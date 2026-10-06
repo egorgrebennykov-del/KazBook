@@ -192,15 +192,41 @@ body.dark-theme {
 }
 
 .nav__logo {
-  display: inline-flex;
-  align-items: center;
-  column-gap: 0.5rem;
+  position: relative;
+  display: block;
   color: var(--first-color);
   font-weight: var(--font-medium);
 }
 
 .nav__logo {
   font-size: 1.25rem;
+}
+
+.nav__logo-image {
+  display: block;
+  width: 12rem;
+  height: 12rem;
+  max-width: 100%;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.nav__logo-image + .nav__logo-image {
+  position: absolute;
+  inset: 0;
+}
+
+.fade-in,
+.fade-out {
+  transition: opacity 0.3s ease;
+}
+
+.fade-in {
+  opacity: 1;
+}
+
+.fade-out {
+  opacity: 0;
 }
 
 /* Navigation for mobile devices */
@@ -427,6 +453,12 @@ body.dark-theme {
   justify-content: flex-end;
   gap: 0.5rem;
   margin-bottom: 0.75rem;
+}
+
+.carousel__controls--home {
+  justify-content: center;
+  margin-top: 0.75rem;
+  margin-bottom: 0;
 }
 
 .carousel__button {
