@@ -1,4 +1,4 @@
-export default function Header({ theme, isLight }) {
+export default function Header({ theme, isLight, login }) {
   return (
     <header className="header" id="header">
       <nav className="nav container">
@@ -52,7 +52,11 @@ export default function Header({ theme, isLight }) {
           {/* Search Button */}
           <i className="ri-search-line search-button" id="search-button" />
           {/* Login Button */}
-          <i className="ri-user-line login-button" id="login-button" />
+          <i
+            className="ri-user-line login-button"
+            id="login-button"
+            onClick={login}
+          />
           {/* Theme Button */}
           <i
             className="ri-moon-line change-theme"

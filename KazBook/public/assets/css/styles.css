@@ -359,6 +359,7 @@ body.dark-theme {
 }
 
 .login__form {
+  position: relative;
   background-color: var(--container-color);
   padding: 2rem 1.5rem;
   border: 2px solid var(--border-color);
@@ -414,15 +415,23 @@ body.dark-theme {
   cursor: pointer;
 }
 
-.login__close {
+.auth-close {
   position: absolute;
-  top: 2rem;
-  right: 2rem;
-  font-size: 2rem;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: calc(var(--z-fixed) + 1);
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--title-color);
+  font-size: 2.5rem;
+  line-height: 1;
   cursor: pointer;
 }
-
 /* Show login */
 .show-login {
   top: 0;
@@ -1003,8 +1012,7 @@ body.dark-theme {
     justify-self: center;
   }
 
-  .search__close,
-  .login__close {
+  .search__close {
     width: max-content;
     top: 4rem;
     left: 0;

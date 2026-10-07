@@ -1,7 +1,16 @@
-export default function Login() {
+export default function Login({ onSignUp, onClose }) {
   return (
-    <div className="login grid" id="login-content">
+    <div className="login grid show-login" id="login-content">
       <form action="" className="login__form grid">
+        <button
+          type="button"
+          className="auth-close"
+          id="login-close"
+          aria-label="Close login"
+          onClick={onClose}
+        >
+          ×
+        </button>
         <h3 className="login__title">Log In</h3>
         <div className="login__group grid">
           <div>
@@ -29,7 +38,16 @@ export default function Login() {
         </div>
         <div>
           <span className="login__signup">
-            You do not have an account? <a href="#">Sign Up</a>
+            You do not have an account?{" "}
+            <a
+              href="#"
+              onClick={(event) => {
+                event.preventDefault();
+                onSignUp();
+              }}
+            >
+              Sign Up
+            </a>
           </span>
           <a href="#" className="login__forgot">
             You forgot your password
@@ -39,7 +57,6 @@ export default function Login() {
           </button>
         </div>
       </form>
-      <i className="ri-close-line login__close" id="login-close" />
     </div>
   );
 }
