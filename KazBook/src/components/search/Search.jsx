@@ -1,6 +1,6 @@
-export default function Search() {
+export default function Search({ show, onClose }) {
   return (
-    <div className="search" id="search-content">
+    <div className={`search ${show ? "show-search" : ""}`} id="search-content">
       <form action="" className="search__form">
         <i className="ri-search-line search__icon" />
         <input
@@ -9,7 +9,11 @@ export default function Search() {
           className="search__input"
         />
       </form>
-      <i className="ri-close-line search__close" id="search-close" />
+      <i
+        className="ri-close-line search__close"
+        id="search-close"
+        onClick={onClose}
+      />
     </div>
   );
 }

@@ -1,8 +1,13 @@
-export default function Header({ theme, isLight, login }) {
+import { Link, NavLink } from "react-router";
+
+const navClass = ({ isActive }) =>
+  isActive ? "nav__link active-link" : "nav__link";
+
+export default function Header({ theme, isLight, onSearch }) {
   return (
     <header className="header" id="header">
       <nav className="nav container">
-        <a href="#" className="nav__logo">
+        <Link to="/" className="nav__logo">
           <img
             src="/assets/img/logo-dark.png"
             alt=""
@@ -13,50 +18,52 @@ export default function Header({ theme, isLight, login }) {
             alt=""
             className={`nav__logo-image ${isLight ? "fade-in" : "fade-out"}`}
           />
-        </a>
+        </Link>
         <div className="nav__menu">
           <ul className="nav__list">
             <li className="nav__item">
-              <a href="#home" className="nav__link active-link">
+              <NavLink to="/" end className={navClass}>
                 <i className="ri-home-line" />
                 <span>Home</span>
-              </a>
+              </NavLink>
             </li>
             <li className="nav__item">
-              <a href="#featured" className="nav__link">
+              <NavLink to="/featured" className={navClass}>
                 <i className="ri-book-3-line" />
                 <span>Featured</span>
-              </a>
+              </NavLink>
             </li>
             <li className="nav__item">
-              <a href="#discount" className="nav__link">
+              <NavLink to="/discount" className={navClass}>
                 <i className="ri-price-tag-3-line" />
                 <span>Discount</span>
-              </a>
+              </NavLink>
             </li>
             <li className="nav__item">
-              <a href="#new" className="nav__link">
+              <NavLink to="/new" className={navClass}>
                 <i className="ri-bookmark-line" />
                 <span>New Books</span>
-              </a>
+              </NavLink>
             </li>
             <li className="nav__item">
-              <a href="#testimonial" className="nav__link">
+              <NavLink to="/testimonial" className={navClass}>
                 <i className="ri-message-3-line" />
                 <span>Testimonial</span>
-              </a>
+              </NavLink>
             </li>
           </ul>
         </div>
         <div className="nav__actions">
           {/* Search Button */}
-          <i className="ri-search-line search-button" id="search-button" />
-          {/* Login Button */}
           <i
-            className="ri-user-line login-button"
-            id="login-button"
-            onClick={login}
+            className="ri-search-line search-button"
+            id="search-button"
+            onClick={onSearch}
           />
+          {/* Login Button */}
+          <Link to="/login">
+            <i className="ri-user-line login-button" id="login-button" />
+          </Link>
           {/* Theme Button */}
           <i
             className="ri-moon-line change-theme"

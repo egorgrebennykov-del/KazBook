@@ -1,6 +1,6 @@
-import CarouselControls from "./CarouselControls";
+import CarouselControls from "../carouselcontrols/CarouselControls";
 
-export default function Header() {
+export default function Featured() {
   return (
     <section className="featured section" id="featured">
       <h2 className="section__title">Featured Books</h2>

@@ -1,15 +1,23 @@
-import Footer from "./components/Footer";
-import Header from "./components/Header";
-import Home from "./components/Home";
-import Login from "./components/Login";
-import SignUp from "./components/SignUp";
+import Discount from "./components/discount/Discount";
+import Featured from "./components/featured/Featured";
+import NewBooks from "./components/newbooks/NewBooks";
+import Testimonial from "./components/testimonial/Testimonial";
+import Footer from "./components/footer/Footer";
+import Header from "./components/header/Header";
+import Home from "./components/home/Home";
+import Join from "./components/join/Join";
+import Login from "./components/login/Login";
+import Search from "./components/search/Search";
+import SignUp from "./components/signup/SignUp";
 import { useEffect, useState } from "react";
+import { Routes, Route, useNavigate } from "react-router";
 
 function App() {
-  const [showHome, setShowHome] = useState(true);
   const [lightTheme, setLightTheme] = useState(true);
-  const [showLogin, setShowLogin] = useState(false);
-  const [showSignUp, setShowSignUp] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const navigate = useNavigate();
+
+  const userTableURL = "https://qgxiisgzwcsevzyaoxvl.supabase.co/rest/v1/user";
 
   useEffect(() => {
     document.body.classList.toggle("dark-theme", !lightTheme);
@@ -19,22 +27,9 @@ function App() {
     setLightTheme((currentTheme) => !currentTheme);
   };
 
-  const login = () => {
-    setShowHome(false);
-    setShowSignUp(false);
-    setShowLogin(true);
-  };
-
-  const signUp = () => {
-    setShowLogin(false);
-    setShowSignUp(true);
-  };
-
-  const closeAuth = () => {
-    setShowLogin(false);
-    setShowSignUp(false);
-    setShowHome(true);
-  };
+  const login = () => navigate("/login");
+  const signUp = () => navigate("/sign-up");
+  const closeAuth = () => navigate("/");
 
   return (
     <>
@@ -52,10 +47,29 @@ function App() {
       <link rel="stylesheet" href="assets/css/swiper-bundle.min.css" />
       <link rel="stylesheet" href="/assets/css/styles.css" />
       <title>KazBook</title>
-      <Header theme={theme} isLight={lightTheme} login={login} />
-      {showHome && <Home />}
-      {showLogin && <Login onSignUp={signUp} onClose={closeAuth} />}
-      {showSignUp && <SignUp onLogin={login} onClose={closeAuth} />}
+      <Header
+        theme={theme}
+        isLight={lightTheme}
+        onSearch={() => setShowSearch(true)}
+      />
+      <Search show={showSearch} onClose={() => setShowSearch(false)} />
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route
+          path="/login"
+          element={<Login onSignUp={signUp} onClose={closeAuth} />}
+        />
+        <Route
+          path="/sign-up"
+          element={<SignUp onLogin={login} onClose={closeAuth} />}
+        />
+        <Route path="/join" element={<Join />} />
+        <Route path="/featured" element={<Featured />} />
+        <Route path="/discount" element={<Discount />} />
+        <Route path="/new" element={<NewBooks />} />
+        <Route path="/testimonial" element={<Testimonial />} />
+      </Routes>
+
       <main className="main"></main>
       <Footer />
       <a href="#" className="scrollup" id="scroll-up">

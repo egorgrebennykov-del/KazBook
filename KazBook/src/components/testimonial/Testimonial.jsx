@@ -1,4 +1,4 @@
-import CarouselControls from "./CarouselControls";
+import CarouselControls from "../carouselcontrols/CarouselControls";
 
 export default function Testimonial() {
   return (

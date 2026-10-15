@@ -4,7 +4,7 @@ export default function Footer() {
       <div className="footer__container container grid">
         <div>
           <a href="#" className="footer__logo">
-            <i className="ri-book-3-line" /> BookVerse
+            <i className="ri-book-3-line" /> KazBook
           </a>
           <p className="footer__description">
             Find and explore the best <br />
@@ -68,14 +68,14 @@ export default function Footer() {
             <ul className="footer__links">
               <li>
                 <address className="footer__info">
-                  Av. Hacienda <br />
-                  Lima 4321, Perú
+                  st.Parva <br />
+                  Nesebar, Bulgaria
                 </address>
               </li>
               <li>
                 <address className="footer__info">
-                  book.verse@email.com <br />
-                  0987-654-321
+                  egor.grebennykov@gmail.com <br />
+                  +359 87 948 5078
                 </address>
               </li>
             </ul>
