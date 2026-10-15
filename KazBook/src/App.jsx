@@ -8,6 +8,7 @@ import Home from "./components/home/Home";
 import Join from "./components/join/Join";
 import Login from "./components/login/Login";
 import Search from "./components/search/Search";
+import SearchResults from "./components/searchresults/SearchResults";
 import SignUp from "./components/signup/SignUp";
 import { useEffect, useState } from "react";
 import { Routes, Route, useNavigate } from "react-router";
@@ -64,6 +65,7 @@ function App() {
           element={<SignUp onLogin={login} onClose={closeAuth} />}
         />
         <Route path="/join" element={<Join />} />
+        <Route path="/search" element={<SearchResults />} />
         <Route path="/featured" element={<Featured />} />
         <Route path="/discount" element={<Discount />} />
         <Route path="/new" element={<NewBooks />} />
