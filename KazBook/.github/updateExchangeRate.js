@@ -1,7 +1,6 @@
-require("dotenv").config();
-
-const { createClient } = require("@supabase/supabase-js");
-const { XMLParser } = require("fast-xml-parser");
+import "dotenv/config";
+import { createClient } from "@supabase/supabase-js";
+import { XMLParser } from "fast-xml-parser";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
