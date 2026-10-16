@@ -1,5 +1,12 @@
 import getBooksFromFlip from "./getBooksFromFlip";
+import getBooksFromMarvin from "./getBooksFromMarvin";
 import getBooksFromMeloman from "./getBooksFromMeloman";
+
+const SOURCES = [
+  { store: "flip.kz", fetch: getBooksFromFlip },
+  { store: "meloman.kz", fetch: getBooksFromMeloman },
+  { store: "marwin.kz", fetch: getBooksFromMarvin },
+];
 
 function normalize(product, store) {
   return {
@@ -29,19 +36,15 @@ function relevance(title, query) {
 }
 
 export default async function searchBooks(searchBook) {
-  const [flip, meloman] = await Promise.allSettled([
-    getBooksFromFlip(searchBook),
-    getBooksFromMeloman(searchBook),
-  ]);
+  const results = await Promise.allSettled(
+    SOURCES.map((s) => s.fetch(searchBook)),
+  );
 
-  const books = [
-    ...(flip.status === "fulfilled" ? flip.value : []).map((p) =>
-      normalize(p, "flip.kz"),
-    ),
-    ...(meloman.status === "fulfilled" ? meloman.value : []).map((p) =>
-      normalize(p, "meloman.kz"),
-    ),
-  ];
+  const books = results.flatMap((r, i) =>
+    r.status === "fulfilled"
+      ? r.value.map((p) => normalize(p, SOURCES[i].store))
+      : [],
+  );
 
   // Сначала релевантность, при равной — дешевле выше; без цены в конце
   return books
