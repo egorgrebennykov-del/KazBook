@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { register } from "../../../utils/auth";
 
 export default function SignUp({ onLogin, onClose }) {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
@@ -34,7 +35,12 @@ export default function SignUp({ onLogin, onClose }) {
         email: form.email,
         password: form.password,
       });
-      navigate("/");
+      const destination = params.get("redirect");
+      navigate(
+        destination?.startsWith("/") && !destination.startsWith("//")
+          ? destination
+          : "/",
+      );
     } catch (err) {
       setError(err.message);
     } finally {

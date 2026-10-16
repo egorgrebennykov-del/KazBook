@@ -11,6 +11,7 @@ import Search from "./components/search/Search";
 import SearchResults from "./components/searchresults/SearchResults";
 import BookDetails from "./components/bookdetails/BookDetails";
 import Profile from "./components/profile/Profile";
+import Cart from "./components/cart/Cart";
 import SignUp from "./components/signup/SignUp";
 import { useEffect, useState } from "react";
 import {
@@ -46,8 +47,8 @@ function App() {
     setLightTheme((currentTheme) => !currentTheme);
   };
 
-  const login = () => navigate("/login");
-  const signUp = () => navigate("/sign-up");
+  const login = () => navigate(`/login${location.search}`);
+  const signUp = () => navigate(`/sign-up${location.search}`);
   const closeAuth = () => navigate("/");
 
   return (
@@ -92,6 +93,10 @@ function App() {
         />
         <Route path="/join" element={<Join />} />
         <Route path="/profile" element={<Profile />} />
+        <Route
+          path="/cart"
+          element={<Cart onSearch={() => setShowSearch(true)} />}
+        />
         <Route path="/search" element={<SearchResults />} />
         <Route path="/book" element={<BookDetails />} />
         <Route path="/featured" element={<Featured />} />

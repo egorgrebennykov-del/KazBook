@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import getBookDetails from "../../../utils/getBookDetails";
 import getExchangeRate from "../../../utils/getExchangeRate";
+import { addToCart, getCartItem, removeFromCart } from "../../../utils/cart";
+import { getCookieUser, isLoggedIn } from "../../../utils/auth";
 import "./BookDetails.css";
 
 const HIDDEN_PROPERTIES = /^цена|вы экономите|иллюстрированное издание|тираж/i;
@@ -60,14 +62,23 @@ export default function BookDetails() {
   const navigate = useNavigate();
   const preview = state?.book;
   const searchQuery = params.get("q") ?? state?.query;
-  const backTo = searchQuery
-    ? `/search?q=${encodeURIComponent(searchQuery)}`
-    : "/";
+  const backTo = state?.fromCart
+    ? "/cart"
+    : searchQuery
+      ? `/search?q=${encodeURIComponent(searchQuery)}`
+      : "/";
 
   const [product, setProduct] = useState(null);
   const [rate, setRate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [cartStatus, setCartStatus] = useState({
+    url: "",
+    exists: false,
+    id: null,
+  });
+  const [addingToCart, setAddingToCart] = useState(false);
+  const [cartError, setCartError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -87,6 +98,23 @@ export default function BookDetails() {
       cancelled = true;
     };
   }, [url]);
+
+  useEffect(() => {
+    if (!url || !isLoggedIn()) return;
+    let cancelled = false;
+    getCartItem(url, getCookieUser()?.id)
+      .then(
+        (item) =>
+          !cancelled &&
+          setCartStatus({ url, exists: Boolean(item), id: item?.id ?? null }),
+      )
+      .catch((err) => !cancelled && setCartError(err.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+
+  const addedToCart = cartStatus.url === url && cartStatus.exists;
 
   const title = product?.name ?? preview?.title ?? "";
   const image =
@@ -116,9 +144,56 @@ export default function BookDetails() {
     .filter((p) => !seen.has(p.name) && seen.add(p.name));
   const author = properties.find((p) => p.name === "Author")?.value;
 
+  const handleToggleCart = async () => {
+    if (!isLoggedIn()) {
+      navigate("/cart");
+      return;
+    }
+    setAddingToCart(true);
+    setCartError("");
+    if (addedToCart && cartStatus.id != null) {
+      try {
+        await removeFromCart(cartStatus.id);
+        setCartStatus({ url, exists: false, id: null });
+      } catch (err) {
+        setCartError(err.message);
+      } finally {
+        setAddingToCart(false);
+      }
+      return;
+    }
+    const cartPrice =
+      preview?.price ??
+      (Number.isFinite(kzt) && rate
+        ? Math.round((kzt / rate) * 100) / 100
+        : kzt);
+    try {
+      const item = await addToCart({
+        title,
+        url,
+        image,
+        store: preview?.store ?? product?.brand?.name ?? "Bookstore",
+        price: cartPrice,
+        currency: preview?.currency ?? (rate ? "EUR" : "KZT"),
+      });
+      setCartStatus({ url, exists: true, id: item?.id ?? null });
+    } catch (err) {
+      setCartError(err.message);
+    } finally {
+      setAddingToCart(false);
+    }
+  };
+
   return (
     <section className="book section container">
-      <button className="book__back" onClick={() => navigate(backTo)}>
+      <button
+        className="book__back"
+        onClick={() =>
+          navigate(backTo, {
+            state: state?.fromCart ? { restoreCartScroll: true } : undefined,
+          })
+        }
+      >
         <i className="ri-arrow-left-line" /> Back
       </button>
 
@@ -165,6 +240,26 @@ export default function BookDetails() {
             <h1 className="book__title">{title}</h1>
             {author && <p className="book__author">{author}</p>}
             {price && <p className="book__price">{price}</p>}
+            <button
+              className="book__add-cart button"
+              type="button"
+              onClick={handleToggleCart}
+              disabled={addingToCart}
+            >
+              <i className="ri-shopping-basket-2-line" />
+              {addingToCart
+                ? addedToCart
+                  ? "Removing..."
+                  : "Adding..."
+                : addedToCart
+                  ? "Added to cart"
+                  : "Add to cart"}
+            </button>
+            {cartError && (
+              <p className="book__cart-error" role="alert">
+                {cartError}
+              </p>
+            )}
 
             {product?.description && (
               <div className="book__section">

@@ -62,6 +62,9 @@ export default function Header({ theme, isLight, onSearch }) {
             id="search-button"
             onClick={onSearch}
           />
+          <Link to="/cart" aria-label="Shopping cart" title="Shopping cart">
+            <i className="ri-shopping-basket-2-line" />
+          </Link>
           <Link to={isLoggedIn() ? "/profile" : "/login"}>
             <i className="ri-user-line login-button" id="login-button" />
           </Link>

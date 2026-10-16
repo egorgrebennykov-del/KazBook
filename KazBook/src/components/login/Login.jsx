@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { login } from "../../../utils/auth";
 
 export default function Login({ onSignUp, onClose }) {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -15,7 +16,12 @@ export default function Login({ onSignUp, onClose }) {
     setSubmitting(true);
     try {
       await login(email, password);
-      navigate("/");
+      const destination = params.get("redirect");
+      navigate(
+        destination?.startsWith("/") && !destination.startsWith("//")
+          ? destination
+          : "/",
+      );
     } catch (err) {
       setError(err.message);
     } finally {
