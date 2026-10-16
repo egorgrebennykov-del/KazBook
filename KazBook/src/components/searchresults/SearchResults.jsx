@@ -1,25 +1,48 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
 import searchBooks from "../../../utils/searchBooks";
-import removeWhiteBackground from "../../../utils/removeWhiteBackground";
 import "./SearchResults.css";
 
-function BookImage({ src, alt }) {
-  const [url, setUrl] = useState(src);
+const loadingMessages = [
+  "Checking bookstores",
+  "Searching for your books",
+  "Comparing prices",
+  "Browsing book catalogs",
+  "Finding the best deals",
+  "Checking book availability",
+  "Collecting prices from stores",
+  "Comparing book editions",
+  "Looking for the lowest prices",
+  "Almost there",
+  "Exploring bookstore listings",
+  "Hunting for the best deals",
+  "Checking the latest offers",
+  "Gathering search results",
+  "Finding your next read",
+];
+
+function LoadingMessage() {
+  const [index, setIndex] = useState(0);
 
   useEffect(() => {
-    if (!src) return;
-    let cancelled = false;
-    removeWhiteBackground(src)
-      .then((png) => !cancelled && setUrl(png))
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [src]);
+    const id = setInterval(
+      () => setIndex((i) => (i + 1) % loadingMessages.length),
+      2000,
+    );
+    return () => clearInterval(id);
+  }, []);
 
+  return (
+    <p key={index} className="results__message">
+      {loadingMessages[index]}
+      <span className="results__dots" />
+    </p>
+  );
+}
+
+function BookImage({ src, alt }) {
   return src ? (
-    <img src={url} alt={alt} className="results__img" />
+    <img src={src} alt={alt} className="results__img" loading="lazy" />
   ) : (
     <div className="results__img" />
   );
@@ -53,6 +76,7 @@ export default function SearchResults() {
       {loading && (
         <div className="results__loader">
           <div className="results__spinner" />
+          <LoadingMessage />
         </div>
       )}
       {!loading && books.length === 0 && <p>Nothing found</p>}
@@ -67,7 +91,11 @@ export default function SearchResults() {
               <span className="results__price">
                 {Number.isNaN(book.price)
                   ? "—"
-                  : `${book.price} ${book.currency}`}
+                  : new Intl.NumberFormat("ru-RU", {
+                      style: "currency",
+                      currency: book.currency,
+                      maximumFractionDigits: book.currency === "EUR" ? 2 : 0,
+                    }).format(book.price)}
               </span>
             </article>
           ))}
