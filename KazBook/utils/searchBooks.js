@@ -13,7 +13,6 @@ function normalize(product, store, rate) {
   const kzt = Number.parseFloat(
     String(product.price ?? "").replace(/[^\d.]/g, ""),
   );
-  // Без курса остаёмся в тенге
   const inEur = rate && !Number.isNaN(kzt);
   return {
     title: product.name ?? "",
@@ -27,7 +26,6 @@ function normalize(product, store, rate) {
 
 const tokenize = (s) => s.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
 
-// В названиях магазинов автор стоит в начале: "Пушкин А. С.: Сказки", "А. С. Пушкин. Поэмы"
 function splitTitle(title) {
   const colon = title.indexOf(":");
   if (colon > 0) return [title.slice(0, colon), title.slice(colon + 1), true];
@@ -36,8 +34,6 @@ function splitTitle(title) {
   return [title.split(/\s+/).slice(0, 3).join(" "), title, false];
 }
 
-// 3 — книга названа как запрос, 2.5 — запрос в названии после автора, 2 — запрос в имени автора,
-// 1.5 — фраза в названии, иначе доля слов
 function relevance(title, query) {
   const words = tokenize(query);
   if (words.length === 0) return 0;
@@ -65,7 +61,6 @@ function relevance(title, query) {
 
 export default async function searchBooks(searchBook) {
   const words = tokenize(searchBook);
-  // Каждое слово запроса должно встречаться в названии, даже как часть другого слова
   const wordPatterns = words.map(
     (w) => new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "iu"),
   );
@@ -82,7 +77,6 @@ export default async function searchBooks(searchBook) {
       : [],
   );
 
-  // Сначала релевантность, при равной — дешевле выше
   return books
     .filter((b) => Number.isFinite(b.price) && b.price > 0)
     .filter((b) => matchesQuery(b.title))

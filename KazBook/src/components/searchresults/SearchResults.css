@@ -1,5 +1,5 @@
-.results {
-  padding-top: 7rem;
+.results.section {
+  padding-top: 10rem;
 }
 
 .results__loader {
@@ -80,6 +80,8 @@
 }
 
 .results__card {
+  color: inherit;
+  text-decoration: none;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;

@@ -9,16 +9,34 @@ import Join from "./components/join/Join";
 import Login from "./components/login/Login";
 import Search from "./components/search/Search";
 import SearchResults from "./components/searchresults/SearchResults";
+import BookDetails from "./components/bookdetails/BookDetails";
+import Profile from "./components/profile/Profile";
 import SignUp from "./components/signup/SignUp";
 import { useEffect, useState } from "react";
-import { Routes, Route, useNavigate } from "react-router";
+import {
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+  useNavigate,
+} from "react-router";
+import { isLoggedIn } from "../utils/auth";
+
+function GuestOnly({ children }) {
+  return isLoggedIn() ? <Navigate to="/" replace /> : children;
+}
 
 function App() {
   const [lightTheme, setLightTheme] = useState(true);
   const [showSearch, setShowSearch] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const userTableURL = "https://qgxiisgzwcsevzyaoxvl.supabase.co/rest/v1/user";
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     document.body.classList.toggle("dark-theme", !lightTheme);
@@ -58,14 +76,24 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route
           path="/login"
-          element={<Login onSignUp={signUp} onClose={closeAuth} />}
+          element={
+            <GuestOnly>
+              <Login onSignUp={signUp} onClose={closeAuth} />
+            </GuestOnly>
+          }
         />
         <Route
           path="/sign-up"
-          element={<SignUp onLogin={login} onClose={closeAuth} />}
+          element={
+            <GuestOnly>
+              <SignUp onLogin={login} onClose={closeAuth} />
+            </GuestOnly>
+          }
         />
         <Route path="/join" element={<Join />} />
+        <Route path="/profile" element={<Profile />} />
         <Route path="/search" element={<SearchResults />} />
+        <Route path="/book" element={<BookDetails />} />
         <Route path="/featured" element={<Featured />} />
         <Route path="/discount" element={<Discount />} />
         <Route path="/new" element={<NewBooks />} />

@@ -11,7 +11,6 @@ const RATE_URL = "https://nationalbank.kz/rss/rates_all.xml";
 
 async function updateExchangeRate() {
   try {
-    // Fetch the latest exchange rates
     const response = await fetch(RATE_URL);
 
     if (!response.ok) {
@@ -20,7 +19,6 @@ async function updateExchangeRate() {
 
     const xml = await response.text();
 
-    // Parse the XML response
     const parser = new XMLParser({
       ignoreAttributes: false,
       isArray: (name) => name === "item",
@@ -33,7 +31,6 @@ async function updateExchangeRate() {
       throw new Error("Could not find exchange rates in XML");
     }
 
-    // Find the EUR exchange rate
     const euro = items.find((item) => String(item.title).trim() === "EUR");
 
     if (!euro) {
@@ -53,7 +50,6 @@ async function updateExchangeRate() {
       throw new Error("Invalid EUR/KZT exchange rate");
     }
 
-    // Convert the date from DD.MM.YYYY to YYYY-MM-DD
     const [day, month, year] = String(euro.pubDate).split(".");
     const rateDate = `${year}-${month}-${day}`;
 
@@ -64,7 +60,6 @@ async function updateExchangeRate() {
       throw new Error("Invalid exchange rate date");
     }
 
-    // Update the exchange rate in Supabase
     const { error } = await supabase.from("exchange_rate").upsert(
       {
         base_currency: "EUR",

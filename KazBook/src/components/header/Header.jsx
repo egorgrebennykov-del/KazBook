@@ -1,9 +1,12 @@
-import { Link, NavLink } from "react-router";
+import { Link, NavLink, useLocation } from "react-router";
+import { isLoggedIn } from "../../../utils/auth";
 
 const navClass = ({ isActive }) =>
   isActive ? "nav__link active-link" : "nav__link";
 
 export default function Header({ theme, isLight, onSearch }) {
+  useLocation();
+
   return (
     <header className="header" id="header">
       <nav className="nav container">
@@ -54,17 +57,14 @@ export default function Header({ theme, isLight, onSearch }) {
           </ul>
         </div>
         <div className="nav__actions">
-          {/* Search Button */}
           <i
             className="ri-search-line search-button"
             id="search-button"
             onClick={onSearch}
           />
-          {/* Login Button */}
-          <Link to="/login">
+          <Link to={isLoggedIn() ? "/profile" : "/login"}>
             <i className="ri-user-line login-button" id="login-button" />
           </Link>
-          {/* Theme Button */}
           <i
             className="ri-moon-line change-theme"
             id="theme-button"

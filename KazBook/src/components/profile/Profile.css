@@ -1,0 +1,78 @@
+.profile.section {
+  padding-top: 10rem;
+}
+
+.profile__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 2.5rem 2rem;
+  border-radius: 1.25rem;
+  background-color: var(--container-color);
+  box-shadow: 0 1rem 2.5rem hsla(0, 0%, 0%, 0.12);
+}
+
+.profile__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 50%;
+  background-color: var(--first-color);
+  color: #fff;
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+.profile__name {
+  font-size: var(--h2-font-size);
+}
+
+.profile__email {
+  opacity: 0.7;
+}
+
+.profile__details {
+  display: grid;
+  gap: 0.5rem;
+  width: 100%;
+  margin: 1rem 0;
+}
+
+.profile__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  background-color: var(--body-color);
+}
+
+.profile__row dt {
+  opacity: 0.65;
+}
+
+.profile__row dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.profile__spinner {
+  width: 3rem;
+  height: 3rem;
+  border: 0.35rem solid var(--body-color);
+  border-top-color: var(--first-color);
+  border-radius: 50%;
+  animation: profile-spin 0.8s linear infinite;
+}
+
+@keyframes profile-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

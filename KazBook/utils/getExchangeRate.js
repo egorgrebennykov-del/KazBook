@@ -3,7 +3,6 @@ const SUPABASE_URL =
   "https://qgxiisgzwcsevzyaoxvl.supabase.co";
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Курс EUR/KZT из таблицы exchange_rate; null, если получить не удалось
 export default async function getExchangeRate() {
   if (!SUPABASE_KEY) {
     console.warn("VITE_SUPABASE_ANON_KEY не задан в .env — курс не загружен");

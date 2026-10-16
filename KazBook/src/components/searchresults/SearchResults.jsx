@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import searchBooks from "../../../utils/searchBooks";
+import { useSearchCache } from "../../context/searchCache";
 import "./SearchResults.css";
 
 const loadingMessages = [
@@ -51,18 +52,23 @@ function BookImage({ src, alt }) {
 export default function SearchResults() {
   const [params] = useSearchParams();
   const query = params.get("q") ?? "";
-  const [books, setBooks] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const cache = useSearchCache();
+  const [result, setResult] = useState({ query: "", books: [] });
+
+  const cached = cache.get(query);
+  const books = cached ?? (result.query === query ? result.books : []);
+  const loading = Boolean(query) && !cached && result.query !== query;
 
   useEffect(() => {
-    if (!query) return;
+    if (!query || cache.get(query)) return;
 
     let cancelled = false;
-    setLoading(true);
     searchBooks(query)
-      .then((result) => !cancelled && setBooks(result))
-      .catch(() => !cancelled && setBooks([]))
-      .finally(() => !cancelled && setLoading(false));
+      .then((found) => {
+        cache.set(query, found);
+        if (!cancelled) setResult({ query, books: found });
+      })
+      .catch(() => !cancelled && setResult({ query, books: [] }));
 
     return () => {
       cancelled = true;
@@ -84,7 +90,12 @@ export default function SearchResults() {
       <div className="results__grid">
         {!loading &&
           books.map((book, i) => (
-            <article className="results__card" key={`${book.title}-${i}`}>
+            <Link
+              className="results__card"
+              key={`${book.title}-${i}`}
+              to={`/book?url=${encodeURIComponent(book.url)}&q=${encodeURIComponent(query)}`}
+              state={{ book, query }}
+            >
               <BookImage src={book.image} alt={book.title} />
               <h3 className="results__title">{book.title}</h3>
               <span className="results__store">{book.store}</span>
@@ -97,7 +108,7 @@ export default function SearchResults() {
                       maximumFractionDigits: book.currency === "EUR" ? 2 : 0,
                     }).format(book.price)}
               </span>
-            </article>
+            </Link>
           ))}
       </div>
     </section>

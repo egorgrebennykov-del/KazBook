@@ -6,7 +6,6 @@ function median(values) {
   return s[s.length >> 1];
 }
 
-// Фон берётся по цвету рамки, заливка идёт от краёв, край смягчается и очищается от белого ореола
 export default function removeWhiteBackground(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
