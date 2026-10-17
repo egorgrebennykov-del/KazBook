@@ -32,14 +32,20 @@ function App() {
   const [showSearch, setShowSearch] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const shouldRestoreScroll = Boolean(
+    location.state?.restoreCartScroll ||
+    location.state?.restoreDiscountScroll ||
+    location.state?.restoreHomeScroll,
+  );
 
   useEffect(() => {
     fetch("/api/warmup", { method: "POST" }).catch(() => {});
   }, []);
 
   useEffect(() => {
+    if (shouldRestoreScroll) return;
     window.scrollTo(0, 0);
-  }, [location.pathname, location.search]);
+  }, [location.pathname, location.search, shouldRestoreScroll]);
 
   useEffect(() => {
     document.body.classList.toggle("dark-theme", !lightTheme);
