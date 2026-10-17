@@ -81,9 +81,10 @@
 
 .cart__item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) 8.5rem 10rem 2.5rem;
   align-items: center;
-  gap: 1.25rem;
+  gap: 1rem;
+  min-height: 7rem;
   padding: 1rem;
   border-radius: 0.75rem;
   background-color: var(--container-color);
@@ -114,8 +115,11 @@
 }
 
 .cart__book-info strong {
+  display: -webkit-box;
   overflow: hidden;
-  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .cart__book-info small {
@@ -128,6 +132,7 @@
 
 .cart__price-block {
   display: grid;
+  min-width: 10rem;
   gap: 0.25rem;
   text-align: right;
 }
@@ -140,7 +145,9 @@
 
 .cart__quantity {
   display: inline-flex;
+  width: 8.5rem;
   align-items: center;
+  justify-content: space-between;
   gap: 0.25rem;
   padding: 0.2rem;
   border: 1px solid var(--text-color);
@@ -209,28 +216,50 @@
   }
 
   .cart__item {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    gap: 0.5rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "book remove"
+      "quantity price";
+    gap: 0.75rem 0.5rem;
+    min-height: 0;
+    padding: 0.75rem;
   }
 
-  .cart__price {
-    grid-column: 2;
-    grid-row: 2;
+  .cart__book-link {
+    grid-area: book;
   }
 
-  .cart__remove {
-    grid-column: 3;
-    grid-row: 1;
+  .cart__book-info strong {
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
   }
 
   .cart__quantity {
-    grid-column: 1;
-    grid-row: 2;
-    justify-self: start;
+    grid-area: quantity;
+    width: 7.5rem;
   }
 
   .cart__price-block {
-    grid-column: 2;
-    grid-row: 2;
+    grid-area: price;
+    min-width: 0;
+  }
+
+  .cart__remove {
+    grid-area: remove;
+  }
+}
+
+@media (min-width: 601px) and (max-width: 900px) {
+  .cart__item {
+    grid-template-columns: minmax(0, 1fr) 7.5rem 9rem 2.5rem;
+    gap: 0.75rem;
+  }
+
+  .cart__quantity {
+    width: 7.5rem;
+  }
+
+  .cart__price-block {
+    min-width: 9rem;
   }
 }

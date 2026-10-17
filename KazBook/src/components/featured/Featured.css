@@ -1,0 +1,30 @@
+.book-picks__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 2rem 1.5rem;
+  margin-top: 2rem;
+}
+
+.book-picks__card {
+  transition: transform 0.2s ease;
+}
+
+.book-picks__card:hover {
+  transform: translateY(-3px);
+}
+
+.book-picks__status {
+  display: grid;
+  min-height: 40vh;
+  place-items: center;
+  text-align: center;
+}
+
+.book-picks__cart-error {
+  margin-block: 1rem;
+  color: hsl(0, 70%, 50%);
+}
+
+.book-picks__cart-button {
+  min-height: 2.75rem;
+}

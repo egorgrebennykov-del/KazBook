@@ -51,6 +51,12 @@ html {
   scroll-behavior: smooth;
 }
 
+#root {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+}
+
 body,
 input,
 button {
@@ -814,7 +820,7 @@ body.dark-theme {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  margin-top: 3rem;
+  margin-top: auto;
   padding-block: 1rem 0.75rem;
   color: hsl(0, 0%, 88%);
   background-color: hsl(230, 38%, 14%);
@@ -1175,6 +1181,10 @@ body.dark-theme {
 }
 
 @media screen and (min-width: 1220px) {
+  #root > .section {
+    width: 100%;
+  }
+
   .container {
     margin-inline: auto;
   }
@@ -1216,7 +1226,7 @@ body.dark-theme {
 
 @media screen and (max-width: 767px) {
   .footer {
-    margin-top: 3.5rem;
+    margin-top: auto;
     padding-block: 3rem 1.25rem;
   }
 

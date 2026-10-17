@@ -118,7 +118,11 @@ export default function Cart({ onSearch }) {
         <div>
           <h1 className="cart__title">Your cart</h1>
           <p className="cart__count">
-            {totalBooks} {totalBooks === 1 ? "book" : "books"}
+            {loading
+              ? "Loading cart..."
+              : error && items.length === 0
+                ? "Cart unavailable"
+                : `${totalBooks} ${totalBooks === 1 ? "book" : "books"}`}
           </p>
         </div>
       </div>
@@ -143,6 +147,7 @@ export default function Cart({ onSearch }) {
         <div className="cart__list">
           {items.map((book) => {
             const quantity = Math.max(1, Number(book.quantity) || 1);
+            const unitPriceCents = Math.round(Number(book.price) * 100);
             const draft = quantityDrafts[book.id] ?? String(quantity);
             return (
               <article className="cart__item" key={book.id}>
@@ -221,10 +226,10 @@ export default function Cart({ onSearch }) {
                 </div>
                 <div className="cart__price-block">
                   <strong className="cart__price">
-                    {formatPrice(Number(book.price) * quantity, "EUR")}
+                    {formatPrice((unitPriceCents * quantity) / 100, "EUR")}
                   </strong>
                   <small className="cart__unit-price">
-                    {formatPrice(Number(book.price), "EUR")} each
+                    {formatPrice(unitPriceCents / 100, "EUR")} each
                   </small>
                 </div>
                 <button

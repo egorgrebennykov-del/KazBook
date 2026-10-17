@@ -33,7 +33,7 @@ export default function Header({ theme, isLight, onSearch }) {
             <li className="nav__item">
               <NavLink to="/featured" className={navClass}>
                 <i className="ri-book-3-line" />
-                <span>Featured</span>
+                <span>Book Picks</span>
               </NavLink>
             </li>
             <li className="nav__item">

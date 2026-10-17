@@ -1,0 +1,37 @@
+name: Update Book Picks
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update-book-picks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: KazBook/.github
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: KazBook/.github/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Collect and save Book Picks
+        run: node updateBookPicks.js
+        env:
+          ZYTE_API_KEY: ${{ secrets.ZYTE_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}

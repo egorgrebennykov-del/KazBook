@@ -63,15 +63,18 @@ export default function BookDetails() {
   const preview = state?.book;
   const searchQuery = params.get("q") ?? state?.query;
   const fromHome = state?.fromHome || params.get("source") === "home";
+  const fromBookPicks = params.get("source") === "book-picks";
   const backTo = state?.fromCart
     ? "/cart"
     : state?.fromDiscount
       ? "/discount"
-      : fromHome
-        ? "/"
-        : searchQuery
-          ? `/search?q=${encodeURIComponent(searchQuery)}`
-          : "/";
+      : fromBookPicks
+        ? "/featured"
+        : fromHome
+          ? "/"
+          : searchQuery
+            ? `/search?q=${encodeURIComponent(searchQuery)}`
+            : "/";
 
   const [product, setProduct] = useState(null);
   const [rate, setRate] = useState(null);

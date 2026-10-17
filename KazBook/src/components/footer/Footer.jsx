@@ -3,7 +3,7 @@ import { isLoggedIn } from "../../../utils/auth";
 
 const navigationLinks = [
   { to: "/", label: "Home" },
-  { to: "/featured", label: "Featured" },
+  { to: "/featured", label: "Book Picks" },
   { to: "/discount", label: "Discounts" },
   { to: "/new", label: "New books" },
   { to: "/testimonial", label: "Reviews" },

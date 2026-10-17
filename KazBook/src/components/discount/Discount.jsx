@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
+import { addToCart, getCart, removeFromCart } from "../../../utils/cart";
+import { getCookieUser, isLoggedIn } from "../../../utils/auth";
 import getExchangeRate from "../../../utils/getExchangeRate";
 import getDiscountSnapshot from "../../../utils/getDiscountSnapshot";
 import "./Discount.css";
@@ -57,9 +59,19 @@ function normalizeSnapshot(value) {
 
 export default function Discount() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const userId = getCookieUser()?.id;
+  const needsCartCheck = isLoggedIn() && Boolean(userId);
   const [snapshot, setSnapshot] = useState(null);
   const [rate, setRate] = useState(null);
   const [error, setError] = useState("");
+  const [cartItems, setCartItems] = useState(() => new Map());
+  const [quantities, setQuantities] = useState(() => new Map());
+  const [pendingUrls, setPendingUrls] = useState(() => new Set());
+  const [cartLoaded, setCartLoaded] = useState(false);
+  const [addingUrls, setAddingUrls] = useState(() => new Set());
+  const [cartError, setCartError] = useState("");
+  const cartReady = !needsCartCheck || cartLoaded;
 
   useEffect(() => {
     let cancelled = false;
@@ -85,6 +97,112 @@ export default function Discount() {
     if (!Number.isFinite(savedScroll)) return;
     requestAnimationFrame(() => window.scrollTo(0, savedScroll));
   }, [snapshot, location.state]);
+
+  useEffect(() => {
+    if (!needsCartCheck) return;
+    let cancelled = false;
+    getCart(userId)
+      .then((items) => {
+        if (cancelled) return;
+        setCartItems(new Map(items.map((item) => [item.link, item])));
+        setQuantities(
+          new Map(
+            items.map((item) => [
+              item.link,
+              Math.max(1, Number(item.quantity) || 1),
+            ]),
+          ),
+        );
+      })
+      .catch((err) => !cancelled && setCartError(err.message))
+      .finally(() => !cancelled && setCartLoaded(true));
+    return () => {
+      cancelled = true;
+    };
+  }, [needsCartCheck, userId]);
+
+  const handleToggleCart = async (book) => {
+    if (!isLoggedIn()) {
+      navigate("/cart");
+      return;
+    }
+
+    setCartError("");
+    const cartItem = cartItems.get(book.url);
+    if (cartItem) {
+      setAddingUrls((current) => new Set(current).add(book.url));
+      try {
+        await removeFromCart(cartItem.id, userId);
+        setCartItems((current) => {
+          const next = new Map(current);
+          next.delete(book.url);
+          return next;
+        });
+        setQuantities((current) => new Map(current).set(book.url, 1));
+        setPendingUrls((current) => {
+          const next = new Set(current);
+          next.delete(book.url);
+          return next;
+        });
+      } catch (err) {
+        setCartError(err.message);
+      } finally {
+        setAddingUrls((current) => {
+          const next = new Set(current);
+          next.delete(book.url);
+          return next;
+        });
+      }
+      return;
+    }
+
+    if (!pendingUrls.has(book.url)) {
+      setQuantities((current) => new Map(current).set(book.url, 1));
+      setPendingUrls((current) => new Set(current).add(book.url));
+      return;
+    }
+
+    setAddingUrls((current) => new Set(current).add(book.url));
+    try {
+      const quantity = Math.max(
+        1,
+        Math.floor(Number(quantities.get(book.url)) || 1),
+      );
+      const inserted = await addToCart(
+        {
+          title: book.title,
+          url: book.url,
+          price: book.price,
+          image: book.image,
+          store: book.store,
+          quantity,
+        },
+        userId,
+      );
+      if (inserted) {
+        setCartItems((current) => new Map(current).set(book.url, inserted));
+        setQuantities((current) =>
+          new Map(current).set(
+            book.url,
+            Math.max(1, Number(inserted.quantity) || quantity),
+          ),
+        );
+        setPendingUrls((current) => {
+          const next = new Set(current);
+          next.delete(book.url);
+          return next;
+        });
+      }
+    } catch (err) {
+      setCartError(err.message);
+    } finally {
+      setAddingUrls((current) => {
+        const next = new Set(current);
+        next.delete(book.url);
+        return next;
+      });
+    }
+  };
 
   if (error) {
     return (
@@ -120,6 +238,11 @@ export default function Discount() {
         </div>
         <span className="deals__updated">{products.length} offers</span>
       </div>
+      {cartError && (
+        <p className="results__cart-error" role="alert">
+          {cartError}
+        </p>
+      )}
 
       {products.length === 0 ? (
         <div className="deals__state">
@@ -141,44 +264,158 @@ export default function Discount() {
               price,
               currency,
             };
+            const cartItem = cartItems.get(book.url);
+            const quantity = Math.max(
+              1,
+              Number(quantities.get(book.url) ?? cartItem?.quantity) || 1,
+            );
+            const isBusy = addingUrls.has(book.url) || !cartReady;
+            const canAddToCart = Boolean(rate) || book.currency === "EUR";
+            const isPending = pendingUrls.has(book.url);
 
             return (
-              <Link
-                className="results__card deals__card"
-                key={book.url}
-                to={`/book?url=${encodeURIComponent(book.url)}&q=${encodeURIComponent(book.title)}`}
-                state={{ book: preview, query: book.title, fromDiscount: true }}
-                onClick={() =>
-                  sessionStorage.setItem(
-                    "kazbook-discount-scroll",
-                    String(window.scrollY),
-                  )
-                }
-              >
-                <div className="deals__image-wrap">
-                  <img
-                    className="results__img deals__image"
-                    src={book.image}
-                    alt={book.title}
-                    loading="lazy"
-                  />
-                  <span className="deals__badge">-{book.discountPercent}%</span>
-                </div>
-                <h3 className="results__title deals__book-title">
-                  {book.title}
-                </h3>
-                <span className="results__store deals__store">
-                  {book.store}
-                </span>
-                <div className="deals__prices">
-                  <strong className="results__price deals__price">
-                    {formatPrice(price, currency)}
-                  </strong>
-                  <span className="deals__regular-price">
-                    {formatPrice(regularPrice, currency)}
+              <article className="results__card deals__card" key={book.url}>
+                <Link
+                  className="deals__book-link"
+                  to={`/book?url=${encodeURIComponent(book.url)}&q=${encodeURIComponent(book.title)}`}
+                  state={{
+                    book: preview,
+                    query: book.title,
+                    fromDiscount: true,
+                  }}
+                  onClick={() =>
+                    sessionStorage.setItem(
+                      "kazbook-discount-scroll",
+                      String(window.scrollY),
+                    )
+                  }
+                >
+                  <div className="deals__image-wrap">
+                    <img
+                      className="results__img deals__image"
+                      src={book.image}
+                      alt={book.title}
+                      loading="lazy"
+                    />
+                    <span className="deals__badge">
+                      -{book.discountPercent}%
+                    </span>
+                  </div>
+                  <h3 className="results__title deals__book-title">
+                    {book.title}
+                  </h3>
+                  <span className="results__store deals__store">
+                    {book.store}
                   </span>
+                  <div className="deals__prices">
+                    <strong className="results__price deals__price">
+                      {formatPrice(price, currency)}
+                    </strong>
+                    <span className="deals__regular-price">
+                      {formatPrice(regularPrice, currency)}
+                    </span>
+                  </div>
+                </Link>
+                <div className="results__cart-actions">
+                  {isPending && !cartItem && (
+                    <div className="results__quantity-control">
+                      <div className="results__quantity" aria-label="Quantity">
+                        <button
+                          type="button"
+                          aria-label={`Decrease ${book.title} quantity`}
+                          disabled={isBusy || quantity <= 1}
+                          onClick={() =>
+                            setQuantities((current) =>
+                              new Map(current).set(book.url, quantity - 1),
+                            )
+                          }
+                        >
+                          −
+                        </button>
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          aria-label={`${book.title} quantity`}
+                          value={quantities.get(book.url) ?? quantity}
+                          disabled={isBusy}
+                          onChange={(event) =>
+                            setQuantities((current) =>
+                              new Map(current).set(
+                                book.url,
+                                event.target.value,
+                              ),
+                            )
+                          }
+                          onBlur={() =>
+                            setQuantities((current) =>
+                              new Map(current).set(
+                                book.url,
+                                Math.max(
+                                  1,
+                                  Math.floor(
+                                    Number(current.get(book.url)) || 1,
+                                  ),
+                                ),
+                              ),
+                            )
+                          }
+                        />
+                        <button
+                          type="button"
+                          aria-label={`Increase ${book.title} quantity`}
+                          disabled={isBusy}
+                          onClick={() =>
+                            setQuantities((current) =>
+                              new Map(current).set(book.url, quantity + 1),
+                            )
+                          }
+                        >
+                          +
+                        </button>
+                      </div>
+                      <button
+                        className="results__cart-confirm"
+                        type="button"
+                        aria-label={`Confirm adding ${book.title} to cart`}
+                        title="Confirm"
+                        disabled={isBusy || !canAddToCart}
+                        onClick={() => handleToggleCart(preview)}
+                      >
+                        <i className="ri-check-line" />
+                      </button>
+                    </div>
+                  )}
+                  {(!isPending || cartItem) && (
+                    <button
+                      className="results__cart-button"
+                      type="button"
+                      disabled={isBusy || (!cartItem && !canAddToCart)}
+                      title={cartItem ? "Remove from cart" : "Add to cart"}
+                      onClick={() => handleToggleCart(preview)}
+                    >
+                      <i
+                        className={
+                          cartItem
+                            ? "ri-check-line"
+                            : "ri-shopping-basket-2-line"
+                        }
+                      />
+                      {addingUrls.has(book.url)
+                        ? cartItem
+                          ? "Removing..."
+                          : isPending
+                            ? "Adding..."
+                            : "Add to cart"
+                        : cartItem
+                          ? "Added to cart"
+                          : cartReady
+                            ? "Add to cart"
+                            : "Checking cart..."}
+                    </button>
+                  )}
                 </div>
-              </Link>
+              </article>
             );
           })}
         </div>

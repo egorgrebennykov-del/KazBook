@@ -42,6 +42,15 @@
   transform: translateY(-3px);
 }
 
+.deals__book-link {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.5rem;
+  color: inherit;
+  text-decoration: none;
+}
+
 .deals__image-wrap {
   position: relative;
   background-color: var(--body-color);
