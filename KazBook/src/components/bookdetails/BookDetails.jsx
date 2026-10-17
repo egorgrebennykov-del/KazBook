@@ -64,9 +64,11 @@ export default function BookDetails() {
   const searchQuery = params.get("q") ?? state?.query;
   const backTo = state?.fromCart
     ? "/cart"
-    : searchQuery
-      ? `/search?q=${encodeURIComponent(searchQuery)}`
-      : "/";
+    : state?.fromDiscount
+      ? "/discount"
+      : searchQuery
+        ? `/search?q=${encodeURIComponent(searchQuery)}`
+        : "/";
 
   const [product, setProduct] = useState(null);
   const [rate, setRate] = useState(null);
@@ -79,6 +81,8 @@ export default function BookDetails() {
   });
   const [addingToCart, setAddingToCart] = useState(false);
   const [cartError, setCartError] = useState("");
+  const [pendingAddUrl, setPendingAddUrl] = useState("");
+  const [pendingQuantity, setPendingQuantity] = useState(1);
 
   useEffect(() => {
     let cancelled = false;
@@ -149,12 +153,14 @@ export default function BookDetails() {
       navigate("/cart");
       return;
     }
-    setAddingToCart(true);
     setCartError("");
     if (addedToCart && cartStatus.id != null) {
+      setAddingToCart(true);
       try {
         await removeFromCart(cartStatus.id);
         setCartStatus({ url, exists: false, id: null });
+        setPendingAddUrl("");
+        setPendingQuantity(1);
       } catch (err) {
         setCartError(err.message);
       } finally {
@@ -162,6 +168,13 @@ export default function BookDetails() {
       }
       return;
     }
+    if (pendingAddUrl !== url) {
+      setPendingAddUrl(url);
+      setPendingQuantity(1);
+      return;
+    }
+
+    setAddingToCart(true);
     const cartPrice =
       preview?.price ??
       (Number.isFinite(kzt) && rate
@@ -175,8 +188,10 @@ export default function BookDetails() {
         store: preview?.store ?? product?.brand?.name ?? "Bookstore",
         price: cartPrice,
         currency: preview?.currency ?? (rate ? "EUR" : "KZT"),
+        quantity: pendingQuantity,
       });
       setCartStatus({ url, exists: true, id: item?.id ?? null });
+      setPendingAddUrl("");
     } catch (err) {
       setCartError(err.message);
     } finally {
@@ -190,7 +205,11 @@ export default function BookDetails() {
         className="book__back"
         onClick={() =>
           navigate(backTo, {
-            state: state?.fromCart ? { restoreCartScroll: true } : undefined,
+            state: state?.fromCart
+              ? { restoreCartScroll: true }
+              : state?.fromDiscount
+                ? { restoreDiscountScroll: true }
+                : undefined,
           })
         }
       >
@@ -240,21 +259,78 @@ export default function BookDetails() {
             <h1 className="book__title">{title}</h1>
             {author && <p className="book__author">{author}</p>}
             {price && <p className="book__price">{price}</p>}
-            <button
-              className="book__add-cart button"
-              type="button"
-              onClick={handleToggleCart}
-              disabled={addingToCart}
-            >
-              <i className="ri-shopping-basket-2-line" />
-              {addingToCart
-                ? addedToCart
-                  ? "Removing..."
-                  : "Adding..."
-                : addedToCart
-                  ? "Added to cart"
-                  : "Add to cart"}
-            </button>
+            {pendingAddUrl === url && !addedToCart ? (
+              <div className="book__quantity-control">
+                <div className="book__quantity" aria-label="Quantity">
+                  <button
+                    type="button"
+                    aria-label="Decrease quantity"
+                    disabled={addingToCart || pendingQuantity <= 1}
+                    onClick={() =>
+                      setPendingQuantity((quantity) =>
+                        Math.max(1, quantity - 1),
+                      )
+                    }
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    aria-label="Quantity"
+                    value={pendingQuantity}
+                    disabled={addingToCart}
+                    onChange={(event) => setPendingQuantity(event.target.value)}
+                    onBlur={() =>
+                      setPendingQuantity((quantity) =>
+                        Math.max(1, Math.floor(Number(quantity) || 1)),
+                      )
+                    }
+                  />
+                  <button
+                    type="button"
+                    aria-label="Increase quantity"
+                    disabled={addingToCart}
+                    onClick={() =>
+                      setPendingQuantity((quantity) => Number(quantity) + 1)
+                    }
+                  >
+                    +
+                  </button>
+                </div>
+                <button
+                  className="book__cart-confirm"
+                  type="button"
+                  aria-label="Confirm adding to cart"
+                  title="Confirm"
+                  disabled={addingToCart}
+                  onClick={handleToggleCart}
+                >
+                  <i className="ri-check-line" />
+                </button>
+              </div>
+            ) : (
+              <button
+                className="book__add-cart button"
+                type="button"
+                onClick={handleToggleCart}
+                disabled={addingToCart}
+              >
+                <i
+                  className={
+                    addedToCart ? "ri-check-line" : "ri-shopping-basket-2-line"
+                  }
+                />
+                {addingToCart
+                  ? addedToCart
+                    ? "Removing..."
+                    : "Adding..."
+                  : addedToCart
+                    ? "Added to cart"
+                    : "Add to cart"}
+              </button>
+            )}
             {cartError && (
               <p className="book__cart-error" role="alert">
                 {cartError}

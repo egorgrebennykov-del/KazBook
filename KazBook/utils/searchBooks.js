@@ -1,12 +1,10 @@
 import getBooksFromFlip from "./getBooksFromFlip";
-import getBooksFromMarvin from "./getBooksFromMarvin";
 import getBooksFromMeloman from "./getBooksFromMeloman";
 import getExchangeRate from "./getExchangeRate";
 
 const SOURCES = [
   { store: "flip.kz", fetch: getBooksFromFlip },
   { store: "meloman.kz", fetch: getBooksFromMeloman },
-  { store: "marwin.kz", fetch: getBooksFromMarvin },
 ];
 
 function normalize(product, store, rate) {

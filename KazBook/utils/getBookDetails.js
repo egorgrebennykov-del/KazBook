@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const ALLOWED_HOSTS = ["flip.kz", "meloman.kz", "marwin.kz"];
+const ALLOWED_HOSTS = ["flip.kz", "meloman.kz"];
 
 function isAllowed(url) {
   try {

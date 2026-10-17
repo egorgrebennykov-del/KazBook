@@ -1,4 +1,4 @@
-name: Update exchange rate
+name: Update exchange rate and discounts
 
 on:
   schedule:
@@ -29,5 +29,12 @@ jobs:
       - name: Update EUR/KZT rate
         run: node updateExchangeRate.js
         env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+
+      - name: Update discounted books
+        run: node updateDiscounts.js
+        env:
+          ZYTE_API_KEY: ${{ secrets.ZYTE_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import searchBooks from "../../../utils/searchBooks";
+import dedupeBooks from "../../../utils/dedupeBooks";
 import { useSearchCache } from "../../context/searchCache";
 import { addToCart, getCart, removeFromCart } from "../../../utils/cart";
 import { getCookieUser, isLoggedIn } from "../../../utils/auth";
@@ -43,11 +44,17 @@ function LoadingMessage() {
   );
 }
 
-function BookImage({ src, alt }) {
-  return src ? (
-    <img src={src} alt={alt} className="results__img" loading="lazy" />
-  ) : (
-    <div className="results__img" />
+function BookImage({ src, alt, onLoad, onError }) {
+  if (!src) return null;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="results__img"
+      loading="lazy"
+      onLoad={onLoad}
+      onError={onError}
+    />
   );
 }
 
@@ -57,6 +64,7 @@ export default function SearchResults() {
   const query = params.get("q") ?? "";
   const cache = useSearchCache();
   const [result, setResult] = useState({ query: "", books: [] });
+  const [imageStatuses, setImageStatuses] = useState(() => new Map());
   const [cartItems, setCartItems] = useState(() => new Map());
   const [quantities, setQuantities] = useState(() => new Map());
   const [pendingUrls, setPendingUrls] = useState(() => new Set());
@@ -71,12 +79,19 @@ export default function SearchResults() {
   const cached = cache.get(query);
   const books = cached ?? (result.query === query ? result.books : []);
   const loading = Boolean(query) && !cached && result.query !== query;
+  const visibleBooks = books.filter(
+    (book) => book.image && imageStatuses.get(book.url) === "loaded",
+  );
+  const pendingCovers = books.some(
+    (book) => book.image && !imageStatuses.has(book.url),
+  );
 
   useEffect(() => {
     if (!query || cache.get(query)) return;
 
     let cancelled = false;
     searchBooks(query)
+      .then((found) => dedupeBooks(found, query))
       .then((found) => {
         cache.set(query, found);
         if (!cancelled) setResult({ query, books: found });
@@ -205,6 +220,13 @@ export default function SearchResults() {
         </div>
       )}
       {!loading && books.length === 0 && <p>Nothing found</p>}
+      {!loading && books.length > 0 && visibleBooks.length === 0 && (
+        <p className="results__covers-status">
+          {pendingCovers
+            ? "Loading book covers..."
+            : "No books with available covers were found."}
+        </p>
+      )}
       {cartError && (
         <p className="results__cart-error" role="alert">
           {cartError}
@@ -214,6 +236,10 @@ export default function SearchResults() {
       <div className="results__grid">
         {!loading &&
           books.map((book, i) => {
+            if (!book.image || imageStatuses.get(book.url) === "failed") {
+              return null;
+            }
+            const coverLoaded = imageStatuses.get(book.url) === "loaded";
             const cartItem = cartItems.get(book.url);
             const quantity = Math.max(
               1,
@@ -222,13 +248,29 @@ export default function SearchResults() {
             const isBusy = addingUrls.has(book.url) || !cartReady;
             const isPending = pendingUrls.has(book.url);
             return (
-              <article className="results__card" key={`${book.title}-${i}`}>
+              <article
+                className={`results__card ${coverLoaded ? "" : "results__card--cover-loading"}`}
+                key={`${book.title}-${i}`}
+              >
                 <Link
                   className="results__open"
                   to={`/book?url=${encodeURIComponent(book.url)}&q=${encodeURIComponent(query)}`}
                   state={{ book, query }}
                 >
-                  <BookImage src={book.image} alt={book.title} />
+                  <BookImage
+                    src={book.image}
+                    alt={book.title}
+                    onLoad={() =>
+                      setImageStatuses((current) =>
+                        new Map(current).set(book.url, "loaded"),
+                      )
+                    }
+                    onError={() =>
+                      setImageStatuses((current) =>
+                        new Map(current).set(book.url, "failed"),
+                      )
+                    }
+                  />
                   <h3 className="results__title">{book.title}</h3>
                   <span className="results__store">{book.store}</span>
                   <span className="results__price">

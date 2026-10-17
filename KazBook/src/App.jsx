@@ -33,7 +33,9 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const userTableURL = "https://qgxiisgzwcsevzyaoxvl.supabase.co/rest/v1/user";
+  useEffect(() => {
+    fetch("/api/warmup", { method: "POST" }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     window.scrollTo(0, 0);

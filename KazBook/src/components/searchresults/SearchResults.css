@@ -90,6 +90,15 @@
   background-color: var(--container-color);
 }
 
+.results__card--cover-loading {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.results__covers-status {
+  text-align: center;
+}
+
 .results__open {
   display: flex;
   flex: 1;
