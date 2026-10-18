@@ -5,7 +5,7 @@ export default function getBooksFromMeloman(searchBook) {
     .post(
       "https://api.zyte.com/v1/extract",
       {
-        url: `https://www.meloman.kz/catalogsearch/result/?search_cat=0&stock=1&q=${encodeURIComponent(searchBook)}`,
+        url: `https://www.meloman.kz/catalogsearch/result/index/q/${encodeURIComponent(searchBook)}/?cat=1172&q=${encodeURIComponent(searchBook)}&search_cat=0&stock=1`,
         productList: true,
         productListOptions: { extractFrom: "httpResponseBody" },
         followRedirect: true,

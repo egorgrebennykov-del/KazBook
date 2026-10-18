@@ -5,7 +5,7 @@ export default function getBooksFromFlip(searchBook) {
     .post(
       "https://api.zyte.com/v1/extract",
       {
-        url: `https://www.flip.kz/search?search=${encodeURIComponent(searchBook)}`,
+        url: `https://www.flip.kz/search?search=${encodeURIComponent(searchBook)}&subsection=1&filter-i103=1`,
         productList: true,
         productListOptions: { extractFrom: "httpResponseBody" },
         followRedirect: true,

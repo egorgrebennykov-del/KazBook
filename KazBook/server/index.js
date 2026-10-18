@@ -5,7 +5,11 @@ import { warmupImageModel } from "../utils/bookSimilarity.js";
 
 const PORT = Number(process.env.BOOK_COMPARE_PORT) || 3001;
 const MAX_BODY_SIZE = 2 * 1024 * 1024;
-const ALLOWED_IMAGE_HOSTS = new Set(["s.f.kz", "simg.marwin.kz"]);
+const ALLOWED_IMAGE_HOSTS = new Set([
+  "s.f.kz",
+  "simg.marwin.kz",
+  "www.bookcity.kz",
+]);
 
 function respond(res, status, payload) {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
