@@ -4,6 +4,7 @@ import getBookDetails from "../../../utils/getBookDetails";
 import getExchangeRate from "../../../utils/getExchangeRate";
 import { addToCart, getCartItem, removeFromCart } from "../../../utils/cart";
 import { getCookieUser, isLoggedIn } from "../../../utils/auth";
+import enhancedImageUrl from "../../../utils/enhancedImageUrl";
 import "./BookDetails.css";
 
 const HIDDEN_PROPERTIES = /^цена|вы экономите|иллюстрированное издание|тираж/i;
@@ -239,7 +240,11 @@ export default function BookDetails() {
       {!loading && (!error || preview) && (
         <div className="book__content">
           {image ? (
-            <img src={image} alt={title} className="book__img" />
+            <img
+              src={enhancedImageUrl(image)}
+              alt={title}
+              className="book__img"
+            />
           ) : (
             <div className="book__img" />
           )}

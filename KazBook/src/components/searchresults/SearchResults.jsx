@@ -5,6 +5,7 @@ import dedupeBooks from "../../../utils/dedupeBooks";
 import { useSearchCache } from "../../context/searchCache";
 import { addToCart, getCart, removeFromCart } from "../../../utils/cart";
 import { getCookieUser, isLoggedIn } from "../../../utils/auth";
+import enhancedImageUrl from "../../../utils/enhancedImageUrl";
 import "./SearchResults.css";
 
 const loadingMessages = [
@@ -48,7 +49,7 @@ function BookImage({ src, alt, onLoad, onError }) {
   if (!src) return null;
   return (
     <img
-      src={src}
+      src={enhancedImageUrl(src)}
       alt={alt}
       className="results__img"
       loading="lazy"

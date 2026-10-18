@@ -4,6 +4,7 @@ import { addToCart, getCart, removeFromCart } from "../../../utils/cart";
 import { getCookieUser, isLoggedIn } from "../../../utils/auth";
 import getExchangeRate from "../../../utils/getExchangeRate";
 import getDiscountSnapshot from "../../../utils/getDiscountSnapshot";
+import enhancedImageUrl from "../../../utils/enhancedImageUrl";
 import "./Discount.css";
 
 function formatPrice(value, currency) {
@@ -293,7 +294,7 @@ export default function Discount() {
                   <div className="deals__image-wrap">
                     <img
                       className="results__img deals__image"
-                      src={book.image}
+                      src={enhancedImageUrl(book.image)}
                       alt={book.title}
                       loading="lazy"
                     />

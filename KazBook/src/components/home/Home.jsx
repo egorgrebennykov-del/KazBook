@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router";
 import CarouselControls from "../carouselcontrols/CarouselControls";
 import getHomepageBooks from "../../../utils/getHomepageBooks";
+import enhancedImageUrl from "../../../utils/enhancedImageUrl";
 import "./Home.css";
 
 export default function Home() {
@@ -98,7 +99,7 @@ export default function Home() {
                       }}
                     >
                       <img
-                        src={book.image}
+                        src={enhancedImageUrl(book.image)}
                         alt={book.title}
                         className="home__img"
                         loading="eager"

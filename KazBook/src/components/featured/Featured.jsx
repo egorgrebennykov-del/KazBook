@@ -4,6 +4,7 @@ import { addToCart, getCart, removeFromCart } from "../../../utils/cart";
 import { getCookieUser, isLoggedIn } from "../../../utils/auth";
 import getExchangeRate from "../../../utils/getExchangeRate";
 import getBookPicks from "../../../utils/getBookPicks";
+import enhancedImageUrl from "../../../utils/enhancedImageUrl";
 import "./Featured.css";
 
 function getEuroPrice(book, rate) {
@@ -226,7 +227,7 @@ export default function Featured() {
                   >
                     <img
                       className="results__img"
-                      src={book.image}
+                      src={enhancedImageUrl(book.image)}
                       alt={book.title}
                       loading="lazy"
                     />

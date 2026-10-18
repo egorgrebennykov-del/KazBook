@@ -1,15 +1,26 @@
+import axios from "axios";
+import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
+import sharp from "sharp";
 import { dedupeBooks } from "./dedupeBooks.js";
 import { warmupImageModel } from "../utils/bookSimilarity.js";
 
+const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = Number(process.env.BOOK_COMPARE_PORT) || 3001;
 const MAX_BODY_SIZE = 2 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
+const IMAGE_CACHE_DIR = path.join(appDir, ".cache", "fast-enhanced-images");
 const ALLOWED_IMAGE_HOSTS = new Set([
   "s.f.kz",
   "simg.marwin.kz",
   "www.bookcity.kz",
 ]);
+const pendingImages = new Map();
 
 function respond(res, status, payload) {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
@@ -35,7 +46,106 @@ function validImageUrl(value) {
   }
 }
 
+async function fetchSourceImage(sourceUrl) {
+  let currentUrl = sourceUrl;
+  for (let redirects = 0; redirects <= 3; redirects++) {
+    if (!validImageUrl(currentUrl)) {
+      throw new Error("Image redirect points to an unsupported host");
+    }
+
+    const response = await axios.get(currentUrl, {
+      responseType: "arraybuffer",
+      timeout: 15000,
+      maxContentLength: MAX_IMAGE_BYTES,
+      maxRedirects: 0,
+      validateStatus: (status) => status >= 200 && status < 400,
+    });
+
+    if (response.status >= 300) {
+      const location = response.headers.location;
+      if (!location) throw new Error("Image redirect has no location");
+      currentUrl = new URL(location, currentUrl).href;
+      continue;
+    }
+
+    const image = Buffer.from(response.data);
+    if (!image.length || image.length > MAX_IMAGE_BYTES) {
+      throw new Error("Image is empty or exceeds the size limit");
+    }
+    return image;
+  }
+
+  throw new Error("Image has too many redirects");
+}
+
+async function getEnhancedImage(sourceUrl) {
+  const cacheKey = createHash("sha256")
+    .update(`sharp-bright-sharp-v1:${sourceUrl}`)
+    .digest("hex");
+  const cachePath = path.join(IMAGE_CACHE_DIR, `${cacheKey}.webp`);
+
+  if (pendingImages.has(cacheKey)) return pendingImages.get(cacheKey);
+  const task = (async () => {
+    try {
+      return await readFile(cachePath);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+
+    const original = await fetchSourceImage(sourceUrl);
+    const enhanced = await sharp(original, { limitInputPixels: 40000000 })
+      .rotate()
+      .resize({
+        width: 1600,
+        height: 2400,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .modulate({ brightness: 1.07, saturation: 1.04 })
+      .sharpen({ sigma: 0.55 })
+      .webp({ quality: 88, effort: 3 })
+      .toBuffer();
+
+    await mkdir(IMAGE_CACHE_DIR, { recursive: true });
+    await writeFile(cachePath, enhanced);
+    return enhanced;
+  })();
+
+  pendingImages.set(cacheKey, task);
+  try {
+    return await task;
+  } finally {
+    pendingImages.delete(cacheKey);
+  }
+}
+
+async function handleEnhancedImage(req, res) {
+  const sourceUrl = new URL(req.url, "http://localhost").searchParams.get(
+    "url",
+  );
+  if (!sourceUrl || !validImageUrl(sourceUrl)) {
+    respond(res, 400, { error: "Unsupported image URL" });
+    return;
+  }
+
+  try {
+    const image = await getEnhancedImage(sourceUrl);
+    res.writeHead(200, {
+      "Content-Type": "image/webp",
+      "Cache-Control": "public, max-age=31536000, immutable",
+    });
+    res.end(image);
+  } catch (error) {
+    console.warn(`Could not enhance image ${sourceUrl}: ${error.message}`);
+    respond(res, 502, { error: "Could not load image" });
+  }
+}
+
 const server = createServer(async (req, res) => {
+  if (req.method === "GET" && req.url?.startsWith("/api/enhance-image?")) {
+    await handleEnhancedImage(req, res);
+    return;
+  }
   if (req.method === "GET" && req.url === "/health") {
     respond(res, 200, { ok: true });
     return;

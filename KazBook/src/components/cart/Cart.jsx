@@ -6,6 +6,7 @@ import {
   updateCartQuantity,
 } from "../../../utils/cart";
 import { getCookieUser, isLoggedIn } from "../../../utils/auth";
+import enhancedImageUrl from "../../../utils/enhancedImageUrl";
 import "./Cart.css";
 
 function formatPrice(price, currency) {
@@ -174,7 +175,11 @@ export default function Cart({ onSearch }) {
                   }
                 >
                   {book.image ? (
-                    <img className="cart__image" src={book.image} alt="" />
+                    <img
+                      className="cart__image"
+                      src={enhancedImageUrl(book.image)}
+                      alt=""
+                    />
                   ) : (
                     <div className="cart__image" />
                   )}
