@@ -26,7 +26,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Update EUR/KZT rate
+      - name: Update EUR/MDL rate
         run: node updateExchangeRate.js
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
