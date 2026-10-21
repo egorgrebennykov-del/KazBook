@@ -87,9 +87,15 @@ export async function getProfile() {
   if (!cookieUser) return null;
 
   const response = await fetch(
-    `${TABLE_URL}?select=firstName,lastName,email&id=eq.${encodeURIComponent(cookieUser.id)}&limit=1`,
+    `${TABLE_URL}?select=id,firstName,lastName,email&id=eq.${encodeURIComponent(cookieUser.id)}&limit=1`,
     { headers },
   );
   const row = response.ok ? (await response.json())[0] : null;
-  return row ?? { firstName: cookieUser.firstName, lastName: "", email: "" };
+  return {
+    id: cookieUser.id,
+    firstName: cookieUser.firstName,
+    lastName: "",
+    email: "",
+    ...(row || {}),
+  };
 }

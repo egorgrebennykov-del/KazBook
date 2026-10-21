@@ -51,6 +51,10 @@
   text-decoration: none;
 }
 
+.deals__book-link > :not(.deals__image-wrap) {
+  padding: 0 1rem;
+}
+
 .deals__image-wrap {
   position: relative;
   background-color: var(--body-color);

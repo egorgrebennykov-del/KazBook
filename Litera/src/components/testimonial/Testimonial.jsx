@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { getProfile, isLoggedIn } from "../../../utils/auth";
-import { getFeedbacks, addFeedback } from "../../../utils/feedbacks";
+import { getCookieUser, getProfile, isLoggedIn } from "../../../utils/auth";
+import {
+  getFeedbacks,
+  addFeedback,
+  updateFeedback,
+  deleteFeedback,
+} from "../../../utils/feedbacks";
 import decodeHtmlEntities from "../../../utils/decodeHtmlEntities";
 import { useLanguage } from "../../context/languageContext";
 import "./Testimonial.css";
@@ -31,18 +36,30 @@ function getInitials(firstName, lastName) {
 export default function Testimonial() {
   const { language, t } = useLanguage();
   const loggedIn = isLoggedIn();
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(getCookieUser);
 
   const [feedbacks, setFeedbacks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
+  // New review form state
   const [stars, setStars] = useState(0);
   const [hoverStars, setHoverStars] = useState(0);
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
+
+  // Edit review state
+  const [editingId, setEditingId] = useState(null);
+  const [editText, setEditText] = useState("");
+  const [editStars, setEditStars] = useState(0);
+  const [editHoverStars, setEditHoverStars] = useState(0);
+  const [savingId, setSavingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [actionError, setActionError] = useState("");
+
+  const currentUserId = user?.id ?? getCookieUser()?.id;
 
   useEffect(() => {
     let cancelled = false;
@@ -66,7 +83,11 @@ export default function Testimonial() {
     if (!loggedIn) return;
     let cancelled = false;
     getProfile()
-      .then((profile) => !cancelled && setUser(profile))
+      .then((profile) => {
+        if (!cancelled && profile) {
+          setUser(profile);
+        }
+      })
       .catch(() => {});
     return () => {
       cancelled = true;
@@ -87,7 +108,7 @@ export default function Testimonial() {
     setSubmitting(true);
     try {
       const inserted = await addFeedback({
-        userId: user?.id,
+        userId: currentUserId,
         userFirstName: user?.firstName || "Пользователь",
         userLastName: user?.lastName || "",
         feedback: cleanText,
@@ -97,7 +118,6 @@ export default function Testimonial() {
       if (inserted) {
         setFeedbacks((prev) => [inserted, ...prev]);
       } else {
-        // Fallback refetch
         const refreshed = await getFeedbacks();
         setFeedbacks(
           [...refreshed].sort(
@@ -117,7 +137,75 @@ export default function Testimonial() {
     }
   };
 
+  const handleStartEdit = (item) => {
+    setEditingId(item.id);
+    setEditText(item.feedback || "");
+    setEditStars(item.stars || 0);
+    setEditHoverStars(0);
+    setActionError("");
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditText("");
+    setEditStars(0);
+    setEditHoverStars(0);
+    setActionError("");
+  };
+
+  const handleSaveEdit = async (id) => {
+    setActionError("");
+    const cleanText = editText.trim();
+    if (!cleanText && (!editStars || editStars < 1)) {
+      setActionError(t("testimonial.validationError"));
+      return;
+    }
+
+    setSavingId(id);
+    try {
+      const updated = await updateFeedback({
+        id,
+        userId: currentUserId,
+        feedback: cleanText,
+        stars: editStars > 0 ? editStars : null,
+      });
+
+      setFeedbacks((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                feedback: updated.feedback ?? cleanText,
+                stars: updated.stars ?? (editStars > 0 ? editStars : null),
+              }
+            : item,
+        ),
+      );
+      setEditingId(null);
+    } catch (err) {
+      setActionError(err.message || t("testimonial.error"));
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm(t("testimonial.confirmDelete"))) return;
+    setActionError("");
+    setDeletingId(id);
+    try {
+      await deleteFeedback({ id, userId: currentUserId });
+      setFeedbacks((prev) => prev.filter((item) => item.id !== id));
+      if (editingId === id) setEditingId(null);
+    } catch (err) {
+      setActionError(err.message || t("testimonial.error"));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const activeStarCount = hoverStars || stars;
+  const activeEditStarCount = editHoverStars || editStars;
 
   return (
     <section className="testimonial section container" id="testimonial">
@@ -279,6 +367,15 @@ export default function Testimonial() {
           )}
         </h2>
 
+        {actionError && (
+          <div
+            className="testimonial__alert testimonial__alert--error"
+            role="alert"
+          >
+            {actionError}
+          </div>
+        )}
+
         {loading && (
           <div className="testimonial__state" role="status">
             <div className="testimonial__spinner" />
@@ -313,6 +410,9 @@ export default function Testimonial() {
               const rating = Number(item.stars);
               const hasRating = Number.isInteger(rating) && rating >= 1 && rating <= 5;
               const feedbackText = decodeHtmlEntities(item.feedback || "");
+              const isOwnReview =
+                Boolean(loggedIn && currentUserId != null && String(item.user_id) === String(currentUserId));
+              const isEditing = editingId === item.id;
 
               return (
                 <article className="testimonial__review-card" key={item.id}>
@@ -324,6 +424,11 @@ export default function Testimonial() {
                       <div className="testimonial__author-meta">
                         <span className="testimonial__author-name">
                           {authorName}
+                          {isOwnReview && (
+                            <span className="testimonial__own-badge">
+                              {language === "ru" ? "Ваш отзыв" : "Your review"}
+                            </span>
+                          )}
                         </span>
                         {item.created_at && (
                           <time
@@ -338,28 +443,151 @@ export default function Testimonial() {
                       </div>
                     </div>
 
-                    {hasRating && (
-                      <div
-                        className="testimonial__review-stars"
-                        aria-label={`${rating} / 5`}
-                        title={`${rating} / 5`}
-                      >
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <i
-                            key={star}
-                            className={
-                              star <= rating
-                                ? "ri-star-fill"
-                                : "ri-star-line testimonial__star-empty"
-                            }
-                          />
-                        ))}
-                      </div>
-                    )}
+                    <div className="testimonial__header-right">
+                      {!isEditing && hasRating && (
+                        <div
+                          className="testimonial__review-stars"
+                          aria-label={`${rating} / 5`}
+                          title={`${rating} / 5`}
+                        >
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <i
+                              key={star}
+                              className={
+                                star <= rating
+                                  ? "ri-star-fill"
+                                  : "ri-star-line testimonial__star-empty"
+                              }
+                            />
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Edit / Delete actions for owner */}
+                      {isOwnReview && !isEditing && (
+                        <div className="testimonial__card-actions">
+                          <button
+                            type="button"
+                            className="testimonial__card-action-btn testimonial__card-action-btn--edit"
+                            onClick={() => handleStartEdit(item)}
+                            title={t("testimonial.edit")}
+                            aria-label={t("testimonial.edit")}
+                          >
+                            <i className="ri-edit-line" />
+                            <span>{t("testimonial.edit")}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="testimonial__card-action-btn testimonial__card-action-btn--delete"
+                            onClick={() => handleDelete(item.id)}
+                            disabled={deletingId === item.id}
+                            title={t("testimonial.delete")}
+                            aria-label={t("testimonial.delete")}
+                          >
+                            <i className="ri-delete-bin-line" />
+                            <span>
+                              {deletingId === item.id
+                                ? t("testimonial.deleting")
+                                : t("testimonial.delete")}
+                            </span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </header>
 
-                  {feedbackText && (
-                    <p className="testimonial__review-text">{feedbackText}</p>
+                  {/* Normal view vs Inline Edit view */}
+                  {isEditing ? (
+                    <div className="testimonial__edit-box">
+                      {/* Rating selector in edit mode */}
+                      <div className="testimonial__rating-group">
+                        <span className="testimonial__rating-label">
+                          {t("testimonial.rating")}:
+                        </span>
+                        <div className="testimonial__stars-picker">
+                          {[1, 2, 3, 4, 5].map((val) => (
+                            <button
+                              key={val}
+                              type="button"
+                              className={`testimonial__star-btn ${
+                                val <= activeEditStarCount
+                                  ? "testimonial__star-btn--filled"
+                                  : ""
+                              }`}
+                              onClick={() =>
+                                setEditStars((curr) => (curr === val ? 0 : val))
+                              }
+                              onMouseEnter={() => setEditHoverStars(val)}
+                              onMouseLeave={() => setEditHoverStars(0)}
+                              aria-label={`${val} ${val === 1 ? t("testimonial.star") : t("testimonial.stars")}`}
+                            >
+                              <i
+                                className={
+                                  val <= activeEditStarCount
+                                    ? "ri-star-fill"
+                                    : "ri-star-line"
+                                }
+                              />
+                            </button>
+                          ))}
+                          {editStars > 0 && (
+                            <>
+                              <span className="testimonial__rating-text">
+                                {editStars} / 5
+                              </span>
+                              <button
+                                type="button"
+                                className="testimonial__rating-reset"
+                                onClick={() => {
+                                  setEditStars(0);
+                                  setEditHoverStars(0);
+                                }}
+                              >
+                                {t("testimonial.clearRating")}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Text in edit mode */}
+                      <textarea
+                        className="testimonial__edit-textarea"
+                        rows={3}
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        placeholder={t("testimonial.placeholder")}
+                      />
+
+                      <div className="testimonial__edit-actions">
+                        <button
+                          type="button"
+                          className="button testimonial__edit-save-btn"
+                          disabled={savingId === item.id}
+                          onClick={() => handleSaveEdit(item.id)}
+                        >
+                          <i className="ri-check-line" />
+                          <span>
+                            {savingId === item.id
+                              ? t("testimonial.editing")
+                              : t("testimonial.save")}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className="testimonial__edit-cancel-btn"
+                          disabled={savingId === item.id}
+                          onClick={handleCancelEdit}
+                        >
+                          <i className="ri-close-line" />
+                          <span>{t("testimonial.cancel")}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    feedbackText && (
+                      <p className="testimonial__review-text">{feedbackText}</p>
+                    )
                   )}
                 </article>
               );

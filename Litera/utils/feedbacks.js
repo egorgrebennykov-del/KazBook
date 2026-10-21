@@ -56,3 +56,62 @@ export async function addFeedback({
   }
   return body?.[0] ?? body;
 }
+
+export async function updateFeedback({
+  id,
+  userId = getCookieUser()?.id,
+  feedback = "",
+  stars = null,
+}) {
+  if (!id || !userId) {
+    throw new Error("Cannot update review without id and user");
+  }
+  const cleanFeedback = (feedback ?? "").trim();
+  const validStars =
+    Number.isInteger(stars) && stars >= 1 && stars <= 5 ? stars : null;
+
+  if (!cleanFeedback && validStars === null) {
+    throw new Error("Please provide review text or a star rating");
+  }
+
+  const response = await fetch(
+    `${TABLE_URL}?id=eq.${id}&user_id=eq.${userId}`,
+    {
+      method: "PATCH",
+      headers: {
+        ...headers,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        feedback: cleanFeedback,
+        stars: validStars,
+      }),
+    },
+  );
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(body?.message ?? body?.hint ?? "Could not update review");
+  }
+  return body?.[0] ?? body;
+}
+
+export async function deleteFeedback({ id, userId = getCookieUser()?.id }) {
+  if (!id || !userId) {
+    throw new Error("Cannot delete review without id and user");
+  }
+
+  const response = await fetch(
+    `${TABLE_URL}?id=eq.${id}&user_id=eq.${userId}`,
+    {
+      method: "DELETE",
+      headers,
+    },
+  );
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.message ?? body?.hint ?? "Could not delete review");
+  }
+  return true;
+}

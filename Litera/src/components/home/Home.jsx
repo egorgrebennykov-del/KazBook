@@ -53,9 +53,9 @@ export default function Home() {
         <div className="home__data">
           <h1 className="home__title">{t("home.title")}</h1>
           <p className="home__description">{t("home.description")}</p>
-          <a href="#featured" className="button">
+          <Link to="/featured" className="button">
             {t("home.startShopping")}
-          </a>
+          </Link>
         </div>
         <div className="home__images">
           <div className="carousel">
@@ -105,9 +105,11 @@ export default function Home() {
                       <span className="home__book-title">
                         {decodeHtmlEntities(book.title)}
                       </span>
-                      <span className="home__book-publisher">
-                        {book.publisher}
-                      </span>
+                      {book.publisher && (
+                        <span className="home__book-publisher">
+                          {book.publisher}
+                        </span>
+                      )}
                     </Link>
                   </article>
                 ))}

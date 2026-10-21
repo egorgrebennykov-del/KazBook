@@ -14,7 +14,7 @@ export const translations = {
     "nav.language": "Сменить язык",
 
     // Home
-    "home.title": "Ваши любимые книги от Молдовы до Европы",
+    "home.title": "Ваши любимые книги уже в Европе",
     "home.description":
       "Litera находит нужную вам книгу в книжных магазинах Молдовы и рассчитывает оптимальный вариант с доставкой по Европе по единой итоговой цене.",
     "home.startShopping": "Перейти к покупкам",
@@ -151,6 +151,15 @@ export const translations = {
     "testimonial.star": "звезда",
     "testimonial.stars": "звезд",
     "testimonial.anonymous": "Покупатель",
+    "testimonial.edit": "Редактировать",
+    "testimonial.delete": "Удалить",
+    "testimonial.save": "Сохранить",
+    "testimonial.cancel": "Отмена",
+    "testimonial.confirmDelete": "Вы уверены, что хотите удалить свой отзыв?",
+    "testimonial.editing": "Сохранение...",
+    "testimonial.deleting": "Удаление...",
+    "testimonial.updated": "Отзыв успешно обновлен!",
+    "testimonial.deleted": "Отзыв удален",
 
     // Join
     "join.title": "Подпишитесь, чтобы получать\nсвежие обновления",
@@ -180,7 +189,7 @@ export const translations = {
     "nav.language": "Switch language",
 
     // Home
-    "home.title": "Your Favorite Books From Moldova to Europe",
+    "home.title": "Your Favorite Books Already in Europe",
     "home.description":
       "Litera finds your book across popular bookstores in Moldova and calculates the best available option with delivery to Europe, all in one final price.",
     "home.startShopping": "Start Shopping",
@@ -317,6 +326,15 @@ export const translations = {
     "testimonial.star": "star",
     "testimonial.stars": "stars",
     "testimonial.anonymous": "Customer",
+    "testimonial.edit": "Edit",
+    "testimonial.delete": "Delete",
+    "testimonial.save": "Save",
+    "testimonial.cancel": "Cancel",
+    "testimonial.confirmDelete": "Are you sure you want to delete your review?",
+    "testimonial.editing": "Saving...",
+    "testimonial.deleting": "Deleting...",
+    "testimonial.updated": "Review updated successfully!",
+    "testimonial.deleted": "Review deleted",
 
     // Join
     "join.title": "Subscribe To Receive \nThe Latest Updates",
