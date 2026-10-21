@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router";
 import { getProfile, isLoggedIn, logout } from "../../../utils/auth";
+import { useLanguage } from "../../context/languageContext";
 import "./Profile.css";
 
 export default function Profile() {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const loggedIn = isLoggedIn();
   const [profile, setProfile] = useState(null);
@@ -46,18 +48,18 @@ export default function Profile() {
 
             <dl className="profile__details">
               <div className="profile__row">
-                <dt>First name</dt>
+                <dt>{t("auth.firstName")}</dt>
                 <dd>{profile.firstName}</dd>
               </div>
               {profile.lastName && (
                 <div className="profile__row">
-                  <dt>Last name</dt>
+                  <dt>{t("auth.lastName")}</dt>
                   <dd>{profile.lastName}</dd>
                 </div>
               )}
               {profile.email && (
                 <div className="profile__row">
-                  <dt>Email</dt>
+                  <dt>{t("auth.email")}</dt>
                   <dd>{profile.email}</dd>
                 </div>
               )}
@@ -68,7 +70,7 @@ export default function Profile() {
               className="profile__logout button"
               onClick={handleLogout}
             >
-              Log out
+              {t("auth.logout")}
             </button>
           </>
         )}

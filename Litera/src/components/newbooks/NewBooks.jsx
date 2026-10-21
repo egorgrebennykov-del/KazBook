@@ -6,6 +6,7 @@ import getExchangeRate from "../../../utils/getExchangeRate";
 import getNewBooks from "../../../utils/getNewBooks";
 import BookImage from "../common/BookImage";
 import decodeHtmlEntities from "../../../utils/decodeHtmlEntities";
+import { useLanguage } from "../../context/languageContext";
 import "./NewBooks.css";
 
 function getEuroPrice(book, rate) {
@@ -15,8 +16,9 @@ function getEuroPrice(book, rate) {
   return rate ? price / rate : null;
 }
 
-function formatPrice(value, currency) {
-  return new Intl.NumberFormat("ru-RU", {
+function formatPrice(value, currency, language) {
+  const locale = language === "ru" ? "ru-RU" : "en-US";
+  return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
     maximumFractionDigits: currency === "EUR" ? 2 : 0,
@@ -24,6 +26,7 @@ function formatPrice(value, currency) {
 }
 
 export default function NewBooks() {
+  const { language, t } = useLanguage();
   const navigate = useNavigate();
   const [data, setData] = useState({ updatedAt: null, products: [] });
   const [status, setStatus] = useState("loading");
@@ -178,11 +181,11 @@ export default function NewBooks() {
     <section className="new-books section container" id="new">
       <div className="new-books__header">
         <div>
-          <h1 className="new-books__title">New Books</h1>
+          <h1 className="new-books__title">{t("newBooks.title")}</h1>
           {updatedAt && (
             <p className="new-books__info">
-              Updated{" "}
-              {new Intl.DateTimeFormat("ru-RU", {
+              {t("newBooks.updated")}{" "}
+              {new Intl.DateTimeFormat(language === "ru" ? "ru-RU" : "en-GB", {
                 dateStyle: "medium",
                 timeStyle: "short",
               }).format(new Date(updatedAt))}
@@ -190,7 +193,7 @@ export default function NewBooks() {
           )}
         </div>
         {products.length > 0 && (
-          <span className="new-books__info">{products.length} new arrivals</span>
+          <span className="new-books__info">{products.length} {t("newBooks.arrivals")}</span>
         )}
       </div>
 
@@ -203,19 +206,19 @@ export default function NewBooks() {
       {status === "loading" && (
         <div className="new-books__status">
           <div className="results__spinner" />
-          <p>Loading new books...</p>
+          <p>{t("newBooks.loading")}</p>
         </div>
       )}
 
       {status === "error" && (
         <div className="new-books__status">
-          <p>Could not load new books. Please try again later.</p>
+          <p>{t("newBooks.error")}</p>
         </div>
       )}
 
       {status === "empty" && (
         <div className="new-books__status">
-          <p>No new books available at this moment.</p>
+          <p>{t("newBooks.empty")}</p>
         </div>
       )}
 
@@ -264,7 +267,7 @@ export default function NewBooks() {
                   <h2 className="results__title">{decodeHtmlEntities(book.title)}</h2>
                   <span className="results__store">{book.store || "librarius.md"}</span>
                   <span className="results__price">
-                    {formatPrice(price, currency)}
+                    {formatPrice(price, currency, language)}
                   </span>
                 </Link>
 
@@ -330,7 +333,7 @@ export default function NewBooks() {
                         className="results__cart-confirm"
                         type="button"
                         aria-label={`Confirm adding ${book.title} to cart`}
-                        title="Confirm"
+                        title={t("cart.confirm")}
                         disabled={isBusy}
                         onClick={() => handleToggleCart(book)}
                       >
@@ -344,7 +347,7 @@ export default function NewBooks() {
                       className="results__cart-button new-books__cart-button"
                       type="button"
                       disabled={isBusy}
-                      title={cartItem ? "Remove from cart" : "Add to cart"}
+                      title={cartItem ? t("cart.remove") : t("cart.addToCart")}
                       onClick={() => handleToggleCart(book)}
                     >
                       <i
@@ -356,15 +359,15 @@ export default function NewBooks() {
                       />
                       {addingUrls.has(book.url)
                         ? cartItem
-                          ? "Removing..."
+                          ? t("cart.removing")
                           : isPending
-                            ? "Adding..."
-                            : "Add to cart"
+                            ? t("cart.adding")
+                            : t("cart.addToCart")
                         : cartItem
-                          ? "Added to cart"
+                          ? t("cart.addedToCart")
                           : cartReady
-                            ? "Add to cart"
-                            : "Checking cart..."}
+                            ? t("cart.addToCart")
+                            : t("cart.checking")}
                     </button>
                   )}
                 </div>

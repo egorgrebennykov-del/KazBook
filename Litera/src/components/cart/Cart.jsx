@@ -8,10 +8,12 @@ import {
 import { getCookieUser, isLoggedIn } from "../../../utils/auth";
 import BookImage from "../common/BookImage";
 import decodeHtmlEntities from "../../../utils/decodeHtmlEntities";
+import { useLanguage } from "../../context/languageContext";
 import "./Cart.css";
 
-function formatPrice(price, currency) {
-  return new Intl.NumberFormat("ru-RU", {
+function formatPrice(price, currency, language) {
+  const locale = language === "ru" ? "ru-RU" : "en-US";
+  return new Intl.NumberFormat(locale, {
     style: "currency",
     currency: currency || "EUR",
     maximumFractionDigits: currency === "EUR" ? 2 : 0,
@@ -19,6 +21,7 @@ function formatPrice(price, currency) {
 }
 
 export default function Cart({ onSearch }) {
+  const { language, t } = useLanguage();
   const location = useLocation();
   const [loggedIn] = useState(isLoggedIn);
   const [user] = useState(getCookieUser);
@@ -53,14 +56,14 @@ export default function Cart({ onSearch }) {
       <section className="cart section container">
         <div className="cart__guest">
           <i className="ri-shopping-basket-2-line cart__guest-icon" />
-          <h1 className="cart__title">Your cart</h1>
-          <p>Sign in or create an account to view and save your cart.</p>
+          <h1 className="cart__title">{t("cart.guestTitle")}</h1>
+          <p>{t("cart.guestDesc")}</p>
           <div className="cart__actions">
             <Link className="button" to="/login?redirect=%2Fcart">
-              Log in
+              {t("auth.loginBtn")}
             </Link>
             <Link className="cart__signup" to="/sign-up?redirect=%2Fcart">
-              Create account
+              {t("auth.signUpBtn")}
             </Link>
           </div>
         </div>
@@ -114,17 +117,32 @@ export default function Cart({ onSearch }) {
     0,
   );
 
+  const getBookCountText = (count) => {
+    if (language === "ru") {
+      const mod10 = count % 10;
+      const mod100 = count % 100;
+      let word = t("cart.bookMany");
+      if (mod10 === 1 && mod100 !== 11) {
+        word = t("cart.bookSingle");
+      } else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) {
+        word = t("cart.bookFew");
+      }
+      return `${count} ${word}`;
+    }
+    return `${count} ${count === 1 ? t("cart.bookSingle") : t("cart.bookFew")}`;
+  };
+
   return (
     <section className="cart section container">
       <div className="cart__heading">
         <div>
-          <h1 className="cart__title">Your cart</h1>
+          <h1 className="cart__title">{t("cart.title")}</h1>
           <p className="cart__count">
             {loading
-              ? "Loading cart..."
+              ? t("cart.loading")
               : error && items.length === 0
-                ? "Cart unavailable"
-                : `${totalBooks} ${totalBooks === 1 ? "book" : "books"}`}
+                ? t("cart.unavailable")
+                : getBookCountText(totalBooks)}
           </p>
         </div>
       </div>
@@ -136,13 +154,13 @@ export default function Cart({ onSearch }) {
       )}
 
       {loading ? (
-        <div className="cart__loading" aria-label="Loading cart" />
+        <div className="cart__loading" aria-label={t("cart.loading")} />
       ) : items.length === 0 && !error ? (
         <div className="cart__empty">
           <i className="ri-book-open-line" />
-          <p>Your cart is empty</p>
+          <p>{t("cart.emptyTitle")}</p>
           <button className="button" type="button" onClick={onSearch}>
-            Find a book
+            {t("cart.findBooks")}
           </button>
         </div>
       ) : (
@@ -229,17 +247,17 @@ export default function Cart({ onSearch }) {
                 </div>
                 <div className="cart__price-block">
                   <strong className="cart__price">
-                    {formatPrice((unitPriceCents * quantity) / 100, "EUR")}
+                    {formatPrice((unitPriceCents * quantity) / 100, "EUR", language)}
                   </strong>
                   <small className="cart__unit-price">
-                    {formatPrice(unitPriceCents / 100, "EUR")} each
+                    {formatPrice(unitPriceCents / 100, "EUR", language)} {t("cart.each")}
                   </small>
                 </div>
                 <button
                   className="cart__remove"
                   type="button"
                   aria-label={`Remove ${book.title} from cart`}
-                  title="Remove from cart"
+                  title={t("cart.remove")}
                   onClick={() => handleRemove(book.id)}
                 >
                   <i className="ri-delete-bin-line" />

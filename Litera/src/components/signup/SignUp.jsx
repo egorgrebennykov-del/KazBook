@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { register } from "../../../utils/auth";
+import { useLanguage } from "../../context/languageContext";
 
 export default function SignUp({ onLogin, onClose }) {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [form, setForm] = useState({
@@ -24,7 +26,7 @@ export default function SignUp({ onLogin, onClose }) {
     event.preventDefault();
     setError("");
     if (form.password !== form.repeat) {
-      setError("Passwords do not match");
+      setError(t("auth.passwordsMismatch"));
       return;
     }
     setSubmitting(true);
@@ -60,15 +62,15 @@ export default function SignUp({ onLogin, onClose }) {
         >
           ×
         </button>
-        <h3 className="login__title">Sign Up</h3>
+        <h3 className="login__title">{t("auth.signUpTitle")}</h3>
         <div className="login__group grid">
           <div>
             <label htmlFor="signup-first-name" className="login__label">
-              First name
+              {t("auth.firstName")}
             </label>
             <input
               type="text"
-              placeholder="Write your first name"
+              placeholder={t("auth.firstNamePlaceholder")}
               id="signup-first-name"
               className="login__input"
               autoComplete="given-name"
@@ -79,11 +81,11 @@ export default function SignUp({ onLogin, onClose }) {
           </div>
           <div>
             <label htmlFor="signup-last-name" className="login__label">
-              Last name
+              {t("auth.lastName")}
             </label>
             <input
               type="text"
-              placeholder="Write your last name"
+              placeholder={t("auth.lastNamePlaceholder")}
               id="signup-last-name"
               className="login__input"
               autoComplete="family-name"
@@ -94,11 +96,11 @@ export default function SignUp({ onLogin, onClose }) {
           </div>
           <div>
             <label htmlFor="signup-email" className="login__label">
-              Email
+              {t("auth.email")}
             </label>
             <input
               type="email"
-              placeholder="Write your email"
+              placeholder={t("auth.emailPlaceholder")}
               id="signup-email"
               className="login__input"
               autoComplete="email"
@@ -108,11 +110,11 @@ export default function SignUp({ onLogin, onClose }) {
           </div>
           <div>
             <label htmlFor="signup-password" className="login__label">
-              Password
+              {t("auth.password")}
             </label>
             <input
               type="password"
-              placeholder="Create a password"
+              placeholder={t("auth.passwordPlaceholder")}
               id="signup-password"
               className="login__input"
               autoComplete="new-password"
@@ -124,11 +126,11 @@ export default function SignUp({ onLogin, onClose }) {
           </div>
           <div>
             <label htmlFor="signup-repeat-password" className="login__label">
-              Repeat Password
+              {t("auth.repeatPassword")}
             </label>
             <input
               type="password"
-              placeholder="Repeat your password"
+              placeholder={t("auth.repeatPasswordPlaceholder")}
               id="signup-repeat-password"
               className="login__input"
               autoComplete="new-password"
@@ -144,7 +146,7 @@ export default function SignUp({ onLogin, onClose }) {
         )}
         <div>
           <span className="login__signup">
-            Already have an account?{" "}
+            {t("auth.haveAccount")}{" "}
             <a
               href="#"
               onClick={(event) => {
@@ -152,7 +154,7 @@ export default function SignUp({ onLogin, onClose }) {
                 onLogin();
               }}
             >
-              Log In
+              {t("auth.loginBtn")}
             </a>
           </span>
           <button
@@ -160,7 +162,7 @@ export default function SignUp({ onLogin, onClose }) {
             className="login__button button"
             disabled={submitting}
           >
-            Sign Up
+            {t("auth.signUpBtn")}
           </button>
         </div>
       </form>

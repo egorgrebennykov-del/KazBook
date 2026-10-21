@@ -1,25 +1,27 @@
 import { Link } from "react-router";
 import { isLoggedIn } from "../../../utils/auth";
-
-const navigationLinks = [
-  { to: "/", label: "Home" },
-  { to: "/featured", label: "Book Picks" },
-  { to: "/discount", label: "Discounts" },
-  { to: "/new", label: "New books" },
-  { to: "/testimonial", label: "Reviews" },
-];
+import { useLanguage } from "../../context/languageContext";
 
 export default function Footer() {
+  const { t } = useLanguage();
   const accountPath = isLoggedIn() ? "/profile" : "/login";
-  const accountLabel = isLoggedIn() ? "Profile" : "Sign in";
+  const accountLabel = isLoggedIn() ? t("nav.profile") : t("nav.login");
+
+  const navigationLinks = [
+    { to: "/", label: t("nav.home") },
+    { to: "/featured", label: t("nav.bookPicks") },
+    { to: "/discount", label: t("nav.discount") },
+    { to: "/new", label: t("nav.newBooks") },
+    { to: "/testimonial", label: t("nav.testimonial") },
+  ];
 
   return (
     <footer className="footer">
       <div className="footer__container container">
-        <Link to="/" className="footer__brand" aria-label="KazBook home">
+        <Link to="/" className="footer__brand" aria-label="Litera home">
           <img
             src="/assets/img/logo-dark.png"
-            alt="KazBook"
+            alt="Litera"
             className="footer__logo-image"
           />
         </Link>
@@ -37,7 +39,7 @@ export default function Footer() {
         <div className="footer__actions">
           <Link to="/cart" className="footer__action">
             <i className="ri-shopping-basket-2-line" aria-hidden="true" />
-            Cart
+            {t("nav.cart")}
           </Link>
           <Link to={accountPath} className="footer__action">
             <i className="ri-user-line" aria-hidden="true" />
@@ -47,9 +49,9 @@ export default function Footer() {
       </div>
       <div className="footer__bottom container">
         <span className="footer__copy">
-          © {new Date().getFullYear()} KazBook
+          © {new Date().getFullYear()} Litera
         </span>
-        <span className="footer__tagline">Books from Moldova to Europe</span>
+        <span className="footer__tagline">{t("footer.tagline")}</span>
       </div>
     </footer>
   );

@@ -4,9 +4,11 @@ import CarouselControls from "../carouselcontrols/CarouselControls";
 import getHomepageBooks from "../../../utils/getHomepageBooks";
 import BookImage from "../common/BookImage";
 import decodeHtmlEntities from "../../../utils/decodeHtmlEntities";
+import { useLanguage } from "../../context/languageContext";
 import "./Home.css";
 
 export default function Home() {
+  const { t } = useLanguage();
   const location = useLocation();
   const [books, setBooks] = useState([]);
   const [booksError, setBooksError] = useState(false);
@@ -49,16 +51,10 @@ export default function Home() {
     <section className="home section" id="home">
       <div className="home__container container grid">
         <div className="home__data">
-          <h1 className="home__title">
-            Your Favorite Books <br /> From Moldova to Europe
-          </h1>
-          <p className="home__description">
-            KazBook finds your book across popular bookstores in Moldova and
-            calculates the best available option with delivery to Europe, all in
-            one final price.
-          </p>
-          <a href="#" className="button">
-            Start Shopping
+          <h1 className="home__title">{t("home.title")}</h1>
+          <p className="home__description">{t("home.description")}</p>
+          <a href="#featured" className="button">
+            {t("home.startShopping")}
           </a>
         </div>
         <div className="home__images">
@@ -121,8 +117,8 @@ export default function Home() {
             {books.length === 0 && (
               <p className="home__books-status">
                 {booksError
-                  ? "Featured books are unavailable."
-                  : "Loading featured books..."}
+                  ? t("featured.error")
+                  : t("featured.loading")}
               </p>
             )}
           </div>

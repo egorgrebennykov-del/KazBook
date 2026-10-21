@@ -22,13 +22,29 @@ import {
   useNavigate,
 } from "react-router";
 import { isLoggedIn } from "../utils/auth";
+import { getCookie, setCookie } from "../utils/cookies";
+
+const THEME_COOKIE_KEY = "litera_theme";
+
+function getInitialTheme() {
+  if (typeof document === "undefined") return true;
+  try {
+    const saved = getCookie(THEME_COOKIE_KEY) || getCookie("theme");
+    if (saved === "dark") return false;
+    if (saved === "light") return true;
+  } catch {
+    // Ignore error
+  }
+  // Default: light theme
+  return true;
+}
 
 function GuestOnly({ children }) {
   return isLoggedIn() ? <Navigate to="/" replace /> : children;
 }
 
 function App() {
-  const [lightTheme, setLightTheme] = useState(true);
+  const [lightTheme, setLightTheme] = useState(getInitialTheme);
   const [showSearch, setShowSearch] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -49,6 +65,7 @@ function App() {
 
   useEffect(() => {
     document.body.classList.toggle("dark-theme", !lightTheme);
+    setCookie(THEME_COOKIE_KEY, lightTheme ? "light" : "dark");
   }, [lightTheme]);
 
   const theme = () => {

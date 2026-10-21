@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import { useLanguage } from "../../context/languageContext";
 
 export default function Search({ show, onClose }) {
+  const { t } = useLanguage();
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
 
@@ -20,7 +22,7 @@ export default function Search({ show, onClose }) {
         <i className="ri-search-line search__icon" />
         <input
           type="search"
-          placeholder="What are you looking for?"
+          placeholder={t("search.placeholder")}
           className="search__input"
           value={query}
           onChange={(e) => setQuery(e.target.value)}

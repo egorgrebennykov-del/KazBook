@@ -6,10 +6,12 @@ import getExchangeRate from "../../../utils/getExchangeRate";
 import getDiscountSnapshot from "../../../utils/getDiscountSnapshot";
 import BookImage from "../common/BookImage";
 import decodeHtmlEntities from "../../../utils/decodeHtmlEntities";
+import { useLanguage } from "../../context/languageContext";
 import "./Discount.css";
 
-function formatPrice(value, currency) {
-  return new Intl.NumberFormat("ru-RU", {
+function formatPrice(value, currency, language) {
+  const locale = language === "ru" ? "ru-RU" : "en-US";
+  return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
     maximumFractionDigits: currency === "EUR" ? 2 : 0,
@@ -60,6 +62,7 @@ function normalizeSnapshot(value) {
 }
 
 export default function Discount() {
+  const { language, t } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
   const userId = getCookieUser()?.id;
@@ -217,7 +220,7 @@ export default function Discount() {
   if (!snapshot) {
     return (
       <section className="deals section container">
-        <div className="deals__state">Loading discounts...</div>
+        <div className="deals__state">{t("discount.loading")}</div>
       </section>
     );
   }
@@ -228,17 +231,17 @@ export default function Discount() {
     <section className="deals section container">
       <div className="deals__heading">
         <div>
-          <h1 className="deals__title">Discount books</h1>
+          <h1 className="deals__title">{t("discount.title")}</h1>
           {snapshot.updatedAt && (
             <p className="deals__updated">
-              Updated{" "}
-              {new Intl.DateTimeFormat("en-GB").format(
+              {t("discount.updated")}{" "}
+              {new Intl.DateTimeFormat(language === "ru" ? "ru-RU" : "en-GB").format(
                 new Date(snapshot.updatedAt),
               )}
             </p>
           )}
         </div>
-        <span className="deals__updated">{products.length} offers</span>
+        <span className="deals__updated">{products.length} {t("discount.offers")}</span>
       </div>
       {cartError && (
         <p className="results__cart-error" role="alert">
@@ -248,7 +251,7 @@ export default function Discount() {
 
       {products.length === 0 ? (
         <div className="deals__state">
-          No discounted books in the latest update.
+          {t("discount.empty")}
         </div>
       ) : (
         <div className="deals__grid">
@@ -311,10 +314,10 @@ export default function Discount() {
                   </span>
                   <div className="deals__prices">
                     <strong className="results__price deals__price">
-                      {formatPrice(price, currency)}
+                      {formatPrice(price, currency, language)}
                     </strong>
                     <span className="deals__regular-price">
-                      {formatPrice(regularPrice, currency)}
+                      {formatPrice(regularPrice, currency, language)}
                     </span>
                   </div>
                 </Link>
@@ -380,7 +383,7 @@ export default function Discount() {
                         className="results__cart-confirm"
                         type="button"
                         aria-label={`Confirm adding ${book.title} to cart`}
-                        title="Confirm"
+                        title={t("cart.confirm")}
                         disabled={isBusy || !canAddToCart}
                         onClick={() => handleToggleCart(preview)}
                       >
@@ -393,7 +396,7 @@ export default function Discount() {
                       className="results__cart-button"
                       type="button"
                       disabled={isBusy || (!cartItem && !canAddToCart)}
-                      title={cartItem ? "Remove from cart" : "Add to cart"}
+                      title={cartItem ? t("cart.remove") : t("cart.addToCart")}
                       onClick={() => handleToggleCart(preview)}
                     >
                       <i
@@ -405,15 +408,15 @@ export default function Discount() {
                       />
                       {addingUrls.has(book.url)
                         ? cartItem
-                          ? "Removing..."
+                          ? t("cart.removing")
                           : isPending
-                            ? "Adding..."
-                            : "Add to cart"
+                            ? t("cart.adding")
+                            : t("cart.addToCart")
                         : cartItem
-                          ? "Added to cart"
+                          ? t("cart.addedToCart")
                           : cartReady
-                            ? "Add to cart"
-                            : "Checking cart..."}
+                            ? t("cart.addToCart")
+                            : t("cart.checking")}
                     </button>
                   )}
                 </div>

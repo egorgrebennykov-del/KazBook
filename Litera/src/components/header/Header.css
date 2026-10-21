@@ -1,0 +1,35 @@
+.nav__lang-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  background: var(--container-color);
+  border: 1px solid var(--border-color);
+  padding: 0.2rem 0.5rem;
+  border-radius: 1.25rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+  transition: border-color 0.3s, background-color 0.3s, color 0.3s;
+}
+
+.nav__lang-toggle:hover {
+  border-color: var(--first-color);
+}
+
+.nav__lang-item {
+  color: var(--text-color);
+  opacity: 0.55;
+  transition: color 0.2s, opacity 0.2s;
+}
+
+.nav__lang-item--active {
+  color: var(--first-color);
+  opacity: 1;
+}
+
+.nav__lang-divider {
+  color: var(--text-color);
+  opacity: 0.35;
+  font-size: 0.7rem;
+}

@@ -6,48 +6,68 @@ import { addToCart, getCart, removeFromCart } from "../../../utils/cart";
 import { getCookieUser, isLoggedIn } from "../../../utils/auth";
 import BookImage from "../common/BookImage";
 import decodeHtmlEntities from "../../../utils/decodeHtmlEntities";
+import { useLanguage } from "../../context/languageContext";
 import "./SearchResults.css";
 
-const loadingMessages = [
-  "Checking bookstores",
-  "Searching for your books",
-  "Comparing prices",
-  "Browsing book catalogs",
-  "Finding the best deals",
-  "Checking book availability",
-  "Collecting prices from stores",
-  "Comparing book editions",
-  "Looking for the lowest prices",
-  "Almost there",
-  "Exploring bookstore listings",
-  "Hunting for the best deals",
-  "Checking the latest offers",
-  "Gathering search results",
-  "Finding your next read",
-];
+const loadingMessages = {
+  ru: [
+    "Опрашиваем книжные магазины",
+    "Ищем ваши книги",
+    "Сравниваем цены",
+    "Просматриваем каталоги",
+    "Ищем лучшие предложения",
+    "Проверяем наличие книг",
+    "Собираем цены из магазинов",
+    "Сравниваем издания",
+    "Ищем самые выгодные цены",
+    "Почти готово",
+    "Проверяем каталоги магазинов",
+    "Ищем лучшие варианты",
+    "Уточняем свежие предложения",
+    "Формируем результаты поиска",
+    "Подбираем для вас книги",
+  ],
+  en: [
+    "Checking bookstores",
+    "Searching for your books",
+    "Comparing prices",
+    "Browsing book catalogs",
+    "Finding the best deals",
+    "Checking book availability",
+    "Collecting prices from stores",
+    "Comparing book editions",
+    "Looking for the lowest prices",
+    "Almost there",
+    "Exploring bookstore listings",
+    "Hunting for the best deals",
+    "Checking the latest offers",
+    "Gathering search results",
+    "Finding your next read",
+  ],
+};
 
-function LoadingMessage() {
+function LoadingMessage({ language }) {
   const [index, setIndex] = useState(0);
+  const messages = loadingMessages[language] || loadingMessages.en;
 
   useEffect(() => {
     const id = setInterval(
-      () => setIndex((i) => (i + 1) % loadingMessages.length),
+      () => setIndex((i) => (i + 1) % messages.length),
       2000,
     );
     return () => clearInterval(id);
-  }, []);
+  }, [messages.length]);
 
   return (
     <p key={index} className="results__message">
-      {loadingMessages[index]}
+      {messages[index]}
       <span className="results__dots" />
     </p>
   );
 }
 
-
-
 export default function SearchResults() {
+  const { language, t } = useLanguage();
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const query = params.get("q") ?? "";
@@ -191,17 +211,22 @@ export default function SearchResults() {
     }
   };
 
+  const resultsHeading =
+    language === "ru"
+      ? `${t("search.resultsFor")} «${query}»`
+      : `${t("search.resultsFor")} “${query}”`;
+
   return (
     <section className="results section container">
-      <h2 className="section__title">Results for “{query}”</h2>
+      <h2 className="section__title">{resultsHeading}</h2>
 
       {loading && (
         <div className="results__loader">
           <div className="results__spinner" />
-          <LoadingMessage />
+          <LoadingMessage language={language} />
         </div>
       )}
-      {!loading && books.length === 0 && <p>Nothing found</p>}
+      {!loading && books.length === 0 && <p>{t("search.nothingFound")}</p>}
       {cartError && (
         <p className="results__cart-error" role="alert">
           {cartError}
@@ -251,12 +276,15 @@ export default function SearchResults() {
                   <span className="results__price">
                     {Number.isNaN(book.price)
                       ? "—"
-                      : new Intl.NumberFormat("ru-RU", {
-                          style: "currency",
-                          currency: book.currency,
-                          maximumFractionDigits:
-                            book.currency === "EUR" ? 2 : 0,
-                        }).format(book.price)}
+                      : new Intl.NumberFormat(
+                          language === "ru" ? "ru-RU" : "en-US",
+                          {
+                            style: "currency",
+                            currency: book.currency,
+                            maximumFractionDigits:
+                              book.currency === "EUR" ? 2 : 0,
+                          },
+                        ).format(book.price)}
                   </span>
                 </Link>
                 <div className="results__cart-actions">
@@ -321,7 +349,7 @@ export default function SearchResults() {
                         className="results__cart-confirm"
                         type="button"
                         aria-label={`Confirm adding ${book.title} to cart`}
-                        title="Confirm"
+                        title={t("cart.confirm")}
                         disabled={isBusy}
                         onClick={() => handleToggleCart(book)}
                       >
@@ -334,7 +362,7 @@ export default function SearchResults() {
                       className="results__cart-button"
                       type="button"
                       disabled={isBusy}
-                      title={cartItem ? "Remove from cart" : "Add to cart"}
+                      title={cartItem ? t("cart.remove") : t("cart.addToCart")}
                       onClick={() => handleToggleCart(book)}
                     >
                       <i
@@ -346,15 +374,15 @@ export default function SearchResults() {
                       />
                       {addingUrls.has(book.url)
                         ? cartItem
-                          ? "Removing..."
+                          ? t("cart.removing")
                           : isPending
-                            ? "Adding..."
-                            : "Add to cart"
+                            ? t("cart.adding")
+                            : t("cart.addToCart")
                         : cartItem
-                          ? "Added to cart"
+                          ? t("cart.addedToCart")
                           : cartReady
-                            ? "Add to cart"
-                            : "Checking cart..."}
+                            ? t("cart.addToCart")
+                            : t("cart.checking")}
                     </button>
                   )}
                 </div>

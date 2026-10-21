@@ -6,11 +6,12 @@ import { addToCart, getCartItem, removeFromCart } from "../../../utils/cart";
 import { getCookieUser, isLoggedIn } from "../../../utils/auth";
 import BookImage from "../common/BookImage";
 import decodeHtmlEntities from "../../../utils/decodeHtmlEntities";
+import { useLanguage } from "../../context/languageContext";
 import "./BookDetails.css";
 
 const HIDDEN_PROPERTIES = /^цена|вы экономите|иллюстрированное издание|тираж/i;
 
-const PROPERTY_NAMES = {
+const PROPERTY_NAMES_EN = {
   код: "Code",
   "код товара": "Code",
   автор: "Author",
@@ -31,7 +32,7 @@ const PROPERTY_NAMES = {
   продавец: "Seller",
 };
 
-const PROPERTY_VALUES = {
+const PROPERTY_VALUES_EN = {
   русский: "Russian",
   румынский: "Romanian",
   молдавский: "Moldavian",
@@ -51,14 +52,21 @@ const PROPERTY_VALUES = {
 const translate = (dictionary, text) =>
   dictionary[String(text).trim().toLowerCase()] ?? text;
 
-const formatPrice = (value, currency) =>
-  new Intl.NumberFormat("ru-RU", {
+const formatCapitalized = (text) => {
+  const str = String(text).trim();
+  if (!str) return "";
+  return str.charAt(0).toUpperCase() + str.slice(1);
+};
+
+const formatPrice = (value, currency, language) =>
+  new Intl.NumberFormat(language === "ru" ? "ru-RU" : "en-US", {
     style: "currency",
     currency,
     maximumFractionDigits: currency === "EUR" ? 2 : 0,
   }).format(value);
 
 export default function BookDetails() {
+  const { language, t } = useLanguage();
   const [params] = useSearchParams();
   const url = params.get("url") ?? "";
   const { state } = useLocation();
@@ -143,24 +151,34 @@ export default function BookDetails() {
   if (preview && Number.isFinite(preview.price)) {
     price =
       preview.currency !== "EUR" && rate
-        ? formatPrice(toEur(preview.price), "EUR")
-        : formatPrice(preview.price, preview.currency);
+        ? formatPrice(toEur(preview.price), "EUR", language)
+        : formatPrice(preview.price, preview.currency, language);
   } else if (Number.isFinite(rawPrice) && rate) {
-    price = formatPrice(toEur(rawPrice), "EUR");
+    price = formatPrice(toEur(rawPrice), "EUR", language);
   } else if (Number.isFinite(rawPrice)) {
-    price = formatPrice(rawPrice, product?.currency ?? "MDL");
+    price = formatPrice(rawPrice, product?.currency ?? "MDL", language);
   }
 
   const seen = new Set();
   const properties = (product?.additionalProperties ?? [])
     .filter((p) => p.name && p.value && !HIDDEN_PROPERTIES.test(p.name))
-    .map((p) => ({
-      name: translate(PROPERTY_NAMES, p.name),
-      value: translate(PROPERTY_VALUES, decodeHtmlEntities(p.value)),
-    }))
+    .map((p) => {
+      const decodedVal = decodeHtmlEntities(p.value);
+      if (language === "en") {
+        return {
+          name: translate(PROPERTY_NAMES_EN, p.name),
+          value: translate(PROPERTY_VALUES_EN, decodedVal),
+        };
+      }
+      return {
+        name: formatCapitalized(p.name),
+        value: formatCapitalized(decodedVal),
+      };
+    })
     .filter((p) => !seen.has(p.name) && seen.add(p.name));
+
   const author = decodeHtmlEntities(
-    properties.find((p) => p.name === "Author")?.value ?? "",
+    properties.find((p) => p.name === "Author" || p.name.toLowerCase() === "автор")?.value ?? "",
   );
 
   const handleToggleCart = async () => {
@@ -230,7 +248,7 @@ export default function BookDetails() {
           })
         }
       >
-        <i className="ri-arrow-left-line" /> Back
+        <i className="ri-arrow-left-line" /> {t("book.back")}
       </button>
 
       {loading && !preview && (
@@ -241,7 +259,7 @@ export default function BookDetails() {
 
       {!loading && error && !preview && (
         <p>
-          Could not load the book. <Link to="/">Go home</Link>
+          {t("book.notFound")} <Link to="/">{t("book.goHome")}</Link>
         </p>
       )}
 
@@ -269,8 +287,8 @@ export default function BookDetails() {
                   }`}
                 >
                   {product.availability === "InStock"
-                    ? "In stock"
-                    : "Out of stock"}
+                    ? t("book.inStock")
+                    : t("book.outOfStock")}
                 </span>
               )}
             </div>
@@ -283,7 +301,7 @@ export default function BookDetails() {
                 <div className="book__quantity" aria-label="Quantity">
                   <button
                     type="button"
-                    aria-label="Decrease quantity"
+                    aria-label={t("cart.decrease")}
                     disabled={addingToCart || pendingQuantity <= 1}
                     onClick={() =>
                       setPendingQuantity((quantity) =>
@@ -309,7 +327,7 @@ export default function BookDetails() {
                   />
                   <button
                     type="button"
-                    aria-label="Increase quantity"
+                    aria-label={t("cart.increase")}
                     disabled={addingToCart}
                     onClick={() =>
                       setPendingQuantity((quantity) => Number(quantity) + 1)
@@ -321,8 +339,8 @@ export default function BookDetails() {
                 <button
                   className="book__cart-confirm"
                   type="button"
-                  aria-label="Confirm adding to cart"
-                  title="Confirm"
+                  aria-label={t("cart.confirm")}
+                  title={t("cart.confirm")}
                   disabled={addingToCart}
                   onClick={handleToggleCart}
                 >
@@ -343,11 +361,11 @@ export default function BookDetails() {
                 />
                 {addingToCart
                   ? addedToCart
-                    ? "Removing..."
-                    : "Adding..."
+                    ? t("cart.removing")
+                    : t("cart.adding")
                   : addedToCart
-                    ? "Added to cart"
-                    : "Add to cart"}
+                    ? t("cart.addedToCart")
+                    : t("cart.addToCart")}
               </button>
             )}
             {cartError && (
@@ -357,19 +375,19 @@ export default function BookDetails() {
             )}
 
             {loading && preview && (
-              <p className="book__loading-hint">Loading full details...</p>
+              <p className="book__loading-hint">{t("book.loadingHint")}</p>
             )}
 
             {product?.description && (
               <div className="book__section">
-                <h2 className="book__heading">About the book</h2>
+                <h2 className="book__heading">{t("book.about")}</h2>
                 <p className="book__description">{product.description}</p>
               </div>
             )}
 
             {properties.length > 0 && (
               <div className="book__section">
-                <h2 className="book__heading">Details</h2>
+                <h2 className="book__heading">{t("book.details")}</h2>
                 <dl className="book__props">
                   {properties.map((p) => (
                     <div key={p.name} className="book__prop">

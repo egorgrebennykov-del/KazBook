@@ -18,12 +18,12 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
 const SOURCE_URL =
   process.env.HOMEPAGE_SOURCE_URL ||
-  "https://librarius.md/ru/books?sortBy=qty_desc&perPage=36&pb%5B%5D=215&pb%5B%5D=8&pb%5B%5D=356&pb%5B%5D=4331";
+  "https://librarius.md/ru/books?sortBy=qty_desc&perPage=48&pb%5B%5D=215&pb%5B%5D=8&pb%5B%5D=192&pb%5B%5D=356&pb%5B%5D=4331&pb%5B%5D=362";
 const DETAIL_BATCH_SIZE = 5;
 const COVER_BATCH_SIZE = 4;
 const BOOK_COUNT = 5;
 const MIN_PRICE = 50;
-const MIN_COVER_SCORE = 0.12;
+const MIN_COVER_SCORE = 0.08;
 const COVER_LABELS = [
   "a flat straight-on scan of one single book front cover only, artwork fills the image edge to edge, no visible spine, no background",
   "a 3D book mockup standing upright at an angle with a visible spine",
@@ -177,9 +177,19 @@ async function selectPublishers(books) {
     }
   }
 
-  if (selected.length !== BOOK_COUNT) {
+  if (selected.length < BOOK_COUNT) {
+    for (const book of books) {
+      if (selected.length >= BOOK_COUNT) break;
+      if (!seenUrls.has(book.url)) {
+        seenUrls.add(book.url);
+        selected.push({ ...book, publisher: book.publisher || "librarius.md" });
+      }
+    }
+  }
+
+  if (selected.length === 0) {
     throw new Error(
-      `Found only ${selected.length} visually suitable books from distinct publishers`,
+      "No visually suitable books found for homepage",
     );
   }
   return selected;

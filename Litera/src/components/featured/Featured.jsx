@@ -6,6 +6,7 @@ import getExchangeRate from "../../../utils/getExchangeRate";
 import getBookPicks from "../../../utils/getBookPicks";
 import BookImage from "../common/BookImage";
 import decodeHtmlEntities from "../../../utils/decodeHtmlEntities";
+import { useLanguage } from "../../context/languageContext";
 import "./Featured.css";
 
 function getEuroPrice(book, rate) {
@@ -25,6 +26,7 @@ function formatEuroPrice(price) {
 }
 
 export default function Featured() {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [books, setBooks] = useState([]);
   const [status, setStatus] = useState("loading");
@@ -177,19 +179,19 @@ export default function Featured() {
   return (
     <section className="featured section book-picks" id="featured">
       <div className="container">
-        <h1 className="section__title">Book Picks</h1>
+        <h1 className="section__title">{t("featured.title")}</h1>
         {status === "loading" && (
           <p className="book-picks__status" role="status">
-            Loading books...
+            {t("featured.loading")}
           </p>
         )}
         {status === "error" && (
           <p className="book-picks__status" role="alert">
-            Could not load Book Picks. Please try again later.
+            {t("featured.error")}
           </p>
         )}
         {status === "empty" && (
-          <p className="book-picks__status">No books have been added yet.</p>
+          <p className="book-picks__status">{t("featured.empty")}</p>
         )}
         {status === "ready" && !rate && (
           <p className="book-picks__status" role="alert">
@@ -198,7 +200,7 @@ export default function Featured() {
         )}
         {status === "ready" && rate && eligibleBooks.length === 0 && (
           <p className="book-picks__status">
-            No books meet the €2 minimum price.
+            {t("featured.empty")}
           </p>
         )}
         {cartError && (
@@ -314,7 +316,7 @@ export default function Featured() {
                           className="results__cart-confirm"
                           type="button"
                           aria-label={`Confirm adding ${book.title} to cart`}
-                          title="Confirm"
+                          title={t("cart.confirm")}
                           disabled={isBusy}
                           onClick={() => handleToggleCart(book)}
                         >
@@ -327,7 +329,7 @@ export default function Featured() {
                         className="results__cart-button book-picks__cart-button"
                         type="button"
                         disabled={isBusy}
-                        title={cartItem ? "Remove from cart" : "Add to cart"}
+                        title={cartItem ? t("cart.remove") : t("cart.addToCart")}
                         onClick={() => handleToggleCart(book)}
                       >
                         <i
@@ -339,15 +341,15 @@ export default function Featured() {
                         />
                         {addingUrls.has(book.url)
                           ? cartItem
-                            ? "Removing..."
+                            ? t("cart.removing")
                             : isPending
-                              ? "Adding..."
-                              : "Add to cart"
+                              ? t("cart.adding")
+                              : t("cart.addToCart")
                           : cartItem
-                            ? "Added to cart"
+                            ? t("cart.addedToCart")
                             : cartReady
-                              ? "Add to cart"
-                              : "Checking cart..."}
+                              ? t("cart.addToCart")
+                              : t("cart.checking")}
                       </button>
                     )}
                   </div>

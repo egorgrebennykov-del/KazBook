@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { login } from "../../../utils/auth";
+import { useLanguage } from "../../context/languageContext";
 
 export default function Login({ onSignUp, onClose }) {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [email, setEmail] = useState("");
@@ -41,15 +43,15 @@ export default function Login({ onSignUp, onClose }) {
         >
           ×
         </button>
-        <h3 className="login__title">Log In</h3>
+        <h3 className="login__title">{t("auth.loginTitle")}</h3>
         <div className="login__group grid">
           <div>
             <label htmlFor="login-email" className="login__label">
-              Email
+              {t("auth.email")}
             </label>
             <input
               type="email"
-              placeholder="Write your email"
+              placeholder={t("auth.emailPlaceholder")}
               id="login-email"
               className="login__input"
               value={email}
@@ -60,11 +62,11 @@ export default function Login({ onSignUp, onClose }) {
           </div>
           <div>
             <label htmlFor="login-pass" className="login__label">
-              Password
+              {t("auth.password")}
             </label>
             <input
               type="password"
-              placeholder="Enter your password"
+              placeholder={t("auth.passwordPlaceholder")}
               id="login-pass"
               className="login__input"
               value={password}
@@ -81,7 +83,7 @@ export default function Login({ onSignUp, onClose }) {
         )}
         <div>
           <span className="login__signup">
-            You do not have an account?{" "}
+            {t("auth.noAccount")}{" "}
             <a
               href="#"
               onClick={(event) => {
@@ -89,18 +91,18 @@ export default function Login({ onSignUp, onClose }) {
                 onSignUp();
               }}
             >
-              Sign Up
+              {t("auth.signUpBtn")}
             </a>
           </span>
           <a href="#" className="login__forgot">
-            You forgot your password
+            {t("auth.forgotPassword")}
           </a>
           <button
             type="submit"
             className="login__button button"
             disabled={submitting}
           >
-            Log In
+            {t("auth.loginBtn")}
           </button>
         </div>
       </form>
