@@ -124,6 +124,9 @@ export const translations = {
     "checkout.fillAddressPrompt": "Укажите адрес доставки, чтобы рассчитать стоимость доставки и продолжить оплату.",
     "checkout.fillRequired": "Пожалуйста, заполните город и улицу доставки.",
     "checkout.deleteAddress": "Удалить адрес",
+    "checkout.selectCountry": "Выберите страну",
+    "checkout.searchCountry": "Поиск страны или кода...",
+    "checkout.noCountryFound": "Страна не найдена",
 
     // Book Details
     "book.back": "Назад",
@@ -166,6 +169,8 @@ export const translations = {
     "auth.profile": "Профиль",
     "auth.logout": "Выйти",
     "auth.passwordsMismatch": "Пароли не совпадают",
+    "auth.showPassword": "Показать пароль",
+    "auth.hidePassword": "Скрыть пароль",
 
     // Testimonial & Feedbacks
     "testimonial.title": "Отзывы наших читателей",
@@ -335,6 +340,9 @@ export const translations = {
     "checkout.fillAddressPrompt": "Please enter your shipping address to calculate delivery fee and complete payment.",
     "checkout.fillRequired": "Please fill in the required address fields (city and street).",
     "checkout.deleteAddress": "Delete address",
+    "checkout.selectCountry": "Select country",
+    "checkout.searchCountry": "Search country or dial code...",
+    "checkout.noCountryFound": "No country found",
 
     // Book Details
     "book.back": "Back",
@@ -377,6 +385,8 @@ export const translations = {
     "auth.profile": "Profile",
     "auth.logout": "Log out",
     "auth.passwordsMismatch": "Passwords do not match",
+    "auth.showPassword": "Show password",
+    "auth.hidePassword": "Hide password",
 
     // Testimonial & Feedbacks
     "testimonial.title": "Customer Reviews",

@@ -1292,3 +1292,37 @@ body.dark-theme {
     padding-inline: 0.4rem;
   }
 }
+
+
+/* Password toggle & copy */
+.auth__password-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.auth__password-input {
+  padding-right: 3rem !important;
+}
+
+.auth__password-toggle {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-color-light, #999);
+  font-size: 1.25rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  transition: color 0.2s;
+}
+
+.auth__password-toggle:hover {
+  color: var(--first-color);
+}

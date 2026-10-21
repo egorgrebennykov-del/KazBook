@@ -9,8 +9,69 @@ export default function Login({ onSignUp, onClose }) {
   const [params] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const handlePasswordCopy = (e) => {
+    const input = e.currentTarget;
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    const textToCopy =
+      start !== null && end !== null && start !== end
+        ? password.substring(start, end)
+        : password;
+
+    if (textToCopy) {
+      if (e.clipboardData) {
+        e.clipboardData.setData("text/plain", textToCopy);
+        e.preventDefault();
+      }
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(textToCopy).catch(() => {});
+      }
+    }
+  };
+
+  const handlePasswordCut = (e) => {
+    const input = e.currentTarget;
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    const textToCopy =
+      start !== null && end !== null && start !== end
+        ? password.substring(start, end)
+        : password;
+
+    if (textToCopy) {
+      if (e.clipboardData) {
+        e.clipboardData.setData("text/plain", textToCopy);
+        e.preventDefault();
+      }
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(textToCopy).catch(() => {});
+      }
+      if (start !== null && end !== null && start !== end) {
+        setPassword(password.slice(0, start) + password.slice(end));
+      } else {
+        setPassword("");
+      }
+    }
+  };
+
+  const handlePasswordKeyDown = (e) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "C")) {
+      const input = e.currentTarget;
+      const start = input.selectionStart;
+      const end = input.selectionEnd;
+      const textToCopy =
+        start !== null && end !== null && start !== end
+          ? password.substring(start, end)
+          : password;
+      if (textToCopy && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(textToCopy).catch(() => {});
+      }
+    }
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -64,16 +125,31 @@ export default function Login({ onSignUp, onClose }) {
             <label htmlFor="login-pass" className="login__label">
               {t("auth.password")}
             </label>
-            <input
-              type="password"
-              placeholder={t("auth.passwordPlaceholder")}
-              id="login-pass"
-              className="login__input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
+            <div className="auth__password-wrap">
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder={t("auth.passwordPlaceholder")}
+                id="login-pass"
+                className="login__input auth__password-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onCopy={handlePasswordCopy}
+                onCut={handlePasswordCut}
+                onKeyDown={handlePasswordKeyDown}
+                autoComplete="current-password"
+                required
+              />
+              <button
+                type="button"
+                className="auth__password-toggle"
+                onClick={() => setShowPassword((prev) => !prev)}
+                title={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
+                aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
+                tabIndex={-1}
+              >
+                <i className={showPassword ? "ri-eye-off-line" : "ri-eye-line"} />
+              </button>
+            </div>
           </div>
         </div>
         {error && (

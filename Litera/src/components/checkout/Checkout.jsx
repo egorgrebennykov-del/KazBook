@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { clearCart, getCart } from "../../../utils/cart";
 import {
@@ -14,6 +14,47 @@ import BookImage from "../common/BookImage";
 import decodeHtmlEntities from "../../../utils/decodeHtmlEntities";
 import { useLanguage } from "../../context/languageContext";
 import "./Checkout.css";
+
+const COUNTRIES = [
+  { code: "MD", dialCode: "+373", flag: "🇲🇩", name: { ru: "Молдова", en: "Moldova" } },
+  { code: "RO", dialCode: "+40", flag: "🇷🇴", name: { ru: "Румыния", en: "Romania" } },
+  { code: "BG", dialCode: "+359", flag: "🇧🇬", name: { ru: "Болгария", en: "Bulgaria" } },
+  { code: "UA", dialCode: "+380", flag: "🇺🇦", name: { ru: "Украина", en: "Ukraine" } },
+  { code: "DE", dialCode: "+49", flag: "🇩🇪", name: { ru: "Германия", en: "Germany" } },
+  { code: "FR", dialCode: "+33", flag: "🇫🇷", name: { ru: "Франция", en: "France" } },
+  { code: "IT", dialCode: "+39", flag: "🇮🇹", name: { ru: "Италия", en: "Italy" } },
+  { code: "ES", dialCode: "+34", flag: "🇪🇸", name: { ru: "Испания", en: "Spain" } },
+  { code: "PL", dialCode: "+48", flag: "🇵🇱", name: { ru: "Польша", en: "Poland" } },
+  { code: "GB", dialCode: "+44", flag: "🇬🇧", name: { ru: "Великобритания", en: "United Kingdom" } },
+  { code: "GR", dialCode: "+30", flag: "🇬🇷", name: { ru: "Греция", en: "Greece" } },
+  { code: "CZ", dialCode: "+420", flag: "🇨🇿", name: { ru: "Чехия", en: "Czech Republic" } },
+  { code: "AT", dialCode: "+43", flag: "🇦🇹", name: { ru: "Австрия", en: "Austria" } },
+  { code: "PT", dialCode: "+351", flag: "🇵🇹", name: { ru: "Португалия", en: "Portugal" } },
+  { code: "NL", dialCode: "+31", flag: "🇳🇱", name: { ru: "Нидерланды", en: "Netherlands" } },
+  { code: "BE", dialCode: "+32", flag: "🇧🇪", name: { ru: "Бельгия", en: "Belgium" } },
+  { code: "CH", dialCode: "+41", flag: "🇨🇭", name: { ru: "Швейцария", en: "Switzerland" } },
+  { code: "SE", dialCode: "+46", flag: "🇸🇪", name: { ru: "Швеция", en: "Sweden" } },
+  { code: "NO", dialCode: "+47", flag: "🇳🇴", name: { ru: "Норвегия", en: "Norway" } },
+  { code: "DK", dialCode: "+45", flag: "🇩🇰", name: { ru: "Дания", en: "Denmark" } },
+  { code: "FI", dialCode: "+358", flag: "🇫🇮", name: { ru: "Финляндия", en: "Finland" } },
+  { code: "IE", dialCode: "+353", flag: "🇮🇪", name: { ru: "Ирландия", en: "Ireland" } },
+  { code: "SK", dialCode: "+421", flag: "🇸🇰", name: { ru: "Словакия", en: "Slovakia" } },
+  { code: "HU", dialCode: "+36", flag: "🇭🇺", name: { ru: "Венгрия", en: "Hungary" } },
+  { code: "RS", dialCode: "+381", flag: "🇷🇸", name: { ru: "Сербия", en: "Serbia" } },
+  { code: "HR", dialCode: "+385", flag: "🇭🇷", name: { ru: "Хорватия", en: "Croatia" } },
+  { code: "SI", dialCode: "+386", flag: "🇸🇮", name: { ru: "Словения", en: "Slovenia" } },
+  { code: "LT", dialCode: "+370", flag: "🇱🇹", name: { ru: "Литва", en: "Lithuania" } },
+  { code: "LV", dialCode: "+371", flag: "🇱🇻", name: { ru: "Латвия", en: "Latvia" } },
+  { code: "EE", dialCode: "+372", flag: "🇪🇪", name: { ru: "Эстония", en: "Estonia" } },
+  { code: "CY", dialCode: "+357", flag: "🇨🇾", name: { ru: "Кипр", en: "Cyprus" } },
+  { code: "IL", dialCode: "+972", flag: "🇮🇱", name: { ru: "Израиль", en: "Israel" } },
+  { code: "TR", dialCode: "+90", flag: "🇹🇷", name: { ru: "Турция", en: "Turkey" } },
+  { code: "GE", dialCode: "+995", flag: "🇬🇪", name: { ru: "Грузия", en: "Georgia" } },
+  { code: "AM", dialCode: "+374", flag: "🇦🇲", name: { ru: "Армения", en: "Armenia" } },
+  { code: "KZ", dialCode: "+7", flag: "🇰🇿", name: { ru: "Казахстан", en: "Kazakhstan" } },
+  { code: "US", dialCode: "+1", flag: "🇺🇸", name: { ru: "США", en: "USA" } },
+  { code: "CA", dialCode: "+1", flag: "🇨🇦", name: { ru: "Канада", en: "Canada" } },
+];
 
 // Base shipping calculation - can be customized by the user with any formula
 function calculateShipping(address) {
@@ -60,13 +101,119 @@ export default function Checkout() {
   const [saveAddressOption, setSaveAddressOption] = useState(true);
   const [addressForm, setAddressForm] = useState({
     recipientName: "",
-    country: "Молдова",
+    country: "",
     city: "",
     street: "",
     postalCode: "",
     phone: "",
   });
   const [addressError, setAddressError] = useState("");
+
+  // Country selector state for phone input
+  const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
+  const [isCountryOpen, setIsCountryOpen] = useState(false);
+  const [countrySearch, setCountrySearch] = useState("");
+  const countryDropdownRef = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!isCountryOpen) return;
+    const handleOutsideClick = (e) => {
+      if (
+        countryDropdownRef.current &&
+        !countryDropdownRef.current.contains(e.target)
+      ) {
+        setIsCountryOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [isCountryOpen]);
+
+  // Filter countries in dropdown
+  const filteredCountries = useMemo(() => {
+    const q = countrySearch.trim().toLowerCase();
+    if (!q) return COUNTRIES;
+    return COUNTRIES.filter((c) => {
+      const ruName = c.name.ru.toLowerCase();
+      const enName = c.name.en.toLowerCase();
+      const dial = c.dialCode.toLowerCase();
+      return (
+        ruName.includes(q) ||
+        enName.includes(q) ||
+        dial.includes(q) ||
+        c.code.toLowerCase().includes(q)
+      );
+    });
+  }, [countrySearch]);
+
+  const handleSelectCountry = (country) => {
+    setSelectedCountry(country);
+    setIsCountryOpen(false);
+    setCountrySearch("");
+
+    setAddressForm((prev) => {
+      const currentPhone = prev.phone.trim();
+      if (!currentPhone) {
+        return {
+          ...prev,
+          phone: `${country.dialCode} `,
+        };
+      }
+      const matched = COUNTRIES.find((c) => currentPhone.startsWith(c.dialCode));
+      let subscriber = matched
+        ? currentPhone.slice(matched.dialCode.length).trim()
+        : currentPhone.replace(/^\+\d+\s*/, "").trim();
+      subscriber = subscriber.replace(/^0+/, "");
+      return {
+        ...prev,
+        phone: subscriber ? `${country.dialCode} ${subscriber}` : `${country.dialCode} `,
+      };
+    });
+  };
+
+  const handlePhoneChange = (e) => {
+    const rawVal = e.target.value;
+    if (!rawVal) {
+      setAddressForm((prev) => ({ ...prev, phone: "" }));
+      return;
+    }
+
+    const dial = selectedCountry.dialCode;
+    const dialDigits = dial.replace("+", "");
+    const codeRegex = new RegExp(`^\\+?${dialDigits}\\s*`, "i");
+
+    // Case 1: starts with selected dial code
+    if (codeRegex.test(rawVal)) {
+      let subscriber = rawVal.replace(codeRegex, "");
+      // Auto-strip leading zero(s) e.g. 087 -> 87
+      subscriber = subscriber.replace(/^0+/, "");
+      const formatted = subscriber ? `${dial} ${subscriber}` : `${dial} `;
+      setAddressForm((prev) => ({ ...prev, phone: formatted }));
+      return;
+    }
+
+    // Case 2: starts with another country '+' code
+    if (rawVal.startsWith("+")) {
+      const matched = COUNTRIES.find((c) => rawVal.startsWith(c.dialCode));
+      if (matched) {
+        setSelectedCountry(matched);
+        let subscriber = rawVal.slice(matched.dialCode.length).trimStart();
+        subscriber = subscriber.replace(/^0+/, "");
+        const formatted = subscriber ? `${matched.dialCode} ${subscriber}` : `${matched.dialCode} `;
+        setAddressForm((prev) => ({ ...prev, phone: formatted }));
+        return;
+      }
+      const cleaned = rawVal.replace(/^(\+\d{1,4}\s*)0+/, "$1");
+      setAddressForm((prev) => ({ ...prev, phone: cleaned }));
+      return;
+    }
+
+    // Case 3: local number entered (e.g. 087...) -> strip leading zero and prepend dial code
+    let subscriber = rawVal.replace(/^0+/, "");
+    const formatted = subscriber ? `${dial} ${subscriber}` : `${dial} `;
+    setAddressForm((prev) => ({ ...prev, phone: formatted }));
+  };
 
   // Order completion state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -556,7 +703,6 @@ export default function Checkout() {
                       <input
                         id="recipientName"
                         type="text"
-                        placeholder="Yegor Grebennikov"
                         value={addressForm.recipientName}
                         onChange={(e) =>
                           setAddressForm({ ...addressForm, recipientName: e.target.value })
@@ -569,7 +715,6 @@ export default function Checkout() {
                       <input
                         id="country"
                         type="text"
-                        placeholder="Молдова"
                         value={addressForm.country}
                         onChange={(e) =>
                           setAddressForm({ ...addressForm, country: e.target.value })
@@ -584,7 +729,6 @@ export default function Checkout() {
                       <input
                         id="city"
                         type="text"
-                        placeholder="Кишинёв"
                         required
                         value={addressForm.city}
                         onChange={(e) =>
@@ -600,7 +744,6 @@ export default function Checkout() {
                       <input
                         id="street"
                         type="text"
-                        placeholder="ул. Штефан чел Маре 1, кв. 10"
                         required
                         value={addressForm.street}
                         onChange={(e) =>
@@ -614,7 +757,6 @@ export default function Checkout() {
                       <input
                         id="postalCode"
                         type="text"
-                        placeholder="MD-2000"
                         value={addressForm.postalCode}
                         onChange={(e) =>
                           setAddressForm({ ...addressForm, postalCode: e.target.value })
@@ -624,15 +766,96 @@ export default function Checkout() {
 
                     <div className="checkout__form-field">
                       <label htmlFor="phone">{t("checkout.phone")}</label>
-                      <input
-                        id="phone"
-                        type="tel"
-                        placeholder="+373 69 000000"
-                        value={addressForm.phone}
-                        onChange={(e) =>
-                          setAddressForm({ ...addressForm, phone: e.target.value })
-                        }
-                      />
+                      <div className="checkout__phone-group">
+                        <div
+                          className="checkout__country-select-wrap"
+                          ref={countryDropdownRef}
+                        >
+                          <button
+                            type="button"
+                            className="checkout__country-btn"
+                            onClick={() => setIsCountryOpen((prev) => !prev)}
+                            title={
+                              selectedCountry
+                                ? `${selectedCountry.name[language] || selectedCountry.name.ru} (${selectedCountry.dialCode})`
+                                : t("checkout.selectCountry")
+                            }
+                            aria-expanded={isCountryOpen}
+                          >
+                            <span className="checkout__country-flag">
+                              {selectedCountry.flag}
+                            </span>
+                            <span className="checkout__country-code">
+                              {selectedCountry.dialCode}
+                            </span>
+                            <i
+                              className={`ri-arrow-down-s-line checkout__country-arrow ${isCountryOpen ? "checkout__country-arrow--open" : ""}`}
+                            />
+                          </button>
+
+                          {isCountryOpen && (
+                            <div className="checkout__country-dropdown">
+                              <div className="checkout__country-search-wrap">
+                                <i className="ri-search-line" />
+                                <input
+                                  type="text"
+                                  className="checkout__country-search-input"
+                                  placeholder={t("checkout.searchCountry")}
+                                  value={countrySearch}
+                                  onChange={(e) => setCountrySearch(e.target.value)}
+                                  autoFocus
+                                />
+                                {countrySearch && (
+                                  <button
+                                    type="button"
+                                    className="checkout__country-search-clear"
+                                    onClick={() => setCountrySearch("")}
+                                  >
+                                    ×
+                                  </button>
+                                )}
+                              </div>
+                              <ul className="checkout__country-list">
+                                {filteredCountries.map((c) => {
+                                  const isCurrent =
+                                    c.code === selectedCountry.code &&
+                                    c.dialCode === selectedCountry.dialCode;
+                                  return (
+                                    <li
+                                      key={`${c.code}-${c.dialCode}`}
+                                      className={`checkout__country-option ${isCurrent ? "checkout__country-option--selected" : ""}`}
+                                      onClick={() => handleSelectCountry(c)}
+                                    >
+                                      <span className="checkout__country-opt-flag">
+                                        {c.flag}
+                                      </span>
+                                      <span className="checkout__country-opt-name">
+                                        {c.name[language] || c.name.ru}
+                                      </span>
+                                      <span className="checkout__country-opt-code">
+                                        {c.dialCode}
+                                      </span>
+                                    </li>
+                                  );
+                                })}
+                                {filteredCountries.length === 0 && (
+                                  <li className="checkout__country-no-results">
+                                    {t("checkout.noCountryFound")}
+                                  </li>
+                                )}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+
+                        <input
+                          id="phone"
+                          type="tel"
+                          className="checkout__phone-input"
+                          value={addressForm.phone}
+                          onChange={handlePhoneChange}
+                        />
+                      </div>
                     </div>
                   </div>
 

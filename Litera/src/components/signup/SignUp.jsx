@@ -14,8 +14,76 @@ export default function SignUp({ onLogin, onClose }) {
     password: "",
     repeat: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showRepeat, setShowRepeat] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const handlePasswordCopy = (e, fieldName) => {
+    const input = e.currentTarget;
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    const val = form[fieldName] || "";
+    const textToCopy =
+      start !== null && end !== null && start !== end
+        ? val.substring(start, end)
+        : val;
+
+    if (textToCopy) {
+      if (e.clipboardData) {
+        e.clipboardData.setData("text/plain", textToCopy);
+        e.preventDefault();
+      }
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(textToCopy).catch(() => {});
+      }
+    }
+  };
+
+  const handlePasswordCut = (e, fieldName) => {
+    const input = e.currentTarget;
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    const val = form[fieldName] || "";
+    const textToCopy =
+      start !== null && end !== null && start !== end
+        ? val.substring(start, end)
+        : val;
+
+    if (textToCopy) {
+      if (e.clipboardData) {
+        e.clipboardData.setData("text/plain", textToCopy);
+        e.preventDefault();
+      }
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(textToCopy).catch(() => {});
+      }
+      if (start !== null && end !== null && start !== end) {
+        setForm((f) => ({
+          ...f,
+          [fieldName]: val.slice(0, start) + val.slice(end),
+        }));
+      } else {
+        setForm((f) => ({ ...f, [fieldName]: "" }));
+      }
+    }
+  };
+
+  const handlePasswordKeyDown = (e, fieldName) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "C")) {
+      const input = e.currentTarget;
+      const start = input.selectionStart;
+      const end = input.selectionEnd;
+      const val = form[fieldName] || "";
+      const textToCopy =
+        start !== null && end !== null && start !== end
+          ? val.substring(start, end)
+          : val;
+      if (textToCopy && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(textToCopy).catch(() => {});
+      }
+    }
+  };
 
   const field = (name) => ({
     value: form[name],
@@ -112,31 +180,61 @@ export default function SignUp({ onLogin, onClose }) {
             <label htmlFor="signup-password" className="login__label">
               {t("auth.password")}
             </label>
-            <input
-              type="password"
-              placeholder={t("auth.passwordPlaceholder")}
-              id="signup-password"
-              className="login__input"
-              autoComplete="new-password"
-              minLength={8}
-              maxLength={72}
-              required
-              {...field("password")}
-            />
+            <div className="auth__password-wrap">
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder={t("auth.passwordPlaceholder")}
+                id="signup-password"
+                className="login__input auth__password-input"
+                autoComplete="new-password"
+                minLength={8}
+                maxLength={72}
+                required
+                onCopy={(e) => handlePasswordCopy(e, "password")}
+                onCut={(e) => handlePasswordCut(e, "password")}
+                onKeyDown={(e) => handlePasswordKeyDown(e, "password")}
+                {...field("password")}
+              />
+              <button
+                type="button"
+                className="auth__password-toggle"
+                onClick={() => setShowPassword((prev) => !prev)}
+                title={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
+                aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
+                tabIndex={-1}
+              >
+                <i className={showPassword ? "ri-eye-off-line" : "ri-eye-line"} />
+              </button>
+            </div>
           </div>
           <div>
             <label htmlFor="signup-repeat-password" className="login__label">
               {t("auth.repeatPassword")}
             </label>
-            <input
-              type="password"
-              placeholder={t("auth.repeatPasswordPlaceholder")}
-              id="signup-repeat-password"
-              className="login__input"
-              autoComplete="new-password"
-              required
-              {...field("repeat")}
-            />
+            <div className="auth__password-wrap">
+              <input
+                type={showRepeat ? "text" : "password"}
+                placeholder={t("auth.repeatPasswordPlaceholder")}
+                id="signup-repeat-password"
+                className="login__input auth__password-input"
+                autoComplete="new-password"
+                required
+                onCopy={(e) => handlePasswordCopy(e, "repeat")}
+                onCut={(e) => handlePasswordCut(e, "repeat")}
+                onKeyDown={(e) => handlePasswordKeyDown(e, "repeat")}
+                {...field("repeat")}
+              />
+              <button
+                type="button"
+                className="auth__password-toggle"
+                onClick={() => setShowRepeat((prev) => !prev)}
+                title={showRepeat ? t("auth.hidePassword") : t("auth.showPassword")}
+                aria-label={showRepeat ? t("auth.hidePassword") : t("auth.showPassword")}
+                tabIndex={-1}
+              >
+                <i className={showRepeat ? "ri-eye-off-line" : "ri-eye-line"} />
+              </button>
+            </div>
           </div>
         </div>
         {error && (
