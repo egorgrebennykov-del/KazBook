@@ -7,21 +7,21 @@ on:
 
 jobs:
   update-homepage-books:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
-        working-directory: KazBook/.github
+        working-directory: Litera/.github
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: KazBook/.github/package-lock.json
+          cache-dependency-path: Litera/.github/package-lock.json
 
       - name: Install dependencies
         run: npm ci
