@@ -87,7 +87,7 @@ export async function getProfile() {
   if (!cookieUser) return null;
 
   const response = await fetch(
-    `${TABLE_URL}?select=id,firstName,lastName,email&id=eq.${encodeURIComponent(cookieUser.id)}&limit=1`,
+    `${TABLE_URL}?select=id,firstName,lastName,email,adresses&id=eq.${encodeURIComponent(cookieUser.id)}&limit=1`,
     { headers },
   );
   const row = response.ok ? (await response.json())[0] : null;
@@ -96,6 +96,67 @@ export async function getProfile() {
     firstName: cookieUser.firstName,
     lastName: "",
     email: "",
+    adresses: [],
     ...(row || {}),
   };
+}
+
+export async function getUserAddresses(userId) {
+  const id = userId ?? getCookieUser()?.id;
+  if (!id) return [];
+  const response = await fetch(
+    `${TABLE_URL}?select=adresses&id=eq.${encodeURIComponent(id)}&limit=1`,
+    { headers },
+  );
+  if (!response.ok) return [];
+  const data = await response.json();
+  const raw = data?.[0]?.adresses;
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === "object") return [raw];
+  return [];
+}
+
+export async function saveUserAddress(userId, newAddress) {
+  const id = userId ?? getCookieUser()?.id;
+  if (!id) throw new Error("User ID is required");
+  const current = await getUserAddresses(id);
+  const addressToSave = {
+    id:
+      newAddress.id ||
+      `addr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    ...newAddress,
+    savedAt: new Date().toISOString(),
+  };
+  const updated = [...current, addressToSave];
+  const response = await fetch(
+    `${TABLE_URL}?id=eq.${encodeURIComponent(id)}`,
+    {
+      method: "PATCH",
+      headers: { ...headers, Prefer: "return=representation" },
+      body: JSON.stringify({ adresses: updated }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error("Could not save address to profile");
+  }
+  return addressToSave;
+}
+
+export async function deleteUserAddress(userId, addressId) {
+  const id = userId ?? getCookieUser()?.id;
+  if (!id) throw new Error("User ID is required");
+  const current = await getUserAddresses(id);
+  const updated = current.filter((addr) => addr.id !== addressId);
+  const response = await fetch(
+    `${TABLE_URL}?id=eq.${encodeURIComponent(id)}`,
+    {
+      method: "PATCH",
+      headers: { ...headers, Prefer: "return=representation" },
+      body: JSON.stringify({ adresses: updated }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error("Could not delete address");
+  }
+  return updated;
 }

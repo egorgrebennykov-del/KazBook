@@ -105,3 +105,11 @@ export async function removeFromCart(cartItemId, userId = getCookieUser()?.id) {
   });
   await request(`${TABLE_URL}?${params}`, { method: "DELETE" });
 }
+
+export async function clearCart(userId = getCookieUser()?.id) {
+  const id = requireUserId(userId);
+  const params = new URLSearchParams({
+    user_id: `eq.${id}`,
+  });
+  await request(`${TABLE_URL}?${params}`, { method: "DELETE" });
+}

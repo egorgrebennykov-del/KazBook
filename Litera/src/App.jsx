@@ -12,6 +12,7 @@ import SearchResults from "./components/searchresults/SearchResults";
 import BookDetails from "./components/bookdetails/BookDetails";
 import Profile from "./components/profile/Profile";
 import Cart from "./components/cart/Cart";
+import Checkout from "./components/checkout/Checkout";
 import SignUp from "./components/signup/SignUp";
 import { useEffect, useState } from "react";
 import {
@@ -122,6 +123,7 @@ function App() {
           path="/cart"
           element={<Cart onSearch={() => setShowSearch(true)} />}
         />
+        <Route path="/checkout" element={<Checkout />} />
         <Route path="/search" element={<SearchResults />} />
         <Route path="/book" element={<BookDetails />} />
         <Route path="/featured" element={<Featured />} />

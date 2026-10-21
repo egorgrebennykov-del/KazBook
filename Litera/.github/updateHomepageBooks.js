@@ -245,7 +245,14 @@ async function updateHomepageBooks() {
     .select("id")
     .limit(1)
     .maybeSingle();
-  if (lookupError) throw lookupError;
+  if (lookupError) {
+    if (lookupError.code === "42501") {
+      throw new Error(
+        "Permission denied on table books_on_home_page. Please ensure SUPABASE_SECRET_KEY in GitHub Secrets is set to the Supabase secret key (sb_secret_...), not the publishable key (sb_publishable_...), or run: GRANT ALL ON TABLE public.books_on_home_page TO anon, authenticated, service_role;",
+      );
+    }
+    throw lookupError;
+  }
 
   const result = row
     ? await supabase
@@ -253,7 +260,14 @@ async function updateHomepageBooks() {
         .update({ books: selected })
         .eq("id", row.id)
     : await supabase.from("books_on_home_page").insert({ books: selected });
-  if (result.error) throw result.error;
+  if (result.error) {
+    if (result.error.code === "42501") {
+      throw new Error(
+        "Permission denied on table books_on_home_page. Please ensure SUPABASE_SECRET_KEY in GitHub Secrets is set to the Supabase secret key (sb_secret_...), not the publishable key (sb_publishable_...), or run: GRANT ALL ON TABLE public.books_on_home_page TO anon, authenticated, service_role;",
+      );
+    }
+    throw result.error;
+  }
 
   console.log(
     "Saved five visually ranked books from distinct publishers:",
