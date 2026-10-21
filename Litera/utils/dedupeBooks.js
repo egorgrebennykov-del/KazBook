@@ -3,10 +3,9 @@ function normalizeTitle(t) {
 }
 
 export default async function dedupeBooks(books, query) {
-  if (books.length < 2) return books;
+  if (!Array.isArray(books) || books.length < 2) return books;
 
-  // 1. Fast pre-pass: if two books from different stores have the exact same title or image URL,
-  // group them and keep only the cheaper one.
+  // 1. Fast pre-pass: match books across stores by identical normalized title or identical image URL
   const titleGroups = new Map();
   const imageGroups = new Map();
 
@@ -28,13 +27,31 @@ export default async function dedupeBooks(books, query) {
     if (indices.length < 2) return;
     const stores = new Set(indices.map((idx) => books[idx].store));
     if (stores.size < 2) return; // Only deduplicate across different bookstores
-    const sorted = [...indices].sort((a, b) => {
-      const priceA = Number.isFinite(books[a].price) ? books[a].price : Infinity;
-      const priceB = Number.isFinite(books[b].price) ? books[b].price : Infinity;
-      return priceA - priceB || a - b;
-    });
-    // Keep index 0 (cheapest), mark others for removal
-    sorted.slice(1).forEach((idx) => removedIndices.add(idx));
+
+    let minPrice = Infinity;
+    for (const idx of indices) {
+      const price = Number.isFinite(books[idx].price)
+        ? books[idx].price
+        : Infinity;
+      if (price < minPrice) minPrice = price;
+    }
+    if (!Number.isFinite(minPrice)) return;
+
+    const cheapestStores = new Set();
+    for (const idx of indices) {
+      if (books[idx].price === minPrice) {
+        cheapestStores.add(books[idx].store);
+      }
+    }
+
+    // If a book is on another site and is more expensive than the cheapest site's book,
+    // remove the book from the other site and KEEP all books from the first site
+    for (const idx of indices) {
+      const book = books[idx];
+      if (!cheapestStores.has(book.store) && book.price > minPrice) {
+        removedIndices.add(idx);
+      }
+    }
   };
 
   for (const indices of titleGroups.values()) processGroup(indices);
@@ -43,7 +60,7 @@ export default async function dedupeBooks(books, query) {
   let filtered = books.filter((_, idx) => !removedIndices.has(idx));
   if (filtered.length < 2) return filtered;
 
-  // 2. Call server visual cover similarity API for visual matches across different stores
+  // 2. Visual cover similarity API for visual matches across stores
   try {
     const response = await fetch("/api/dedupe-books", {
       method: "POST",
@@ -57,8 +74,8 @@ export default async function dedupeBooks(books, query) {
         filtered = result.books;
       }
     }
-  } catch (error) {
-    console.warn("Cover comparison API skipped:", error.message);
+  } catch {
+    // Fall back to filtered results from step 1
   }
 
   return filtered;

@@ -1,7 +1,11 @@
 export function decodeLibrariusImage(url) {
   if (!url || typeof url !== "string") return "";
+  let target = url;
+  if (target.includes("/img/catalog/")) {
+    target = target.replace("/img/catalog/", "/img/original/");
+  }
   try {
-    const match = url.match(/\/img\/\d+\/\d+\/(?:x)?([A-Za-z0-9_-]+)/);
+    const match = target.match(/\/img\/\d+\/\d+\/(?:x)?([A-Za-z0-9_-]+)/);
     if (match) {
       let b64 = match[1].replace(/_e_/g, "=").replace(/-/g, "+").replace(/_/g, "/");
       while (b64.length % 4 !== 0) b64 += "=";
@@ -11,15 +15,23 @@ export function decodeLibrariusImage(url) {
           : globalThis.Buffer?.from(b64, "base64").toString("binary") ?? "";
       try {
         const decoded = decodeURIComponent(escape(raw));
-        if (decoded.startsWith("http")) return decoded.replace(/^http:/i, "https:");
+        if (decoded.startsWith("http")) {
+          return decoded
+            .replace(/^http:/i, "https:")
+            .replace("/img/catalog/", "/img/original/");
+        }
       } catch {
-        if (raw.startsWith("http")) return raw.replace(/^http:/i, "https:");
+        if (raw.startsWith("http")) {
+          return raw
+            .replace(/^http:/i, "https:")
+            .replace("/img/catalog/", "/img/original/");
+        }
       }
     }
   } catch {
     // Ignore decoding errors
   }
-  return url.replace(/^http:\/\/cdn\./i, "https://cdn.");
+  return target.replace(/^http:\/\/cdn\./i, "https://cdn.");
 }
 
 export function decodeCarturestiImage(url) {
@@ -43,8 +55,28 @@ export function decodeUlyssesImage(url) {
   return url;
 }
 
+export function decodeCarteameaImage(url) {
+  if (!url || typeof url !== "string") return "";
+  if (!url.includes("carteamea.md")) return url;
+  // Convert /wp-content/uploads/.../name-150x225.jpg -> /wp-content/uploads/.../name.jpg (full original resolution)
+  return url.replace(/-\d+x\d+\.(jpe?g|png|webp)(\?.*)?$/i, ".$1$2");
+}
+
+export function decodeBiblionImage(url) {
+  if (!url || typeof url !== "string") return "";
+  if (!url.includes("biblion.md")) return url;
+  const decoded = url.replace(/-\d+x\d+\.(avif|jpe?g|png|webp)(\?.*)?$/i, ".$1$2");
+  try {
+    return new URL(decoded).href;
+  } catch {
+    return decoded;
+  }
+}
+
 export default function enhancedImageUrl(sourceUrl) {
   if (!sourceUrl || typeof sourceUrl !== "string") return "";
+  if (sourceUrl.startsWith("/api/enhance-image")) return sourceUrl;
+
   let resolved = sourceUrl;
 
   if (resolved.includes("librarius.md")) {
@@ -53,6 +85,16 @@ export default function enhancedImageUrl(sourceUrl) {
     resolved = decodeCarturestiImage(resolved);
   } else if (resolved.includes("ulysses.md")) {
     resolved = decodeUlyssesImage(resolved);
+    if (/^https?:\/\//i.test(resolved)) {
+      return `/api/enhance-image?url=${encodeURIComponent(resolved)}`;
+    }
+  } else if (resolved.includes("carteamea.md")) {
+    resolved = decodeCarteameaImage(resolved);
+    if (/^https?:\/\//i.test(resolved)) {
+      return `/api/enhance-image?url=${encodeURIComponent(resolved)}`;
+    }
+  } else if (resolved.includes("biblion.md")) {
+    resolved = decodeBiblionImage(resolved);
   }
 
   if (/^https?:\/\//i.test(resolved)) {

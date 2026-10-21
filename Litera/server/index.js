@@ -18,6 +18,8 @@ import {
 import {
   decodeCarturestiImage,
   decodeUlyssesImage,
+  decodeCarteameaImage,
+  decodeBiblionImage,
 } from "../utils/enhancedImageUrl.js";
 import {
   searchCarturesti,
@@ -26,7 +28,16 @@ import {
 import {
   searchUlysses,
   getUlyssesDetails,
+  thumbToHighRes,
 } from "./ulyssesService.js";
+import {
+  searchCarteamea,
+  getCarteameaDetails,
+} from "./carteameaService.js";
+import {
+  searchBiblion,
+  getBiblionDetails,
+} from "./biblionService.js";
 
 const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = Number(process.env.BOOK_COMPARE_PORT) || 3001;
@@ -41,6 +52,10 @@ const ALLOWED_IMAGE_HOSTS = new Set([
   "www.carturesti.md",
   "ulysses.md",
   "www.ulysses.md",
+  "carteamea.md",
+  "www.carteamea.md",
+  "biblion.md",
+  "www.biblion.md",
 ]);
 const pendingImages = new Map();
 
@@ -61,6 +76,12 @@ async function readJson(req) {
 
 function validImageUrl(value) {
   try {
+    if (typeof value !== "string" || !value) return false;
+    if (value.startsWith("/api/enhance-image?url=")) {
+      const u = new URL(value, "http://localhost");
+      const target = u.searchParams.get("url");
+      return validImageUrl(target);
+    }
     const url = new URL(value);
     return url.protocol === "https:" && ALLOWED_IMAGE_HOSTS.has(url.hostname);
   } catch {
@@ -80,7 +101,13 @@ async function fetchSourceImage(sourceUrl) {
       timeout: 15000,
       maxContentLength: MAX_IMAGE_BYTES,
       maxRedirects: 0,
-      httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+      family: 4,
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Connection: "close",
+      },
+      httpsAgent: new https.Agent({ rejectUnauthorized: false, keepAlive: false }),
       validateStatus: (status) => status >= 200 && status < 400,
     });
 
@@ -104,12 +131,27 @@ async function fetchSourceImage(sourceUrl) {
 function resolveOriginalImageUrl(sourceUrl) {
   if (!sourceUrl) return "";
   let target = sourceUrl;
+  if (target.startsWith("/api/enhance-image?url=")) {
+    try {
+      target =
+        new URL(target, "http://localhost").searchParams.get("url") || target;
+    } catch {
+      // ignore
+    }
+  }
   if (target.includes("librarius.md")) {
     target = decodeLibrariusImage(target) || target;
   } else if (target.includes("carturesti.md")) {
     target = decodeCarturestiImage(target);
   } else if (target.includes("ulysses.md")) {
     target = decodeUlyssesImage(target);
+    if (thumbToHighRes.has(target)) {
+      target = thumbToHighRes.get(target);
+    }
+  } else if (target.includes("carteamea.md")) {
+    target = decodeCarteameaImage(target);
+  } else if (target.includes("biblion.md")) {
+    target = decodeBiblionImage(target);
   }
   return target;
 }
@@ -117,7 +159,7 @@ function resolveOriginalImageUrl(sourceUrl) {
 async function getEnhancedImage(sourceUrl) {
   const targetUrl = resolveOriginalImageUrl(sourceUrl);
   const cacheKey = createHash("sha256")
-    .update(`sharp-fast-v3:${targetUrl}`)
+    .update(`sharp-fast-v4:${targetUrl}`)
     .digest("hex");
   const cachePath = path.join(IMAGE_CACHE_DIR, `${cacheKey}.webp`);
 
@@ -130,19 +172,23 @@ async function getEnhancedImage(sourceUrl) {
     }
 
     const original = await fetchSourceImage(targetUrl);
-    // Basic simple editing without heavy resources:
-    // Smart upscale small covers with Lanczos3 to 420x630, unsharp mask, subtle contrast/saturation
-    const enhanced = await sharp(original, { limitInputPixels: 40000000 })
-      .rotate()
-      .resize({
-        width: 450,
-        height: 675,
-        fit: "cover",
-        kernel: sharp.kernel.lanczos3,
-      })
-      .modulate({ brightness: 1.03, saturation: 1.06 })
-      .sharpen({ sigma: 1.2, m1: 1.4, m2: 0.7 })
-      .webp({ quality: 86, effort: 1 })
+    // Smart upscale small covers with Lanczos3 to 800x1200 without degrading high-res covers
+    const metadata = await sharp(original).metadata();
+    let sharpPipeline = sharp(original, { limitInputPixels: 40000000 }).rotate();
+    if ((metadata.width && metadata.width < 600) || (metadata.height && metadata.height < 900)) {
+      sharpPipeline = sharpPipeline
+        .resize({
+          width: 800,
+          height: 1200,
+          fit: "inside",
+          withoutEnlargement: false,
+          kernel: sharp.kernel.lanczos3,
+        })
+        .sharpen({ sigma: 1.1, m1: 1.4, m2: 0.6 });
+    }
+    const enhanced = await sharpPipeline
+      .modulate({ brightness: 1.02, saturation: 1.05 })
+      .webp({ quality: 92, effort: 3 })
       .toBuffer();
 
     await mkdir(IMAGE_CACHE_DIR, { recursive: true });
@@ -218,15 +264,40 @@ const server = createServer(async (req, res) => {
     }
     return;
   }
+  if (req.method === "GET" && req.url?.startsWith("/api/search-carteamea?")) {
+    const q = new URL(req.url, "http://localhost").searchParams.get("q") ?? "";
+    try {
+      const products = await searchCarteamea(q);
+      respond(res, 200, { products });
+    } catch (error) {
+      console.warn("Direct Carteamea search error:", error.message);
+      respond(res, 500, { error: error.message });
+    }
+    return;
+  }
+  if (req.method === "GET" && req.url?.startsWith("/api/search-biblion?")) {
+    const q = new URL(req.url, "http://localhost").searchParams.get("q") ?? "";
+    try {
+      const products = await searchBiblion(q);
+      respond(res, 200, { products });
+    } catch (error) {
+      console.warn("Direct Biblion search error:", error.message);
+      respond(res, 500, { error: error.message });
+    }
+    return;
+  }
   if (req.method === "GET" && req.url?.startsWith("/api/search-all?")) {
     const q = new URL(req.url, "http://localhost").searchParams.get("q") ?? "";
     try {
-      const [librarius, carturesti, ulysses] = await Promise.all([
-        searchLibrarius(q).catch(() => []),
-        searchCarturesti(q).catch(() => []),
-        searchUlysses(q).catch(() => []),
-      ]);
-      respond(res, 200, { librarius, carturesti, ulysses });
+      const [librarius, carturesti, ulysses, carteamea, biblion] =
+        await Promise.all([
+          searchLibrarius(q).catch(() => []),
+          searchCarturesti(q).catch(() => []),
+          searchUlysses(q).catch(() => []),
+          searchCarteamea(q).catch(() => []),
+          searchBiblion(q).catch(() => []),
+        ]);
+      respond(res, 200, { librarius, carturesti, ulysses, carteamea, biblion });
     } catch (error) {
       console.warn("Search-all error:", error.message);
       respond(res, 500, { error: error.message });
@@ -249,6 +320,16 @@ const server = createServer(async (req, res) => {
       }
       if (bookUrl.includes("ulysses.md")) {
         const product = await getUlyssesDetails(bookUrl);
+        respond(res, 200, { product });
+        return;
+      }
+      if (bookUrl.includes("carteamea.md")) {
+        const product = await getCarteameaDetails(bookUrl);
+        respond(res, 200, { product });
+        return;
+      }
+      if (bookUrl.includes("biblion.md")) {
+        const product = await getBiblionDetails(bookUrl);
         respond(res, 200, { product });
         return;
       }

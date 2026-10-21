@@ -190,7 +190,7 @@ body.dark-theme {
 
 .nav__logo-image {
   display: block;
-  height: 2.5rem;
+  height: 3rem;
   width: auto;
   max-height: 100%;
   flex-shrink: 0;
@@ -1083,7 +1083,7 @@ body.dark-theme {
     column-gap: 4rem;
   }
   .nav__logo-image {
-    height: 3.25rem;
+    height: 6.3rem;
   }
   .nav__link i {
     display: none;

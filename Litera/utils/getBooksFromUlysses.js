@@ -10,7 +10,7 @@ export default async function getBooksFromUlysses(searchBook) {
   try {
     const response = await axios.get(
       `/api/search-ulysses?q=${query}`,
-      { timeout: 9000 },
+      { timeout: 20000 },
     );
     if (Array.isArray(response.data?.products)) {
       return response.data.products;

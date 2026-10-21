@@ -49,9 +49,5 @@ img.book__img,
 img.home__img,
 img.cart__image,
 img.deals__image {
-  image-rendering: -webkit-optimize-contrast;
-  image-rendering: crisp-edges;
-  filter: contrast(1.05) saturate(1.06);
-  backface-visibility: hidden;
-  transform: translateZ(0);
+  image-rendering: auto;
 }

@@ -11,8 +11,12 @@ const DETAILS_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 export function decodeLibrariusImage(url) {
   if (!url) return "";
+  let target = url;
+  if (target.includes("/img/catalog/")) {
+    target = target.replace("/img/catalog/", "/img/original/");
+  }
   try {
-    const match = url.match(/\/img\/\d+\/\d+\/(?:x)?([A-Za-z0-9_-]+)/);
+    const match = target.match(/\/img\/\d+\/\d+\/(?:x)?([A-Za-z0-9_-]+)/);
     if (match) {
       let b64 = match[1].replace(/_e_/g, "=").replace(/-/g, "+").replace(/_/g, "/");
       while (b64.length % 4 !== 0) b64 += "=";
@@ -20,12 +24,16 @@ export function decodeLibrariusImage(url) {
         typeof atob === "function"
           ? atob(b64)
           : globalThis.Buffer?.from(b64, "base64").toString("utf8") ?? "";
-      if (decoded.startsWith("http")) return decoded;
+      if (decoded.startsWith("http")) {
+        return decoded
+          .replace(/^http:/i, "https:")
+          .replace("/img/catalog/", "/img/original/");
+      }
     }
   } catch {
     // Ignore decoding errors and fallback to original URL
   }
-  return url.replace(/^http:\/\/cdn\./, "https://cdn.");
+  return target.replace(/^http:\/\/cdn\./, "https://cdn.");
 }
 
 export function parseLibrariusHtml(html) {

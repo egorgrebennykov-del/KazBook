@@ -114,18 +114,12 @@
   aspect-ratio: 2 / 3;
   object-fit: cover;
   background-color: var(--body-color);
-  /* Basic hardware-accelerated image enhancement without server overhead */
-  image-rendering: -webkit-optimize-contrast;
-  image-rendering: crisp-edges;
-  filter: contrast(1.05) saturate(1.06);
-  backface-visibility: hidden;
-  transform: translateZ(0);
-  transition: transform 0.25s ease, filter 0.25s ease;
+  image-rendering: auto;
+  transition: transform 0.25s ease;
 }
 
 .results__card:hover .results__img {
-  transform: scale(1.02) translateZ(0);
-  filter: contrast(1.08) saturate(1.1);
+  transform: scale(1.02);
 }
 
 .results__img--placeholder {

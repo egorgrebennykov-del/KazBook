@@ -1,6 +1,8 @@
 import getBooksFromLibrarius from "./getBooksFromLibrarius.js";
 import getBooksFromCarturesti from "./getBooksFromCarturesti.js";
 import getBooksFromUlysses from "./getBooksFromUlysses.js";
+import getBooksFromCarteamea from "./getBooksFromCarteamea.js";
+import getBooksFromBiblion from "./getBooksFromBiblion.js";
 import getExchangeRate from "./getExchangeRate.js";
 import dedupeBooks from "./dedupeBooks.js";
 import enhancedImageUrl from "./enhancedImageUrl.js";
@@ -26,6 +28,86 @@ function normalize(product, store, rate) {
 
 const tokenize = (s) => (s || "").toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
 
+const EDITION_TOKENS = new Set([
+  "в", "во", "из", "и", "на", "с", "со", "для", "у", "по",
+  "одном", "двух", "трех", "трёх", "четырех", "четырёх", "пяти", "шести",
+  "томах", "тома", "том", "т",
+  "частях", "части", "часть", "ч",
+  "книгах", "книге", "книга", "книги", "кн",
+  "выпуск", "выпуске", "выпусках",
+  "роман", "романы", "повесть", "повести", "рассказ", "рассказы", "пьеса", "пьесы",
+  "комплект", "сборник", "сочинения", "избранное",
+  "том1", "том2", "том3",
+  "1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
+  "1-2", "2-х", "3-х", "4-х", "1-й", "2-й", "3-й", "4-й",
+  "первая", "вторая", "третья", "четвертая",
+  "мягкая", "твердая", "твердый", "мягкий", "переплет", "обложка",
+  "иллюстрациями", "иллюстрированное", "иллюстрированная", "иллюстр",
+  "издание", "классика", "классики", "русская", "русские", "мировая", "мировые",
+  "зарубежная", "детская", "детские", "школьная", "библиотека", "серия",
+  "азбука", "эксклюзивная", "эксклюзив", "подарочное", "шедевры", "золотая", "золотые",
+  "exclusive", "classics", "pocket", "book", "edition", "vol", "volume",
+  "volum", "volume", "carte", "carti", "editie"
+]);
+
+function isCoreWorkMatch(title, query) {
+  const queryTokens = tokenize(query);
+  if (!queryTokens.length) return false;
+  const queryPhrase = queryTokens.join(" ");
+  const titleTokens = tokenize(title);
+  if (!titleTokens.length) return false;
+  const titlePhrase = titleTokens.join(" ");
+
+  // 1. Exact phrase match
+  if (titlePhrase === queryPhrase) return true;
+
+  // 2. Remove brackets: (...), [...], {...}
+  const noBrackets = title.replace(/\([^)]*\)|\[[^\]]*\]|\{[^}]*\}/gu, " ").trim();
+  const noBracketsTokens = tokenize(noBrackets);
+  if (noBracketsTokens.join(" ") === queryPhrase) return true;
+
+  // 3. Title starts with query and remaining tokens are all edition/series/volume words
+  if (titlePhrase.startsWith(queryPhrase + " ")) {
+    const rest = titleTokens.slice(queryTokens.length);
+    if (rest.length > 0 && rest.every((t) => EDITION_TOKENS.has(t) || /^\d+[-–]?х?$/.test(t))) {
+      return true;
+    }
+  }
+
+  // 4. Check combinations after removing brackets
+  if (
+    noBracketsTokens.length > queryTokens.length &&
+    noBracketsTokens.slice(0, queryTokens.length).join(" ") === queryPhrase
+  ) {
+    const rest = noBracketsTokens.slice(queryTokens.length);
+    if (rest.every((t) => EDITION_TOKENS.has(t) || /^\d+[-–]?х?$/.test(t))) {
+      return true;
+    }
+  }
+
+  // 5. Split by common separators (colon, slash, dash, dot)
+  const separators = [":", "/", " - ", " — ", ". "];
+  for (const sep of separators) {
+    if (title.includes(sep)) {
+      const parts = title.split(sep);
+      for (const part of parts) {
+        const pClean = part.replace(/\([^)]*\)|\[[^\]]*\]|\{[^}]*\}/gu, " ").trim();
+        const pTokens = tokenize(pClean);
+        if (pTokens.join(" ") === queryPhrase) return true;
+        const pPhrase = pTokens.join(" ");
+        if (pPhrase.startsWith(queryPhrase + " ")) {
+          const rest = pTokens.slice(queryTokens.length);
+          if (rest.length > 0 && rest.every((t) => EDITION_TOKENS.has(t) || /^\d+[-–]?х?$/.test(t))) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
 function splitTitle(title) {
   const colon = title.indexOf(":");
   if (colon > 0) return [title.slice(0, colon), title.slice(colon + 1), true];
@@ -43,8 +125,14 @@ function calculateRelevance(title, query, author = "") {
   const queryPhrase = queryTokens.join(" ");
   const titlePhrase = titleTokens.join(" ");
 
-  // Exact phrase match
-  if (titlePhrase === queryPhrase) return 100;
+  // Highest tier (100): Core work exact match ("Идиот", "Идиот (в двух томах)", "Идиот: роман", etc.)
+  if (isCoreWorkMatch(title, query)) return 100;
+
+  // Split title author / work checks (e.g. "Ф. М. Достоевский. Идиот (в 2 томах)")
+  const [splitAuthor, work, hasAuthor] = splitTitle(title);
+  if (hasAuthor && isCoreWorkMatch(work, query)) return 100;
+
+  // Title starts with query phrase (partial match)
   if (titlePhrase.startsWith(queryPhrase + " ")) return 80;
   if ((" " + titlePhrase + " ").includes(" " + queryPhrase + " ")) return 60;
 
@@ -57,8 +145,7 @@ function calculateRelevance(title, query, author = "") {
     if (queryTokens.every((w) => authorTokens.includes(w))) return 50;
   }
 
-  // Split title author / work checks
-  const [splitAuthor, work, hasAuthor] = splitTitle(title);
+  // Split title author / work checks fallback
   if (tokenize(work).join(" ") === queryPhrase) return 75;
   if (
     hasAuthor &&
@@ -82,8 +169,15 @@ function calculateRelevance(title, query, author = "") {
 }
 
 export default async function searchBooks(searchBook) {
-  // Query all three bookstores and the exchange rate concurrently in parallel
-  const [librariusRaw, carturestiRaw, ulyssesRaw, rate] = await Promise.all([
+  // Query all bookstores and the exchange rate concurrently in parallel
+  const [
+    librariusRaw,
+    carturestiRaw,
+    ulyssesRaw,
+    carteameaRaw,
+    biblionRaw,
+    rate,
+  ] = await Promise.all([
     getBooksFromLibrarius(searchBook).catch((err) => {
       console.warn("Librarius search failed:", err.message);
       return [];
@@ -94,6 +188,14 @@ export default async function searchBooks(searchBook) {
     }),
     getBooksFromUlysses(searchBook).catch((err) => {
       console.warn("Ulysses search failed:", err.message);
+      return [];
+    }),
+    getBooksFromCarteamea(searchBook).catch((err) => {
+      console.warn("Carteamea search failed:", err.message);
+      return [];
+    }),
+    getBooksFromBiblion(searchBook).catch((err) => {
+      console.warn("Biblion search failed:", err.message);
       return [];
     }),
     getExchangeRate().catch(() => null),
@@ -108,12 +210,30 @@ export default async function searchBooks(searchBook) {
   const ulyssesBooks = (ulyssesRaw ?? []).map((p) =>
     normalize(p, "ulysses.md", rate),
   );
-
-  const combined = [...librariusBooks, ...carturestiBooks, ...ulyssesBooks].filter(
-    (b) => b.title && b.url && Number.isFinite(b.price) && b.price > 0,
+  const carteameaBooks = (carteameaRaw ?? []).map((p) =>
+    normalize(p, "carteamea.md", rate),
+  );
+  const biblionBooks = (biblionRaw ?? []).map((p) =>
+    normalize(p, "biblion.md", rate),
   );
 
-  // Deduplicate: if books have identical covers/titles across different stores, keep the cheaper one
+  const combined = [
+    ...librariusBooks,
+    ...carturestiBooks,
+    ...ulyssesBooks,
+    ...carteameaBooks,
+    ...biblionBooks,
+  ].filter(
+    (b) =>
+      b.title &&
+      b.url &&
+      Number.isFinite(b.price) &&
+      b.price > 0 &&
+      Boolean(b.image),
+  );
+
+  // Deduplicate: if an identical book is more expensive on another site, remove it from the other site,
+  // and keep all copies/editions from the cheaper site
   const deduped = await dedupeBooks(combined, searchBook);
 
   // Compute relevance for sorting
@@ -129,3 +249,5 @@ export default async function searchBooks(searchBook) {
     return a.price - b.price;
   });
 }
+
+export { calculateRelevance, isCoreWorkMatch };

@@ -2,7 +2,7 @@ import axios from "axios";
 import https from "node:https";
 import decodeHtmlEntities from "../utils/decodeHtmlEntities.js";
 
-const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+const httpsAgent = new https.Agent({ rejectUnauthorized: false, keepAlive: false });
 
 const searchCache = new Map();
 const detailsCache = new Map();
@@ -12,6 +12,7 @@ const DETAILS_TTL_MS = 15 * 60 * 1000;
 const BASE_HEADERS = {
   "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Connection": "close",
 };
 
 export function parseUlyssesHtml(html) {
@@ -52,22 +53,25 @@ export function parseUlyssesHtml(html) {
           : `https://www.ulysses.md${imgMatch[1]}`;
       }
 
-      products.push({
-        url,
-        name,
-        price,
-        mainImage: { url: imgUrl },
-        images: [{ url: imgUrl }],
-      });
+      if (imgUrl) {
+        products.push({
+          url,
+          name,
+          price,
+          mainImage: { url: imgUrl },
+          images: [{ url: imgUrl }],
+        });
+      }
     }
   }
 
   return products;
 }
 
-const highResCache = new Map();
+export const highResCache = new Map();
+export const thumbToHighRes = new Map();
 
-async function resolveHighResImage(productUrl, fallbackImg) {
+export async function resolveHighResImage(productUrl, fallbackImg) {
   if (!productUrl || productUrl.includes("no_photo")) return fallbackImg;
   if (highResCache.has(productUrl)) {
     return highResCache.get(productUrl);
@@ -76,6 +80,7 @@ async function resolveHighResImage(productUrl, fallbackImg) {
     const res = await axios.get(productUrl, {
       headers: BASE_HEADERS,
       httpsAgent,
+      family: 4,
       timeout: 3500,
     });
     const html = res.data;
@@ -95,6 +100,9 @@ async function resolveHighResImage(productUrl, fallbackImg) {
     }
     const finalImg = image || fallbackImg;
     highResCache.set(productUrl, finalImg);
+    if (fallbackImg && finalImg && finalImg !== fallbackImg) {
+      thumbToHighRes.set(fallbackImg, finalImg);
+    }
     return finalImg;
   } catch {
     return fallbackImg;
@@ -117,7 +125,8 @@ export async function searchUlysses(query) {
       const res = await axios.get(getPageUrl(page), {
         headers: BASE_HEADERS,
         httpsAgent,
-        timeout: 8000,
+        family: 4,
+        timeout: 6000,
       });
       return res.data;
     } catch {
@@ -134,7 +143,7 @@ export async function searchUlysses(query) {
       ...page1Html.matchAll(/[?&;]PAGEN_2=(\d+)/g),
     ].map((m) => Number(m[1]));
     const maxPage = pageNumbers.length
-      ? Math.min(Math.max(...pageNumbers), 10)
+      ? Math.min(Math.max(...pageNumbers), 6)
       : 1;
 
     let allProducts = [...page1Products];
@@ -159,17 +168,50 @@ export async function searchUlysses(query) {
       return true;
     });
 
-    // Resolve full 1000px high-resolution images for search products so covers look crisp in search
-    const toResolve = uniqueProducts.slice(0, 30);
-    await Promise.all(
-      toResolve.map(async (p) => {
-        const highRes = await resolveHighResImage(p.url, p.mainImage?.url);
-        if (highRes) {
-          p.mainImage = { url: highRes };
-          p.images = [{ url: highRes }];
-        }
-      }),
-    );
+    // Sort uniqueProducts by query relevance first so that the top search matches
+    // get resolved to 1000px high-resolution covers first
+    const queryTokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const scoreProduct = (p) => {
+      const name = (p.name || "").toLowerCase();
+      let score = 0;
+      for (const token of queryTokens) {
+        if (name === token) score += 100;
+        else if (name.startsWith(token)) score += 50;
+        else if (name.includes(token)) score += 20;
+      }
+      return score;
+    };
+    uniqueProducts.sort((a, b) => scoreProduct(b) - scoreProduct(a));
+
+    // Resolve full 1000px high-resolution images for top 36 products in 2 fast batches
+    const toResolve = uniqueProducts.slice(0, 36);
+    const BATCH_SIZE = 18;
+    for (let i = 0; i < toResolve.length; i += BATCH_SIZE) {
+      const batch = toResolve.slice(i, i + BATCH_SIZE);
+      await Promise.all(
+        batch.map(async (p) => {
+          const highRes = await resolveHighResImage(p.url, p.mainImage?.url);
+          if (highRes) {
+            p.mainImage = { url: highRes };
+            p.images = [{ url: highRes }];
+          }
+        }),
+      );
+    }
+
+    // Background resolve for products 36..72 without delaying the response
+    const remaining = uniqueProducts.slice(36, 72);
+    if (remaining.length > 0) {
+      Promise.all(
+        remaining.map(async (p) => {
+          const highRes = await resolveHighResImage(p.url, p.mainImage?.url);
+          if (highRes) {
+            p.mainImage = { url: highRes };
+            p.images = [{ url: highRes }];
+          }
+        }),
+      ).catch(() => {});
+    }
 
     searchCache.set(cacheKey, {
       data: uniqueProducts,
@@ -193,6 +235,7 @@ export async function getUlyssesDetails(bookUrl) {
     const res = await axios.get(bookUrl, {
       headers: BASE_HEADERS,
       httpsAgent,
+      family: 4,
       timeout: 8000,
     });
 

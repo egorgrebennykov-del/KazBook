@@ -6,6 +6,8 @@ const ALLOWED_HOSTS = [
   "librarius.md",
   "carturesti.md",
   "ulysses.md",
+  "carteamea.md",
+  "biblion.md",
 ];
 
 function isAllowed(url) {
@@ -67,6 +69,16 @@ export default async function getBookDetails(url) {
         const mod = ["..", "server", "ulyssesService.js"].join("/");
         const { getUlyssesDetails } = await import(/* @vite-ignore */ mod);
         const direct = await getUlyssesDetails(url);
+        if (direct) return normalizeProduct(direct);
+      } else if (url.includes("carteamea.md")) {
+        const mod = ["..", "server", "carteameaService.js"].join("/");
+        const { getCarteameaDetails } = await import(/* @vite-ignore */ mod);
+        const direct = await getCarteameaDetails(url);
+        if (direct) return normalizeProduct(direct);
+      } else if (url.includes("biblion.md")) {
+        const mod = ["..", "server", "biblionService.js"].join("/");
+        const { getBiblionDetails } = await import(/* @vite-ignore */ mod);
+        const direct = await getBiblionDetails(url);
         if (direct) return normalizeProduct(direct);
       }
     } catch {

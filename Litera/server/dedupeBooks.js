@@ -68,7 +68,6 @@ export async function dedupeBooks(books, query = "") {
   const candidates = [];
   for (let left = 0; left < books.length; left++) {
     for (let right = left + 1; right < books.length; right++) {
-      if (books[left].store === books[right].store) continue;
       if (!books[left].image || !books[right].image) continue;
       if (
         books[left].image !== books[right].image &&
@@ -83,20 +82,34 @@ export async function dedupeBooks(books, query = "") {
 
   const embeddings = new Map();
   const getEmbedding = async (image) => {
-    if (!embeddings.has(image)) {
+    let target = image;
+    if (typeof target === "string" && target.startsWith("/api/enhance-image?url=")) {
+      try {
+        target = new URL(target, "http://localhost").searchParams.get("url") || target;
+      } catch {
+        // ignore
+      }
+    }
+    if (!embeddings.has(target)) {
       embeddings.set(
-        image,
-        getImageEmbedding(image).catch(() => null),
+        target,
+        getImageEmbedding(target).catch(() => null),
       );
     }
-    return embeddings.get(image);
+    return embeddings.get(target);
   };
 
   const matchingPairs = [];
   for (const [left, right] of candidates) {
     const titleA = (books[left].title || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
     const titleB = (books[right].title || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-    if (books[left].image === books[right].image || (titleA && titleA === titleB)) {
+    const imgA = typeof books[left].image === "string" && books[left].image.startsWith("/api/enhance-image?url=")
+      ? new URL(books[left].image, "http://localhost").searchParams.get("url") || books[left].image
+      : books[left].image;
+    const imgB = typeof books[right].image === "string" && books[right].image.startsWith("/api/enhance-image?url=")
+      ? new URL(books[right].image, "http://localhost").searchParams.get("url") || books[right].image
+      : books[right].image;
+    if (books[left].image === books[right].image || imgA === imgB || (titleA && titleA === titleB)) {
       matchingPairs.push([left, right]);
       continue;
     }
@@ -115,16 +128,33 @@ export async function dedupeBooks(books, query = "") {
 
   const removed = new Set();
   for (const group of createGroups(books.length, matchingPairs)) {
-    const ordered = [...group].sort((left, right) => {
-      const priceLeft = Number.isFinite(books[left].price)
-        ? books[left].price
+    const stores = new Set([...group].map((idx) => books[idx].store));
+    if (stores.size < 2) continue; // Only compare across different bookstores
+
+    let minPrice = Infinity;
+    for (const idx of group) {
+      const price = Number.isFinite(books[idx].price)
+        ? books[idx].price
         : Infinity;
-      const priceRight = Number.isFinite(books[right].price)
-        ? books[right].price
-        : Infinity;
-      return priceLeft - priceRight || left - right;
-    });
-    ordered.slice(1).forEach((index) => removed.add(index));
+      if (price < minPrice) minPrice = price;
+    }
+    if (!Number.isFinite(minPrice)) continue;
+
+    const cheapestStores = new Set();
+    for (const idx of group) {
+      if (books[idx].price === minPrice) {
+        cheapestStores.add(books[idx].store);
+      }
+    }
+
+    // Remove book from another site if it is more expensive than the cheapest site,
+    // and keep all books from the cheapest site
+    for (const idx of group) {
+      const book = books[idx];
+      if (!cheapestStores.has(book.store) && book.price > minPrice) {
+        removed.add(idx);
+      }
+    }
   }
 
   return books.filter((_, index) => !removed.has(index));

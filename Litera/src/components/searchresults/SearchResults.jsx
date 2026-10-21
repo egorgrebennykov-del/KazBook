@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import searchBooks from "../../../utils/searchBooks";
-import dedupeBooks from "../../../utils/dedupeBooks";
 import { useSearchCache } from "../../context/searchCache";
 import { addToCart, getCart, removeFromCart } from "../../../utils/cart";
 import { getCookieUser, isLoggedIn } from "../../../utils/auth";
@@ -75,7 +74,6 @@ export default function SearchResults() {
 
     let cancelled = false;
     searchBooks(query)
-      .then((found) => dedupeBooks(found, query))
       .then((found) => {
         cache.set(query, found);
         if (!cancelled) setResult({ query, books: found });
@@ -235,6 +233,8 @@ export default function SearchResults() {
                     className="results__img"
                     src={book.image}
                     alt={book.title}
+                    loading={i < 8 ? "eager" : "lazy"}
+                    fetchPriority={i < 4 ? "high" : "auto"}
                     onLoad={() =>
                       setImageStatuses((current) =>
                         new Map(current).set(book.url, "loaded"),

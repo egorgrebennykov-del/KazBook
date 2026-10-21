@@ -65,11 +65,7 @@
   object-fit: cover;
   border-radius: 1.25rem;
   background-color: var(--container-color);
-  image-rendering: -webkit-optimize-contrast;
-  image-rendering: crisp-edges;
-  filter: contrast(1.05) saturate(1.06);
-  backface-visibility: hidden;
-  transform: translateZ(0);
+  image-rendering: auto;
 }
 
 .book__info {

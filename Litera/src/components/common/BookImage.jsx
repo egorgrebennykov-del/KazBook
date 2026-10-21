@@ -64,15 +64,39 @@ export default function BookImage({
               "-$1-240.$2$3",
             ),
           );
-        } else if (!currentSrc.startsWith("/api/enhance-image") && (src || currentSrc)) {
-          // 3. Try backend proxy cache which bypasses browser certificate/CORS/hotlink issues
+        } else if (currentSrc.startsWith("/api/enhance-image")) {
+          // 3. Enhanced proxy failed -> try unwrapped source URL or prop src
+          try {
+            const inner = new URL(currentSrc, "http://localhost").searchParams.get("url");
+            if (inner && inner !== currentSrc) {
+              setOverrideSrc(inner);
+            } else if (src && src !== currentSrc) {
+              setOverrideSrc(src);
+            } else {
+              setFailed(true);
+              onError?.();
+            }
+          } catch {
+            if (src && src !== currentSrc) {
+              setOverrideSrc(src);
+            } else {
+              setFailed(true);
+              onError?.();
+            }
+          }
+        } else if (
+          currentSrc.includes("carteamea.md") &&
+          src &&
+          src !== currentSrc
+        ) {
+          // 4. Carteamea high-res failed -> try raw thumbnail
+          setOverrideSrc(src);
+        } else if (src || currentSrc) {
+          // 5. Try backend proxy cache which bypasses browser certificate/CORS/hotlink issues
           const target = src || currentSrc;
           setOverrideSrc(`/api/enhance-image?url=${encodeURIComponent(target)}`);
-        } else if (currentSrc !== src && src) {
-          // 4. Try raw src if different
-          setOverrideSrc(src);
         } else {
-          // 5. Final fallback to placeholder
+          // 6. Final fallback to placeholder
           setFailed(true);
           onError?.();
         }
