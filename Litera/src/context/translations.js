@@ -131,16 +131,28 @@ export const translations = {
     "auth.logout": "Выйти",
     "auth.passwordsMismatch": "Пароли не совпадают",
 
-    // Testimonial & Join
+    // Testimonial & Feedbacks
     "testimonial.title": "Отзывы наших читателей",
-    "testimonial.review1":
-      "Отличный сервис для заказа книг с быстрой доставкой по Европе и очень приятными скидками.",
-    "testimonial.review2":
-      "Нашел редкие издания классики, которые давно искал. Удобный поиск и понятные цены.",
-    "testimonial.review3":
-      "Прекрасный сервис! Быстро оформил заказ, книги пришли в отличном состоянии.",
-    "testimonial.review4":
-      "Очень нравится отслеживать скидки на любимых авторов прямо на сайте. Рекомендую!",
+    "testimonial.subtitle": "Делитесь своими впечатлениями о сервисе и читайте отзывы других покупателей",
+    "testimonial.leaveReview": "Оставить отзыв",
+    "testimonial.rating": "Ваша оценка",
+    "testimonial.text": "Текст отзыва",
+    "testimonial.placeholder": "Поделитесь впечатлениями о сервисе, книгах или доставке...",
+    "testimonial.submit": "Опубликовать отзыв",
+    "testimonial.submitting": "Публикация...",
+    "testimonial.success": "Спасибо за ваш отзыв!",
+    "testimonial.loginRequired": "Чтобы оставить отзыв, пожалуйста, войдите в аккаунт.",
+    "testimonial.loginBtn": "Войти в аккаунт",
+    "testimonial.validationError": "Пожалуйста, напишите текст отзыва или поставьте оценку со звёздами.",
+    "testimonial.empty": "Пока нет отзывов. Станьте первым, кто оставит свой отзыв!",
+    "testimonial.loading": "Загрузка отзывов...",
+    "testimonial.error": "Не удалось загрузить отзывы. Попробуйте позже.",
+    "testimonial.clearRating": "Сбросить оценку",
+    "testimonial.star": "звезда",
+    "testimonial.stars": "звезд",
+    "testimonial.anonymous": "Покупатель",
+
+    // Join
     "join.title": "Подпишитесь, чтобы получать\nсвежие обновления",
     "join.description": "Получайте уведомления о лучших скидках и новинках первыми.",
     "join.placeholder": "Введите email",
@@ -285,16 +297,28 @@ export const translations = {
     "auth.logout": "Log out",
     "auth.passwordsMismatch": "Passwords do not match",
 
-    // Testimonial & Join
-    "testimonial.title": "Customer Opinions",
-    "testimonial.review1":
-      "The best website to buy books, the purchase is very easy to make and has great discounts.",
-    "testimonial.review2":
-      "Found rare classic editions I was looking for. Very convenient search and transparent pricing.",
-    "testimonial.review3":
-      "Great experience! Placed my order quickly and the books arrived in flawless condition.",
-    "testimonial.review4":
-      "Love keeping track of new discounts for my favorite authors directly on the site. Highly recommend!",
+    // Testimonial & Feedbacks
+    "testimonial.title": "Customer Reviews",
+    "testimonial.subtitle": "Share your shopping experience and read reviews from other book lovers",
+    "testimonial.leaveReview": "Leave a Review",
+    "testimonial.rating": "Your Rating",
+    "testimonial.text": "Review Text",
+    "testimonial.placeholder": "Share your thoughts about your books, order, or delivery...",
+    "testimonial.submit": "Submit Review",
+    "testimonial.submitting": "Submitting...",
+    "testimonial.success": "Thank you for your review!",
+    "testimonial.loginRequired": "Please log in to leave a review.",
+    "testimonial.loginBtn": "Sign In",
+    "testimonial.validationError": "Please write a review or select a star rating.",
+    "testimonial.empty": "No reviews yet. Be the first to leave a review!",
+    "testimonial.loading": "Loading reviews...",
+    "testimonial.error": "Could not load reviews. Please try again later.",
+    "testimonial.clearRating": "Reset rating",
+    "testimonial.star": "star",
+    "testimonial.stars": "stars",
+    "testimonial.anonymous": "Customer",
+
+    // Join
     "join.title": "Subscribe To Receive \nThe Latest Updates",
     "join.description": "Be the first to hear about special discounts and new arrivals.",
     "join.placeholder": "Enter email",
