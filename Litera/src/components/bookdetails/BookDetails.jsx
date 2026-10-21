@@ -67,12 +67,15 @@ export default function BookDetails() {
   const searchQuery = params.get("q") ?? state?.query;
   const fromHome = state?.fromHome || params.get("source") === "home";
   const fromBookPicks = params.get("source") === "book-picks";
+  const fromNew = state?.fromNew || params.get("source") === "new";
   const backTo = state?.fromCart
     ? "/cart"
     : state?.fromDiscount
       ? "/discount"
       : fromBookPicks
         ? "/featured"
+        : fromNew
+          ? "/new"
         : fromHome
           ? "/"
           : searchQuery

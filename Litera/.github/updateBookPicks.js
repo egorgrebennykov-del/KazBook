@@ -23,7 +23,7 @@ const SOURCES = [
   {
     url:
       process.env.BOOK_PICKS_SOURCE_URL ||
-      "https://librarius.md/ru/books?sortBy=create_date_desc&perPage=36&pb%5B%5D=215&pb%5B%5D=8&pb%5B%5D=192&pb%5B%5D=356&pb%5B%5D=4331&pb%5B%5D=362",
+      "https://librarius.md/ru/books?sortBy=qty_desc&perPage=36&pb%5B%5D=215&pb%5B%5D=8&pb%5B%5D=192&pb%5B%5D=356&pb%5B%5D=4331&pb%5B%5D=362",
     store: "librarius.md",
   },
 ];
@@ -61,7 +61,10 @@ function highResolutionCover(url) {
   try {
     const match = url.match(/\/img\/\d+\/\d+\/(?:x)?([A-Za-z0-9_-]+)/);
     if (match) {
-      let b64 = match[1].replace(/_e_/g, "=").replace(/-/g, "+").replace(/_/g, "/");
+      let b64 = match[1]
+        .replace(/_e_/g, "=")
+        .replace(/-/g, "+")
+        .replace(/_/g, "/");
       while (b64.length % 4 !== 0) b64 += "=";
       const decoded = Buffer.from(b64, "base64").toString("utf8");
       if (decoded.startsWith("http")) return decoded;

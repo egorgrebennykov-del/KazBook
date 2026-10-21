@@ -18,7 +18,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
 const SOURCE_URL =
   process.env.HOMEPAGE_SOURCE_URL ||
-  "https://librarius.md/ru/esearch?search=%D0%BA%D0%BD%D0%B8%D0%B3%D0%B0";
+  "https://librarius.md/ru/books?sortBy=qty_desc&perPage=36&pb%5B%5D=215&pb%5B%5D=8&pb%5B%5D=356&pb%5B%5D=4331";
 const DETAIL_BATCH_SIZE = 5;
 const COVER_BATCH_SIZE = 4;
 const BOOK_COUNT = 5;
