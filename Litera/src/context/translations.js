@@ -78,7 +78,8 @@ export const translations = {
     // Cart page
     "cart.title": "Ваша корзина",
     "cart.emptyTitle": "Ваша корзина пуста",
-    "cart.emptyDesc": "Найдите книги в поиске или каталоге и добавьте их в корзину.",
+    "cart.emptyDesc":
+      "Найдите книги в поиске или каталоге и добавьте их в корзину.",
     "cart.findBooks": "Искать книгу",
     "cart.total": "Итого:",
     "cart.proceed": "Оформить заказ",
@@ -86,7 +87,8 @@ export const translations = {
     "cart.remove": "Удалить из корзины",
     "cart.loading": "Загрузка корзины...",
     "cart.guestTitle": "Ваша корзина",
-    "cart.guestDesc": "Войдите или зарегистрируйтесь, чтобы просматривать и сохранять корзину.",
+    "cart.guestDesc":
+      "Войдите или зарегистрируйтесь, чтобы просматривать и сохранять корзину.",
     "cart.bookSingle": "книга",
     "cart.bookFew": "книги",
     "cart.bookMany": "книг",
@@ -117,14 +119,16 @@ export const translations = {
     "checkout.pay": "Оплатить",
     "checkout.paying": "Оплата...",
     "checkout.successTitle": "Заказ успешно оформлен!",
-    "checkout.successDesc": "Спасибо за ваш заказ! Мы начали комплектацию и скоро отправим книги по вашему адресу.",
+    "checkout.successDesc":
+      "Спасибо за ваш заказ! Мы начали комплектацию и скоро отправим книги по вашему адресу.",
     "checkout.orderNumber": "Номер заказа",
     "checkout.deliveryAddress": "Адрес доставки",
     "checkout.toHome": "На главную",
     "checkout.toCatalog": "Перейти в каталог",
     "checkout.emptyCart": "Ваша корзина пуста. Невозможно оформить заказ.",
     "checkout.backToCart": "Вернуться в корзину",
-    "checkout.fillAddressPrompt": "Укажите адрес доставки, чтобы рассчитать стоимость доставки и продолжить оплату.",
+    "checkout.fillAddressPrompt":
+      "Укажите адрес доставки, чтобы рассчитать стоимость доставки и продолжить оплату.",
     "checkout.fillRequired": "Пожалуйста, заполните город и улицу доставки.",
     "checkout.deleteAddress": "Удалить адрес",
     "checkout.selectCountry": "Выберите страну",
@@ -200,18 +204,23 @@ export const translations = {
 
     // Testimonial & Feedbacks
     "testimonial.title": "Отзывы наших читателей",
-    "testimonial.subtitle": "Делитесь своими впечатлениями о сервисе и читайте отзывы других покупателей",
+    "testimonial.subtitle":
+      "Делитесь своими впечатлениями о сервисе и читайте отзывы других покупателей",
     "testimonial.leaveReview": "Оставить отзыв",
     "testimonial.rating": "Ваша оценка",
     "testimonial.text": "Текст отзыва",
-    "testimonial.placeholder": "Поделитесь впечатлениями о сервисе, книгах или доставке...",
+    "testimonial.placeholder":
+      "Поделитесь впечатлениями о сервисе, книгах или доставке...",
     "testimonial.submit": "Опубликовать отзыв",
     "testimonial.submitting": "Публикация...",
     "testimonial.success": "Спасибо за ваш отзыв!",
-    "testimonial.loginRequired": "Чтобы оставить отзыв, пожалуйста, войдите в аккаунт.",
+    "testimonial.loginRequired":
+      "Чтобы оставить отзыв, пожалуйста, войдите в аккаунт.",
     "testimonial.loginBtn": "Войти в аккаунт",
-    "testimonial.validationError": "Пожалуйста, напишите текст отзыва или поставьте оценку со звёздами.",
-    "testimonial.empty": "Пока нет отзывов. Станьте первым, кто оставит свой отзыв!",
+    "testimonial.validationError":
+      "Пожалуйста, напишите текст отзыва или поставьте оценку со звёздами.",
+    "testimonial.empty":
+      "Пока нет отзывов. Станьте первым, кто оставит свой отзыв!",
     "testimonial.loading": "Загрузка отзывов...",
     "testimonial.error": "Не удалось загрузить отзывы. Попробуйте позже.",
     "testimonial.clearRating": "Сбросить оценку",
@@ -230,15 +239,17 @@ export const translations = {
 
     // Join
     "join.title": "Подпишитесь, чтобы получать\nсвежие обновления",
-    "join.description": "Получайте уведомления о лучших скидках и новинках первыми.",
+    "join.description":
+      "Получайте уведомления о лучших скидках и новинках первыми.",
     "join.placeholder": "Введите email",
     "join.button": "Подписаться",
 
     // Footer
     "footer.rights": "Все права защищены",
-    "footer.tagline": "Книги из Молдовы по всей Европе",
-    "footer.aboutTitle": "О сервисе",
-    "footer.aboutDesc": "Агрегатор книг и сервис поиска лучших цен в магазинах Молдовы.",
+    "footer.tagline": "Ваш книжный магазин в Европе",
+    "footer.aboutTitle": "О Litera",
+    "footer.aboutDesc":
+      "Интернет-магазин книг с широким выбором и выгодными ценами.",
   },
 
   en: {
@@ -266,7 +277,8 @@ export const translations = {
     "home.freeShipping": "Free Shipping",
     "home.freeShippingDesc": "Order More Than €100",
     "home.securePayment": "100% Secure Payment",
-    "home.securePaymentDesc": "Safe and encrypted checkout with zero hidden fees",
+    "home.securePaymentDesc":
+      "Safe and encrypted checkout with zero hidden fees",
     "home.support": "24/7 Support",
     "home.supportDesc": "Call us anytime",
 
@@ -320,7 +332,8 @@ export const translations = {
     // Cart page
     "cart.title": "Your cart",
     "cart.emptyTitle": "Your cart is empty",
-    "cart.emptyDesc": "Find books using search or catalog and add them to your cart.",
+    "cart.emptyDesc":
+      "Find books using search or catalog and add them to your cart.",
     "cart.findBooks": "Find a book",
     "cart.total": "Total:",
     "cart.proceed": "Proceed to checkout",
@@ -328,7 +341,8 @@ export const translations = {
     "cart.remove": "Remove from cart",
     "cart.loading": "Loading cart...",
     "cart.guestTitle": "Your cart",
-    "cart.guestDesc": "Sign in or create an account to view and save your cart.",
+    "cart.guestDesc":
+      "Sign in or create an account to view and save your cart.",
     "cart.bookSingle": "book",
     "cart.bookFew": "books",
     "cart.bookMany": "books",
@@ -359,15 +373,18 @@ export const translations = {
     "checkout.pay": "Pay now",
     "checkout.paying": "Processing...",
     "checkout.successTitle": "Order placed successfully!",
-    "checkout.successDesc": "Thank you for your order! We are preparing your books and will ship them to your address soon.",
+    "checkout.successDesc":
+      "Thank you for your order! We are preparing your books and will ship them to your address soon.",
     "checkout.orderNumber": "Order number",
     "checkout.deliveryAddress": "Delivery address",
     "checkout.toHome": "Back to Home",
     "checkout.toCatalog": "Browse books",
     "checkout.emptyCart": "Your cart is empty. Cannot proceed to checkout.",
     "checkout.backToCart": "Back to cart",
-    "checkout.fillAddressPrompt": "Please enter your shipping address to calculate delivery fee and complete payment.",
-    "checkout.fillRequired": "Please fill in the required address fields (city and street).",
+    "checkout.fillAddressPrompt":
+      "Please enter your shipping address to calculate delivery fee and complete payment.",
+    "checkout.fillRequired":
+      "Please fill in the required address fields (city and street).",
     "checkout.deleteAddress": "Delete address",
     "checkout.selectCountry": "Select country",
     "checkout.searchCountry": "Search country or dial code...",
@@ -442,17 +459,20 @@ export const translations = {
 
     // Testimonial & Feedbacks
     "testimonial.title": "Customer Reviews",
-    "testimonial.subtitle": "Share your shopping experience and read reviews from other book lovers",
+    "testimonial.subtitle":
+      "Share your shopping experience and read reviews from other book lovers",
     "testimonial.leaveReview": "Leave a Review",
     "testimonial.rating": "Your Rating",
     "testimonial.text": "Review Text",
-    "testimonial.placeholder": "Share your thoughts about your books, order, or delivery...",
+    "testimonial.placeholder":
+      "Share your thoughts about your books, order, or delivery...",
     "testimonial.submit": "Submit Review",
     "testimonial.submitting": "Submitting...",
     "testimonial.success": "Thank you for your review!",
     "testimonial.loginRequired": "Please log in to leave a review.",
     "testimonial.loginBtn": "Sign In",
-    "testimonial.validationError": "Please write a review or select a star rating.",
+    "testimonial.validationError":
+      "Please write a review or select a star rating.",
     "testimonial.empty": "No reviews yet. Be the first to leave a review!",
     "testimonial.loading": "Loading reviews...",
     "testimonial.error": "Could not load reviews. Please try again later.",
@@ -472,14 +492,16 @@ export const translations = {
 
     // Join
     "join.title": "Subscribe To Receive \nThe Latest Updates",
-    "join.description": "Be the first to hear about special discounts and new arrivals.",
+    "join.description":
+      "Be the first to hear about special discounts and new arrivals.",
     "join.placeholder": "Enter email",
     "join.button": "Subscribe",
 
     // Footer
     "footer.rights": "All rights reserved",
-    "footer.tagline": "Books from Moldova to Europe",
+    "footer.tagline": "Your bookstore for Europe",
     "footer.aboutTitle": "About Litera",
-    "footer.aboutDesc": "Book aggregator and best price comparison across bookstores in Moldova.",
+    "footer.aboutDesc":
+      "Online bookstore offering a wide selection of books at great prices.",
   },
 };

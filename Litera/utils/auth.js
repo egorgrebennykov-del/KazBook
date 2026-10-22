@@ -19,14 +19,16 @@ const checkEmail = (email) => {
 export const isLoggedIn = () =>
   document.cookie.split("; ").some((c) => c.startsWith("user="));
 
-const setUserCookie = ({ id, firstName }) => {
-  const value = encodeURIComponent(JSON.stringify({ id, firstName }));
+const setUserCookie = ({ id, firstName, role }) => {
+  const value = encodeURIComponent(
+    JSON.stringify({ id, firstName, role: role || null }),
+  );
   document.cookie = `user=${value}; max-age=${7 * 24 * 60 * 60}; path=/; SameSite=Lax`;
 };
 
 async function findByEmail(email) {
   const response = await fetch(
-    `${TABLE_URL}?select=id,firstName,lastName,email,password_hash&email=eq.${encodeURIComponent(email)}&limit=1`,
+    `${TABLE_URL}?select=id,firstName,lastName,email,password_hash,role&email=eq.${encodeURIComponent(email)}&limit=1`,
     { headers },
   );
   if (!response.ok) throw new Error("Server error, try again later");
@@ -128,7 +130,7 @@ export async function getProfile() {
   if (!cookieUser) return null;
 
   const response = await fetch(
-    `${TABLE_URL}?select=id,firstName,lastName,email,phone,adresses&id=eq.${encodeURIComponent(cookieUser.id)}&limit=1`,
+    `${TABLE_URL}?select=id,firstName,lastName,email,phone,adresses,role&id=eq.${encodeURIComponent(cookieUser.id)}&limit=1`,
     { headers },
   );
   const row = response.ok ? (await response.json())[0] : null;
@@ -139,17 +141,63 @@ export async function getProfile() {
   const phones = parseUserPhones(row?.phone);
   const primaryPhone =
     phones[0] || (typeof row?.phone === "string" ? row.phone.trim() : "");
+  const userRole = row?.role || "";
+
+  if (cookieUser.role !== userRole) {
+    setUserCookie({
+      id: cookieUser.id,
+      firstName: row?.firstName || cookieUser.firstName,
+      role: userRole,
+    });
+  }
 
   return {
     id: cookieUser.id,
     firstName: cookieUser.firstName,
     lastName: "",
     email: "",
+    role: userRole,
     adresses: [],
     ...(row || {}),
     phone: primaryPhone,
     phones,
   };
+}
+
+export function isPrivileged() {
+  const user = getCookieUser();
+  return user?.role === "privileged";
+}
+
+export async function getAllUsers() {
+  try {
+    const response = await fetch(
+      `${TABLE_URL}?select=id,created_at,firstName,lastName,email,phone,role&order=created_at.desc`,
+      { headers },
+    );
+    if (!response.ok) return [];
+    const list = await response.json();
+    return Array.isArray(list) ? list : [];
+  } catch (err) {
+    console.warn("Error fetching users:", err);
+    return [];
+  }
+}
+
+export async function updateUserRole(userId, newRole) {
+  const response = await fetch(
+    `${TABLE_URL}?id=eq.${encodeURIComponent(userId)}`,
+    {
+      method: "PATCH",
+      headers: { ...headers, Prefer: "return=representation" },
+      body: JSON.stringify({ role: newRole }),
+    },
+  );
+  if (!response.ok) {
+    const err = await response.json().catch(() => null);
+    throw new Error(err?.message || "Could not update user role");
+  }
+  return (await response.json())[0];
 }
 
 export async function getUserPhones(userId) {

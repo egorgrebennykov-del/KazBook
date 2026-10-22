@@ -166,3 +166,18 @@
     transform: translateY(0);
   }
 }
+
+.nav__settings-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--title-color);
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: color 0.3s ease, transform 0.3s ease;
+}
+
+.nav__settings-btn:hover {
+  color: var(--first-color);
+  transform: rotate(45deg);
+}

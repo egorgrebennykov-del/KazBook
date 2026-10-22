@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router";
-import { getCookieUser, isLoggedIn, logout } from "../../../utils/auth";
+import { getCookieUser, getProfile, isLoggedIn, logout } from "../../../utils/auth";
 import { useLanguage } from "../../context/languageContext";
 import "./Header.css";
 
@@ -16,6 +16,26 @@ export default function Header({ theme, isLight, onSearch }) {
 
   const loggedIn = isLoggedIn();
   const user = getCookieUser();
+  const [isPrivilegedUser, setIsPrivilegedUser] = useState(
+    user?.role === "privileged",
+  );
+
+  useEffect(() => {
+    if (!loggedIn) {
+      return;
+    }
+    let cancelled = false;
+    getProfile()
+      .then((p) => {
+        if (!cancelled && p?.role === "privileged") {
+          setIsPrivilegedUser(true);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [loggedIn]);
 
   useEffect(() => {
     const handleOutside = (e) => {
@@ -191,6 +211,17 @@ export default function Header({ theme, isLight, onSearch }) {
               title={t("nav.login")}
             >
               <i className="ri-user-line login-button" id="login-button" />
+            </Link>
+          )}
+
+          {isPrivilegedUser && (
+            <Link
+              to="/privileged"
+              className="nav__settings-btn"
+              title={language === "ru" ? "Панель управления" : "Admin Panel"}
+              aria-label={language === "ru" ? "Панель управления" : "Admin Panel"}
+            >
+              <i className="ri-settings-3-line settings-button" id="settings-button" />
             </Link>
           )}
 
