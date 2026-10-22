@@ -60,6 +60,10 @@ export default function Privileged() {
   const [couponDays, setCouponDays] = useState("30");
   const [couponSubmitting, setCouponSubmitting] = useState(false);
 
+  // Git Actions state
+  const [actionStatuses, setActionStatuses] = useState({});
+  const [selectedLogAction, setSelectedLogAction] = useState(null);
+
   // Check auth and verify privileged role
   useEffect(() => {
     if (!loggedIn) return;
@@ -111,6 +115,33 @@ export default function Privileged() {
     };
   }, [isPrivilegedUser]);
 
+  // Poll Git Action statuses when tab is active
+  useEffect(() => {
+    if (!isPrivilegedUser || activeSection !== "git-actions") return;
+    let cancelled = false;
+
+    const fetchStatuses = async () => {
+      try {
+        const res = await fetch("/api/actions-status");
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && data.actions) {
+            setActionStatuses(data.actions);
+          }
+        }
+      } catch {
+        // Ignore polling network errors
+      }
+    };
+
+    fetchStatuses();
+    const interval = setInterval(fetchStatuses, 2000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [isPrivilegedUser, activeSection]);
+
   const handleRefresh = async () => {
     setLoadingData(true);
     try {
@@ -122,10 +153,56 @@ export default function Privileged() {
       setUsers(usersList);
       setOrders(ordersList);
       setCoupons(couponsList);
+      if (activeSection === "git-actions") {
+        const res = await fetch("/api/actions-status");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.actions) setActionStatuses(data.actions);
+        }
+      }
     } catch (err) {
       console.error("Error refreshing data:", err);
     } finally {
       setLoadingData(false);
+    }
+  };
+
+  const handleRunAction = async (actionId, actionTitle) => {
+    setActionStatuses((prev) => ({
+      ...prev,
+      [actionId]: {
+        ...(prev[actionId] || {}),
+        status: "running",
+        startedAt: new Date().toISOString(),
+        output: `[${new Date().toLocaleTimeString()}] Starting ${actionTitle}...\n`,
+      },
+    }));
+
+    try {
+      const res = await fetch("/api/run-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actionId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to start action");
+      }
+      showNotice(
+        language === "ru"
+          ? `Действие "${actionTitle}" успешно запущено!`
+          : `Action "${actionTitle}" successfully started!`,
+      );
+    } catch (err) {
+      setActionStatuses((prev) => ({
+        ...prev,
+        [actionId]: {
+          ...(prev[actionId] || {}),
+          status: "error",
+          error: err.message,
+        },
+      }));
+      showNotice(err.message, true);
     }
   };
 
@@ -989,105 +1066,127 @@ export default function Privileged() {
             </div>
 
             <div className="privileged__workflows-grid">
-              <div className="privileged__workflow-card">
-                <div className="privileged__wf-icon-wrap">
-                  <i className="ri-book-3-line" />
-                </div>
-                <div className="privileged__wf-content">
-                  <strong className="privileged__wf-title">
-                    Update Book Picks
-                  </strong>
-                  <span className="privileged__wf-file">
-                    .github/workflows/update-book-picks.yml
-                  </span>
-                  <p className="privileged__wf-desc">
-                    {t("privileged.gitActions.wfBookPicksDesc")}
-                  </p>
-                </div>
-                <a
-                  href="https://github.com/egorgrebennykov-del/KazBook/actions/workflows/update-book-picks.yml"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="button button--ghost privileged__btn-sm"
-                >
-                  {t("privileged.gitActions.runCheck")}
-                </a>
-              </div>
+              {[
+                {
+                  id: "update-book-picks",
+                  title: "Update Book Picks",
+                  file: ".github/workflows/update-book-picks.yml",
+                  descKey: "privileged.gitActions.wfBookPicksDesc",
+                  icon: "ri-book-3-line",
+                },
+                {
+                  id: "update-home-books",
+                  title: "Update Homepage Books",
+                  file: ".github/workflows/update-home-books.yml",
+                  descKey: "privileged.gitActions.wfHomeBooksDesc",
+                  icon: "ri-home-4-line",
+                },
+                {
+                  id: "update-new-books",
+                  title: "Update New Books",
+                  file: ".github/workflows/update-new-books.yml",
+                  descKey: "privileged.gitActions.wfNewBooksDesc",
+                  icon: "ri-bookmark-line",
+                },
+                {
+                  id: "update-exchange-rate",
+                  title: "Update Exchange Rate",
+                  file: ".github/workflows/update-exchange-rate.yml",
+                  descKey: "privileged.gitActions.wfExchangeRateDesc",
+                  icon: "ri-exchange-dollar-line",
+                },
+              ].map((wf) => {
+                const info = actionStatuses[wf.id] || {};
+                const isRunning = info.status === "running";
+                const isSuccess = info.status === "success";
+                const isError = info.status === "error";
 
-              <div className="privileged__workflow-card">
-                <div className="privileged__wf-icon-wrap">
-                  <i className="ri-home-4-line" />
-                </div>
-                <div className="privileged__wf-content">
-                  <strong className="privileged__wf-title">
-                    Update Homepage Books
-                  </strong>
-                  <span className="privileged__wf-file">
-                    .github/workflows/update-home-books.yml
-                  </span>
-                  <p className="privileged__wf-desc">
-                    {t("privileged.gitActions.wfHomeBooksDesc")}
-                  </p>
-                </div>
-                <a
-                  href="https://github.com/egorgrebennykov-del/KazBook/actions/workflows/update-home-books.yml"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="button button--ghost privileged__btn-sm"
-                >
-                  {t("privileged.gitActions.runCheck")}
-                </a>
-              </div>
+                return (
+                  <div className="privileged__workflow-card" key={wf.id}>
+                    <div className="privileged__wf-icon-wrap">
+                      <i className={wf.icon} />
+                    </div>
+                    <div className="privileged__wf-content">
+                      <strong className="privileged__wf-title">
+                        {wf.title}
+                      </strong>
+                      <span className="privileged__wf-file">{wf.file}</span>
+                      <p className="privileged__wf-desc">{t(wf.descKey)}</p>
 
-              <div className="privileged__workflow-card">
-                <div className="privileged__wf-icon-wrap">
-                  <i className="ri-bookmark-line" />
-                </div>
-                <div className="privileged__wf-content">
-                  <strong className="privileged__wf-title">
-                    Update New Books
-                  </strong>
-                  <span className="privileged__wf-file">
-                    .github/workflows/update-new-books.yml
-                  </span>
-                  <p className="privileged__wf-desc">
-                    {t("privileged.gitActions.wfNewBooksDesc")}
-                  </p>
-                </div>
-                <a
-                  href="https://github.com/egorgrebennykov-del/KazBook/actions/workflows/update-new-books.yml"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="button button--ghost privileged__btn-sm"
-                >
-                  {t("privileged.gitActions.runCheck")}
-                </a>
-              </div>
+                      <div className="privileged__wf-status-row">
+                        <span
+                          className={`privileged__action-status ${
+                            isRunning
+                              ? "privileged__action-status--running"
+                              : isSuccess
+                                ? "privileged__action-status--success"
+                                : isError
+                                  ? "privileged__action-status--error"
+                                  : ""
+                          }`}
+                        >
+                          <i
+                            className={
+                              isRunning
+                                ? "ri-loader-4-line privileged__spin"
+                                : isSuccess
+                                  ? "ri-checkbox-circle-fill"
+                                  : isError
+                                    ? "ri-error-warning-fill"
+                                    : "ri-time-line"
+                            }
+                          />
+                          {isRunning
+                            ? t("privileged.gitActions.statusRunning")
+                            : isSuccess
+                              ? t("privileged.gitActions.statusSuccess")
+                              : isError
+                                ? t("privileged.gitActions.statusError")
+                                : t("privileged.gitActions.statusIdle")}
+                        </span>
+                      </div>
+                    </div>
 
-              <div className="privileged__workflow-card">
-                <div className="privileged__wf-icon-wrap">
-                  <i className="ri-exchange-dollar-line" />
-                </div>
-                <div className="privileged__wf-content">
-                  <strong className="privileged__wf-title">
-                    Update Exchange Rate
-                  </strong>
-                  <span className="privileged__wf-file">
-                    .github/workflows/update-exchange-rate.yml
-                  </span>
-                  <p className="privileged__wf-desc">
-                    {t("privileged.gitActions.wfExchangeRateDesc")}
-                  </p>
-                </div>
-                <a
-                  href="https://github.com/egorgrebennykov-del/KazBook/actions/workflows/update-exchange-rate.yml"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="button button--ghost privileged__btn-sm"
-                >
-                  {t("privileged.gitActions.runCheck")}
-                </a>
-              </div>
+                    <div className="privileged__wf-actions-row">
+                      <button
+                        type="button"
+                        className={`button privileged__btn-sm ${isRunning ? "button--ghost" : ""}`}
+                        disabled={isRunning}
+                        onClick={() => handleRunAction(wf.id, wf.title)}
+                        title={
+                          isRunning
+                            ? t("privileged.gitActions.running")
+                            : t("privileged.gitActions.run")
+                        }
+                      >
+                        {isRunning ? (
+                          <>
+                            <i className="ri-loader-4-line privileged__spin" />
+                            {t("privileged.gitActions.running")}
+                          </>
+                        ) : (
+                          <>
+                            <i className="ri-play-fill" />
+                            {t("privileged.gitActions.run")}
+                          </>
+                        )}
+                      </button>
+
+                      {info.output && (
+                        <button
+                          type="button"
+                          className="button button--ghost privileged__btn-sm"
+                          onClick={() => setSelectedLogAction(wf.id)}
+                          title={t("privileged.gitActions.viewLogs")}
+                        >
+                          <i className="ri-terminal-box-line" />
+                          {t("privileged.gitActions.logs")}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="privileged__git-repo-card">
@@ -1107,6 +1206,46 @@ export default function Privileged() {
           </div>
         )}
       </div>
+
+      {/* Action Logs Modal */}
+      {selectedLogAction && (
+        <div
+          className="privileged__modal-backdrop"
+          onClick={() => setSelectedLogAction(null)}
+        >
+          <div
+            className="privileged__modal privileged__modal--logs"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="privileged__modal-header">
+              <h3>
+                <i className="ri-terminal-box-line" />
+                {t("privileged.gitActions.logModalTitle")} - {selectedLogAction}
+              </h3>
+              <button
+                type="button"
+                className="privileged__modal-close"
+                onClick={() => setSelectedLogAction(null)}
+              >
+                ×
+              </button>
+            </div>
+            <pre className="privileged__terminal-output">
+              {actionStatuses[selectedLogAction]?.output ||
+                t("privileged.gitActions.noLogs")}
+            </pre>
+            <div className="privileged__modal-actions">
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={() => setSelectedLogAction(null)}
+              >
+                {t("privileged.gitActions.closeLogs")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

@@ -7,6 +7,8 @@ import https from "node:https";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
+import dotenv from "dotenv";
 import sharp from "sharp";
 import { dedupeBooks } from "./dedupeBooks.js";
 import { warmupImageModel } from "../utils/bookSimilarity.js";
@@ -40,6 +42,41 @@ import {
 } from "./biblionService.js";
 
 const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+dotenv.config({ path: path.resolve(appDir, ".env") });
+
+const ACTIONS = {
+  "update-book-picks": {
+    id: "update-book-picks",
+    name: "Update Book Picks",
+    workflowFile: "update-book-picks.yml",
+    script: "updateBookPicks.js",
+  },
+  "update-home-books": {
+    id: "update-home-books",
+    name: "Update Homepage Books",
+    workflowFile: "update-home-books.yml",
+    script: "updateHomepageBooks.js",
+  },
+  "update-new-books": {
+    id: "update-new-books",
+    name: "Update New Books",
+    workflowFile: "update-new-books.yml",
+    script: "updateNewBooks.js",
+  },
+  "update-exchange-rate": {
+    id: "update-exchange-rate",
+    name: "Update Exchange Rate",
+    workflowFile: "update-exchange-rate.yml",
+    script: "updateExchangeRate.js",
+  },
+};
+
+const actionStatuses = {
+  "update-book-picks": { status: "idle", lastRun: null, error: null, output: "" },
+  "update-home-books": { status: "idle", lastRun: null, error: null, output: "" },
+  "update-new-books": { status: "idle", lastRun: null, error: null, output: "" },
+  "update-exchange-rate": { status: "idle", lastRun: null, error: null, output: "" },
+};
 const PORT = Number(process.env.BOOK_COMPARE_PORT) || 3001;
 const MAX_BODY_SIZE = 2 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
@@ -354,6 +391,123 @@ const server = createServer(async (req, res) => {
     }
     return;
   }
+  if (req.method === "GET" && req.url === "/api/actions-status") {
+    respond(res, 200, { actions: actionStatuses });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/run-action") {
+    try {
+      const body = await readJson(req);
+      const actionId = body.actionId;
+      const action = ACTIONS[actionId];
+      if (!action) {
+        respond(res, 400, { error: `Unknown action: ${actionId}` });
+        return;
+      }
+      if (actionStatuses[actionId]?.status === "running") {
+        respond(res, 409, { error: "Action is already running" });
+        return;
+      }
+
+      // If GITHUB_TOKEN is available, try dispatching to GitHub Actions
+      const githubToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+      if (githubToken && !body.forceLocal) {
+        try {
+          await axios.post(
+            `https://api.github.com/repos/egorgrebennykov-del/KazBook/actions/workflows/${action.workflowFile}/dispatches`,
+            { ref: "main" },
+            {
+              headers: {
+                Authorization: `Bearer ${githubToken}`,
+                Accept: "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "User-Agent": "Litera-App",
+              },
+            },
+          );
+          actionStatuses[actionId] = {
+            status: "success",
+            startedAt: new Date().toISOString(),
+            finishedAt: new Date().toISOString(),
+            lastRun: new Date().toISOString(),
+            method: "github",
+            output: `[${new Date().toLocaleTimeString()}] Successfully dispatched workflow ${action.workflowFile} to GitHub Actions!`,
+          };
+          respond(res, 200, {
+            success: true,
+            method: "github",
+            message: `Dispatched ${action.name} to GitHub Actions`,
+          });
+          return;
+        } catch (ghErr) {
+          console.warn("GitHub Actions dispatch failed, running locally:", ghErr?.response?.data || ghErr.message);
+        }
+      }
+
+      // Local execution fallback
+      const scriptPath = path.resolve(appDir, ".github", action.script);
+      actionStatuses[actionId] = {
+        status: "running",
+        startedAt: new Date().toISOString(),
+        lastRun: new Date().toISOString(),
+        method: "local",
+        output: `[${new Date().toLocaleTimeString()}] Starting ${action.name} (${action.script})...\n`,
+        error: null,
+      };
+
+      const child = spawn(process.execPath, [scriptPath], {
+        cwd: path.resolve(appDir, ".github"),
+        env: {
+          ...process.env,
+        },
+      });
+
+      child.stdout.on("data", (chunk) => {
+        const text = chunk.toString();
+        const current = actionStatuses[actionId].output || "";
+        actionStatuses[actionId].output = (current + text).slice(-30000);
+      });
+
+      child.stderr.on("data", (chunk) => {
+        const text = chunk.toString();
+        const current = actionStatuses[actionId].output || "";
+        actionStatuses[actionId].output = (current + text).slice(-30000);
+      });
+
+      child.on("close", (code) => {
+        const finishedAt = new Date().toISOString();
+        actionStatuses[actionId].finishedAt = finishedAt;
+        if (code === 0) {
+          actionStatuses[actionId].status = "success";
+          actionStatuses[actionId].output += `\n[${new Date().toLocaleTimeString()}] ${action.name} completed successfully (exit code 0).\n`;
+        } else {
+          actionStatuses[actionId].status = "error";
+          actionStatuses[actionId].error = `Exited with code ${code}`;
+          actionStatuses[actionId].output += `\n[${new Date().toLocaleTimeString()}] Error: ${action.name} exited with code ${code}.\n`;
+        }
+      });
+
+      child.on("error", (err) => {
+        actionStatuses[actionId].status = "error";
+        actionStatuses[actionId].finishedAt = new Date().toISOString();
+        actionStatuses[actionId].error = err.message;
+        actionStatuses[actionId].output += `\n[${new Date().toLocaleTimeString()}] Process error: ${err.message}\n`;
+      });
+
+      respond(res, 200, {
+        success: true,
+        method: "local",
+        status: "running",
+        message: `Action ${action.name} started`,
+      });
+    } catch (err) {
+      console.error("Failed to run action:", err);
+      respond(res, 500, { error: err.message });
+    }
+    return;
+  }
+
   if (req.method !== "POST" || req.url !== "/api/dedupe-books") {
     respond(res, 404, { error: "Not found" });
     return;
