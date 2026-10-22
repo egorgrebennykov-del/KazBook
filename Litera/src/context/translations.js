@@ -127,6 +127,8 @@ export const translations = {
     "checkout.selectCountry": "Выберите страну",
     "checkout.searchCountry": "Поиск страны или кода...",
     "checkout.noCountryFound": "Страна не найдена",
+    "checkout.phoneRequired": "Пожалуйста, укажите номер телефона",
+    "checkout.usePrimaryPhone": "Использовать мой основной телефон",
 
     // Book Details
     "book.back": "Назад",
@@ -343,6 +345,8 @@ export const translations = {
     "checkout.selectCountry": "Select country",
     "checkout.searchCountry": "Search country or dial code...",
     "checkout.noCountryFound": "No country found",
+    "checkout.phoneRequired": "Please enter your phone number",
+    "checkout.usePrimaryPhone": "Use my primary phone",
 
     // Book Details
     "book.back": "Back",

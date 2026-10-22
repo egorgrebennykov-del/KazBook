@@ -33,7 +33,7 @@ async function findByEmail(email) {
   return (await response.json())[0] ?? null;
 }
 
-export async function register({ firstName, lastName, email, password }) {
+export async function register({ firstName, lastName, email, password, phone }) {
   const normalized = checkEmail(email);
   if (await findByEmail(normalized)) {
     throw new Error("This email is already registered");
@@ -47,6 +47,7 @@ export async function register({ firstName, lastName, email, password }) {
       lastName: lastName.trim(),
       email: normalized,
       password_hash: await bcrypt.hash(password, 10),
+      phone: phone ? phone.trim() : null,
     }),
   });
   if (
@@ -87,7 +88,7 @@ export async function getProfile() {
   if (!cookieUser) return null;
 
   const response = await fetch(
-    `${TABLE_URL}?select=id,firstName,lastName,email,adresses&id=eq.${encodeURIComponent(cookieUser.id)}&limit=1`,
+    `${TABLE_URL}?select=id,firstName,lastName,email,phone,adresses&id=eq.${encodeURIComponent(cookieUser.id)}&limit=1`,
     { headers },
   );
   const row = response.ok ? (await response.json())[0] : null;
@@ -96,6 +97,7 @@ export async function getProfile() {
     firstName: cookieUser.firstName,
     lastName: "",
     email: "",
+    phone: "",
     adresses: [],
     ...(row || {}),
   };

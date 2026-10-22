@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { register } from "../../../utils/auth";
 import { useLanguage } from "../../context/languageContext";
+import PhoneInput from "../common/PhoneInput";
+import { countries } from "../checkout/countryPhoneCodes";
 
 export default function SignUp({ onLogin, onClose }) {
   const { t } = useLanguage();
@@ -16,6 +18,8 @@ export default function SignUp({ onLogin, onClose }) {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showRepeat, setShowRepeat] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [countryIso, setCountryIso] = useState("MD");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -93,17 +97,25 @@ export default function SignUp({ onLogin, onClose }) {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
+    if (!phone.trim()) {
+      setError(t("checkout.phoneRequired"));
+      return;
+    }
     if (form.password !== form.repeat) {
       setError(t("auth.passwordsMismatch"));
       return;
     }
     setSubmitting(true);
     try {
+      const selectedCountry =
+        countries.find((c) => c.iso2 === countryIso) || countries[0];
+      const fullPhone = `${selectedCountry.dialCode} ${phone.trim()}`;
       await register({
         firstName: form.firstName,
         lastName: form.lastName,
         email: form.email,
         password: form.password,
+        phone: fullPhone,
       });
       const destination = params.get("redirect");
       navigate(
@@ -174,6 +186,19 @@ export default function SignUp({ onLogin, onClose }) {
               autoComplete="email"
               required
               {...field("email")}
+            />
+          </div>
+          <div>
+            <label htmlFor="signup-phone" className="login__label">
+              {t("checkout.phone")} <span className="checkout__required">*</span>
+            </label>
+            <PhoneInput
+              id="signup-phone"
+              phone={phone}
+              countryIso={countryIso}
+              onPhoneChange={setPhone}
+              onCountryChange={setCountryIso}
+              required
             />
           </div>
           <div>

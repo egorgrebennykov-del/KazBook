@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { clearCart, getCart } from "../../../utils/cart";
 import {
@@ -13,27 +13,17 @@ import { createOrderInProgress } from "../../../utils/orders";
 import BookImage from "../common/BookImage";
 import decodeHtmlEntities from "../../../utils/decodeHtmlEntities";
 import { useLanguage } from "../../context/languageContext";
+import PhoneInput from "../common/PhoneInput";
+import {
+  findCountryByPhone,
+  stripCountryCodeAndLeadingZero,
+} from "../../../utils/phone.js";
 import { countries } from "./countryPhoneCodes.js";
 import "./Checkout.css";
 
-function stripCountryCodeAndLeadingZero(inputVal, dialCode) {
-  if (!inputVal) return "";
-  let val = inputVal.trimStart();
-
-  const digits = dialCode ? dialCode.replace("+", "") : "";
-  if (digits) {
-    const regexWithPlus = new RegExp(`^\\+${digits}\\s*`, "i");
-    const regexWithoutPlus = new RegExp(`^${digits}\\s*`, "i");
-    if (regexWithPlus.test(val)) {
-      val = val.replace(regexWithPlus, "");
-    } else if (regexWithoutPlus.test(val) && digits.length > 1) {
-      val = val.replace(regexWithoutPlus, "");
-    }
-  }
-
-  // Strip leading zero(s) (e.g. "087..." -> "87...")
-  val = val.replace(/^0+/, "");
-  return val;
+function normalizePhone(str) {
+  if (!str) return "";
+  return str.replace(/[^\d+]/g, "");
 }
 
 // Base shipping calculation - can be customized by the user with any formula
@@ -91,95 +81,58 @@ export default function Checkout() {
   // Country selector & phone state
   const [selectedCountryIso, setSelectedCountryIso] = useState("MD");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [isCountryOpen, setIsCountryOpen] = useState(false);
-  const [countrySearch, setCountrySearch] = useState("");
-  const countrySelectRef = useRef(null);
-  const searchInputRef = useRef(null);
+  const [primaryPhone, setPrimaryPhone] = useState("");
+  const [usePrimaryPhone, setUsePrimaryPhone] = useState(false);
 
   const selectedCountry = useMemo(
     () => countries.find((c) => c.iso2 === selectedCountryIso) || countries[0],
     [selectedCountryIso],
   );
 
-  const filteredCountries = useMemo(() => {
-    const q = countrySearch.trim().toLowerCase();
-    if (!q) return countries;
-
-    const isSearchingIsrael =
-      q.includes("изра") ||
-      q.includes("isra") ||
-      ("израиль".startsWith(q) && q.length >= 2) ||
-      ("israel".startsWith(q) && q.length >= 2);
-
-    return countries.filter((c) => {
-      if (isSearchingIsrael) {
-        if (c.iso2 === "IL") return false;
-        if (c.iso2 === "PS") return true;
+  const handleTogglePrimaryPhone = (e) => {
+    const checked = e.target.checked;
+    setUsePrimaryPhone(checked);
+    if (checked) {
+      if (primaryPhone) {
+        const matched = findCountryByPhone(primaryPhone);
+        if (matched) {
+          setSelectedCountryIso(matched.iso2);
+          const sub = stripCountryCodeAndLeadingZero(primaryPhone, matched.dialCode);
+          setPhoneNumber(sub);
+        } else {
+          setPhoneNumber(primaryPhone);
+        }
       }
-
-      const en = c.name.toLowerCase();
-      const ru = (c.ruName || "").toLowerCase();
-      const dial = c.dialCode.toLowerCase();
-      const iso = c.iso2.toLowerCase();
-      return (
-        en.includes(q) ||
-        ru.includes(q) ||
-        dial.includes(q) ||
-        iso.includes(q)
-      );
-    });
-  }, [countrySearch]);
-
-  useEffect(() => {
-    if (!isCountryOpen) return;
-    const timer = setTimeout(() => {
-      searchInputRef.current?.focus();
-    }, 50);
-    const handleOutside = (e) => {
-      if (
-        countrySelectRef.current &&
-        !countrySelectRef.current.contains(e.target)
-      ) {
-        setIsCountryOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleOutside);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener("mousedown", handleOutside);
-    };
-  }, [isCountryOpen]);
-
-  const handleSelectCountry = (country) => {
-    setSelectedCountryIso(country.iso2);
-    setIsCountryOpen(false);
-    setCountrySearch("");
-    // Do not duplicate country dialCode in input string
-    setPhoneNumber((prev) => stripCountryCodeAndLeadingZero(prev, country.dialCode));
+    } else {
+      setPhoneNumber("");
+    }
   };
 
-  const handlePhoneChange = (e) => {
-    const rawVal = e.target.value;
-    if (!rawVal) {
-      setPhoneNumber("");
-      return;
+  const handlePhoneInputChange = (newSubscriber) => {
+    setPhoneNumber(newSubscriber);
+    if (primaryPhone) {
+      const full = newSubscriber.trim()
+        ? `${selectedCountry.dialCode} ${newSubscriber.trim()}`
+        : "";
+      const isMatch =
+        Boolean(full) &&
+        normalizePhone(full) === normalizePhone(primaryPhone);
+      setUsePrimaryPhone(isMatch);
     }
+  };
 
-    const trimmed = rawVal.trimStart();
-    if (trimmed.startsWith("+")) {
-      const sorted = [...countries].sort((a, b) => b.dialCode.length - a.dialCode.length);
-      const matched = sorted.find((c) => trimmed.startsWith(c.dialCode));
-      if (matched) {
-        setSelectedCountryIso(matched.iso2);
-        let subscriber = trimmed.slice(matched.dialCode.length).trimStart();
-        subscriber = subscriber.replace(/^0+/, "");
-        setPhoneNumber(subscriber);
-        return;
-      }
+  const handleCountryInputChange = (newIso) => {
+    setSelectedCountryIso(newIso);
+    if (primaryPhone) {
+      const c = countries.find((item) => item.iso2 === newIso) || countries[0];
+      const full = phoneNumber.trim()
+        ? `${c.dialCode} ${phoneNumber.trim()}`
+        : "";
+      const isMatch =
+        Boolean(full) &&
+        normalizePhone(full) === normalizePhone(primaryPhone);
+      setUsePrimaryPhone(isMatch);
     }
-
-    const cleaned = stripCountryCodeAndLeadingZero(rawVal, selectedCountry.dialCode);
-    setPhoneNumber(cleaned);
   };
 
   // Order completion state
@@ -201,6 +154,19 @@ export default function Checkout() {
             ...current,
             recipientName: current.recipientName || defaultName,
           }));
+        }
+        if (profile?.phone) {
+          const rawPrimary = profile.phone.trim();
+          setPrimaryPhone(rawPrimary);
+          setUsePrimaryPhone(true);
+          const matched = findCountryByPhone(rawPrimary);
+          if (matched) {
+            setSelectedCountryIso(matched.iso2);
+            const sub = stripCountryCodeAndLeadingZero(rawPrimary, matched.dialCode);
+            setPhoneNumber(sub);
+          } else {
+            setPhoneNumber(rawPrimary);
+          }
         }
       })
       .catch((err) => !cancelled && setError(err.message))
@@ -649,22 +615,15 @@ export default function Checkout() {
                     })}
 
                     {/* Option to enter a new address */}
-                    <label
+                    <button
+                      type="button"
                       className={`checkout__address-card checkout__address-card--new ${selectedAddressId === "new" ? "checkout__address-card--selected" : ""}`}
                       onClick={() => setSelectedAddressId("new")}
                     >
-                      <div className="checkout__address-radio-wrap">
-                        <input
-                          type="radio"
-                          name="checkoutAddress"
-                          checked={selectedAddressId === "new"}
-                          onChange={() => setSelectedAddressId("new")}
-                        />
-                      </div>
                       <div className="checkout__address-card-body">
                         <strong>+ {t("checkout.newAddress")}</strong>
                       </div>
-                    </label>
+                    </button>
                   </div>
                 </div>
               ) : null}
@@ -745,110 +704,23 @@ export default function Checkout() {
 
                     <div className="checkout__form-field">
                       <label htmlFor="phone">{t("checkout.phone")}</label>
-                      <div className="checkout__phone-group">
-                        <div
-                          className="checkout__country-select-wrap"
-                          ref={countrySelectRef}
-                        >
-                          <button
-                            type="button"
-                            className="checkout__country-btn"
-                            onClick={() => setIsCountryOpen((prev) => !prev)}
-                            aria-expanded={isCountryOpen}
-                            aria-haspopup="listbox"
-                            title={`${language === "ru" ? selectedCountry.ruName : selectedCountry.name} (${selectedCountry.dialCode})`}
-                          >
-                            <img
-                              src={selectedCountry.flagUrl}
-                              alt={selectedCountry.iso2}
-                              className="checkout__country-flag-img"
-                              width="20"
-                              height="15"
-                            />
-                            <span className="checkout__country-code">
-                              {selectedCountry.dialCode}
-                            </span>
-                            <i
-                              className={`ri-arrow-down-s-line checkout__country-arrow ${isCountryOpen ? "checkout__country-arrow--open" : ""}`}
-                            />
-                          </button>
-
-                          {isCountryOpen && (
-                            <div className="checkout__country-dropdown">
-                              <div className="checkout__country-search-wrap">
-                                <i className="ri-search-line" />
-                                <input
-                                  ref={searchInputRef}
-                                  type="text"
-                                  className="checkout__country-search-input"
-                                  placeholder={
-                                    language === "ru"
-                                      ? "Поиск страны или кода..."
-                                      : "Search country or code..."
-                                  }
-                                  value={countrySearch}
-                                  onChange={(e) => setCountrySearch(e.target.value)}
-                                />
-                                {countrySearch && (
-                                  <button
-                                    type="button"
-                                    className="checkout__country-search-clear"
-                                    onClick={() => setCountrySearch("")}
-                                    aria-label="Clear"
-                                  >
-                                    ×
-                                  </button>
-                                )}
-                              </div>
-                              <ul className="checkout__country-list" role="listbox">
-                                {filteredCountries.map((c) => {
-                                  const isSelected = c.iso2 === selectedCountry.iso2;
-                                  const cName = language === "ru" ? c.ruName : c.name;
-                                  return (
-                                    <li
-                                      key={c.iso2}
-                                      role="option"
-                                      aria-selected={isSelected}
-                                      className={`checkout__country-option ${isSelected ? "checkout__country-option--selected" : ""}`}
-                                      onClick={() => handleSelectCountry(c)}
-                                    >
-                                      <img
-                                        src={c.flagUrl}
-                                        alt={c.iso2}
-                                        className="checkout__country-flag-img"
-                                        width="20"
-                                        height="15"
-                                        loading="lazy"
-                                      />
-                                      <span className="checkout__country-opt-name">
-                                        {cName}
-                                      </span>
-                                      <span className="checkout__country-opt-code">
-                                        {c.dialCode}
-                                      </span>
-                                    </li>
-                                  );
-                                })}
-                                {filteredCountries.length === 0 && (
-                                  <li className="checkout__country-no-results">
-                                    {language === "ru"
-                                      ? "Ничего не найдено"
-                                      : "No results found"}
-                                  </li>
-                                )}
-                              </ul>
-                            </div>
-                          )}
-                        </div>
-
-                        <input
-                          id="phone"
-                          type="tel"
-                          className="checkout__phone-input"
-                          value={phoneNumber}
-                          onChange={handlePhoneChange}
-                        />
-                      </div>
+                      <PhoneInput
+                        id="phone"
+                        phone={phoneNumber}
+                        countryIso={selectedCountryIso}
+                        onPhoneChange={handlePhoneInputChange}
+                        onCountryChange={handleCountryInputChange}
+                      />
+                      {primaryPhone && (
+                        <label className="checkout__primary-phone-label">
+                          <input
+                            type="checkbox"
+                            checked={usePrimaryPhone}
+                            onChange={handleTogglePrimaryPhone}
+                          />
+                          <span>{t("checkout.usePrimaryPhone")}</span>
+                        </label>
+                      )}
                     </div>
                   </div>
 

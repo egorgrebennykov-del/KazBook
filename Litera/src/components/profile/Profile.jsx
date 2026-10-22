@@ -140,6 +140,14 @@ export default function Profile() {
                   </dd>
                 </div>
               )}
+              {profile.phone && (
+                <div className="profile__row">
+                  <dt>{t("checkout.phone")}</dt>
+                  <dd>
+                    <TruncatedField text={profile.phone} />
+                  </dd>
+                </div>
+              )}
             </dl>
 
             <button
