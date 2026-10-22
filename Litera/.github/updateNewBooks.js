@@ -8,6 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(scriptDir, "../.env") });
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 const API_KEY = process.env.ZYTE_API_KEY;
 const SUPABASE_URL = process.env.SUPABASE_URL;

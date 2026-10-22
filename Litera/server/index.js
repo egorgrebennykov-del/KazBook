@@ -460,6 +460,7 @@ const server = createServer(async (req, res) => {
         cwd: path.resolve(appDir, ".github"),
         env: {
           ...process.env,
+          NODE_TLS_REJECT_UNAUTHORIZED: "0",
         },
       });
 

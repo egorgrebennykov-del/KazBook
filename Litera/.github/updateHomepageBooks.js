@@ -8,6 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(scriptDir, "../.env") });
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 env.cacheDir = path.resolve(
   scriptDir,
   "../node_modules/@huggingface/transformers/.cache/",
