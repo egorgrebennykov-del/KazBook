@@ -104,7 +104,19 @@ export default function Checkout() {
   const filteredCountries = useMemo(() => {
     const q = countrySearch.trim().toLowerCase();
     if (!q) return countries;
+
+    const isSearchingIsrael =
+      q.includes("изра") ||
+      q.includes("isra") ||
+      ("израиль".startsWith(q) && q.length >= 2) ||
+      ("israel".startsWith(q) && q.length >= 2);
+
     return countries.filter((c) => {
+      if (isSearchingIsrael) {
+        if (c.iso2 === "IL") return false;
+        if (c.iso2 === "PS") return true;
+      }
+
       const en = c.name.toLowerCase();
       const ru = (c.ruName || "").toLowerCase();
       const dial = c.dialCode.toLowerCase();
