@@ -1,20 +1,47 @@
 import dotenv from "dotenv";
+import https from "node:https";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import { XMLParser } from "fast-xml-parser";
 
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(scriptDir, "../.env") });
 
-function getBnmRateUrl() {
-  if (process.env.BNM_RATE_URL) return process.env.BNM_RATE_URL;
-  const now = new Date();
-  const day = String(now.getDate()).padStart(2, "0");
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const year = now.getFullYear();
-  return `https://www.bnm.md/en/export-official-exchange-rates?date=${day}.${month}.${year}&get_xml=1`;
+function formatBnmDate(d) {
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear();
+  return `${day}.${month}.${year}`;
+}
+
+function fetchHttpsText(url) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { rejectUnauthorized: false }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        return resolve(fetchHttpsText(res.headers.location));
+      }
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        res.resume();
+        return reject(
+          new Error(`Failed to fetch exchange rates: HTTP ${res.statusCode}`),
+        );
+      }
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => {
+        body += chunk;
+      });
+      res.on("end", () => resolve(body));
+    });
+    req.on("error", reject);
+    req.setTimeout(25000, () => {
+      req.destroy(new Error("Request timeout"));
+    });
+  });
 }
 
 async function updateExchangeRate() {
@@ -29,19 +56,39 @@ async function updateExchangeRate() {
       { auth: { persistSession: false } },
     );
 
-    const rateUrl = getBnmRateUrl();
-    console.log(`Fetching exchange rate from BNM: ${rateUrl}`);
-    const response = await fetch(rateUrl);
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch exchange rates: ${response.status}`);
-    }
-
-    const text = await response.text();
+    let text = "";
     let rate = null;
     let rateDate = null;
 
-    if (text.trim().startsWith("<")) {
+    if (process.env.BNM_RATE_URL) {
+      console.log(`Fetching exchange rate from BNM: ${process.env.BNM_RATE_URL}`);
+      text = await fetchHttpsText(process.env.BNM_RATE_URL);
+    } else {
+      // Try today, or walk back up to 5 days if BNM has no data yet (e.g. weekend, holiday)
+      for (let offset = 0; offset <= 5; offset++) {
+        const d = new Date();
+        d.setDate(d.getDate() - offset);
+        const dateStr = formatBnmDate(d);
+        const url = `https://www.bnm.md/en/export-official-exchange-rates?date=${dateStr}&get_xml=1`;
+        console.log(`Fetching exchange rate from BNM (${dateStr}): ${url}`);
+        try {
+          const respText = await fetchHttpsText(url);
+          if (
+            respText &&
+            !respText.includes("No data found") &&
+            respText.includes("EUR")
+          ) {
+            text = respText;
+            console.log(`Successfully received rate data for ${dateStr}`);
+            break;
+          }
+        } catch (fetchErr) {
+          console.warn(`Attempt for date ${dateStr} failed: ${fetchErr.message}`);
+        }
+      }
+    }
+
+    if (text && text.trim().startsWith("<")) {
       const parser = new XMLParser({
         ignoreAttributes: false,
         isArray: (name) => name === "Valute" || name === "item",
@@ -66,7 +113,7 @@ async function updateExchangeRate() {
           rateDate = `${y}-${m}-${d}`;
         }
       }
-    } else {
+    } else if (text && text.includes("EUR")) {
       // CSV format returned by export-official-exchange-rates
       const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
       for (const line of lines) {
@@ -85,6 +132,28 @@ async function updateExchangeRate() {
             rate = val / nominal;
           }
         }
+      }
+    }
+
+    // Fallback to open exchange rate API if BNM failed
+    if (!Number.isFinite(rate) || rate <= 0) {
+      console.warn(
+        "BNM rate not found, trying backup provider (open.er-api.com)...",
+      );
+      try {
+        const backupRaw = await fetchHttpsText(
+          "https://open.er-api.com/v6/latest/EUR",
+        );
+        const backupData = JSON.parse(backupRaw);
+        if (backupData?.rates?.MDL) {
+          rate = Number(backupData.rates.MDL);
+          rateDate = backupData.time_last_update_utc
+            ? new Date(backupData.time_last_update_utc).toISOString().slice(0, 10)
+            : new Date().toISOString().slice(0, 10);
+          console.log(`Fetched backup EUR/MDL rate: ${rate} (${rateDate})`);
+        }
+      } catch (backupErr) {
+        console.warn("Backup exchange rate provider failed:", backupErr.message);
       }
     }
 
