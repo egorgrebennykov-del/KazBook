@@ -178,6 +178,18 @@ export default function Header({ theme, isLight, onSearch }) {
                         <span>{t("nav.profile")}</span>
                       </Link>
                     </li>
+                    {isPrivilegedUser && (
+                      <li className="nav__profile-item" role="none">
+                        <Link
+                          to="/privileged"
+                          role="menuitem"
+                          onClick={() => setIsDropdownOpen(false)}
+                        >
+                          <i className="ri-shield-check-line" />
+                          <span>{t("privileged.title")}</span>
+                        </Link>
+                      </li>
+                    )}
                     <li className="nav__profile-item" role="none">
                       <Link
                         to="/orders/current"
@@ -228,8 +240,8 @@ export default function Header({ theme, isLight, onSearch }) {
             <Link
               to="/privileged"
               className="nav__settings-btn"
-              title={language === "ru" ? "Панель управления" : "Admin Panel"}
-              aria-label={language === "ru" ? "Панель управления" : "Admin Panel"}
+              title={t("privileged.title")}
+              aria-label={t("privileged.title")}
             >
               <i className="ri-settings-3-line settings-button" id="settings-button" />
             </Link>

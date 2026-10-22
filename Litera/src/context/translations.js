@@ -250,6 +250,116 @@ export const translations = {
     "footer.aboutTitle": "О Litera",
     "footer.aboutDesc":
       "Интернет-магазин книг с широким выбором и выгодными ценами.",
+
+    // Privileged / Admin Panel
+    "privileged.checkingAuth": "Проверка прав доступа...",
+    "privileged.badge": "Привилегированный доступ",
+    "privileged.title": "Панель управления",
+    "privileged.subtitle":
+      "Управление пользователями, купонами, заказами и автоматизациями",
+    "privileged.refresh": "Обновить",
+    "privileged.refreshTitle": "Обновить данные",
+
+    // Privileged Tabs
+    "privileged.tabs.users": "Пользователи",
+    "privileged.tabs.privileged": "Привилегированные пользователи",
+    "privileged.tabs.coupons": "Купоны",
+    "privileged.tabs.orders": "Заказы",
+    "privileged.tabs.gitActions": "Git Actions",
+
+    // Privileged Users Tab
+    "privileged.users.searchPlaceholder":
+      "Поиск по имени, email или телефону...",
+    "privileged.users.found": "Найдено пользователей:",
+    "privileged.users.thUser": "Пользователь",
+    "privileged.users.thEmail": "Email",
+    "privileged.users.thPhone": "Телефон",
+    "privileged.users.thRegistered": "Дата регистрации",
+    "privileged.users.thRole": "Роль",
+    "privileged.users.thAction": "Действие",
+    "privileged.users.revokePrivileges": "Снять привилегии",
+    "privileged.users.makePrivileged": "Сделать privileged",
+    "privileged.users.revokeTitle": "Снять статус privileged",
+    "privileged.users.makeTitle": "Назначить privileged",
+    "privileged.users.empty": "Пользователи не найдены",
+    "privileged.users.noticeRevoked": "Привилегии сняты с",
+    "privileged.users.noticeGranted": "теперь имеет роль privileged!",
+
+    // Privileged Users List Tab
+    "privileged.privilegedUsers.title": "Привилегированные пользователи",
+    "privileged.privilegedUsers.subtitle":
+      "Пользователи с расширенными правами доступа",
+    "privileged.privilegedUsers.email": "Email:",
+    "privileged.privilegedUsers.phones": "Телефоны:",
+    "privileged.privilegedUsers.registered": "Зарегистрирован:",
+    "privileged.privilegedUsers.id": "ID:",
+    "privileged.privilegedUsers.revokeBtn": "Отозвать привилегии",
+    "privileged.privilegedUsers.empty": "Нет пользователей с ролью privileged",
+
+    // Privileged Coupons Tab
+    "privileged.coupons.title": "Управление скидочными купонами",
+    "privileged.coupons.total": "Всего купонов:",
+    "privileged.coupons.createBtn": "Создать купон",
+    "privileged.coupons.discountFallback": "Скидка",
+    "privileged.coupons.nameFallback": "Промокод",
+    "privileged.coupons.validUntil": "Действует до:",
+    "privileged.coupons.indefinite": "Бессрочно",
+    "privileged.coupons.expired": "Истёк",
+    "privileged.coupons.deleteBtn": "Удалить",
+    "privileged.coupons.deleteTitle": "Удалить купон",
+    "privileged.coupons.empty": "Купоны пока не созданы",
+    "privileged.coupons.createFirst": "Создать первый купон",
+    "privileged.coupons.modalTitle": "Новый купон",
+    "privileged.coupons.codeLabel": "Код купона (промокод) *",
+    "privileged.coupons.codePlaceholder": "Например: AUTUMN15, BOOK2026",
+    "privileged.coupons.descLabel": "Описание / Название",
+    "privileged.coupons.descPlaceholder":
+      "Осенняя скидка для постоянных читателей",
+    "privileged.coupons.discountPercentLabel": "Скидка (%)",
+    "privileged.coupons.durationLabel": "Срок действия (дней)",
+    "privileged.coupons.cancel": "Отмена",
+    "privileged.coupons.submit": "Создать купон",
+    "privileged.coupons.submitting": "Создание...",
+    "privileged.coupons.confirmDelete": "Удалить купон",
+    "privileged.coupons.deleted": "удален",
+    "privileged.coupons.created": "успешно создан!",
+
+    // Privileged Orders Tab
+    "privileged.orders.title": "Управление заказами клиентов",
+    "privileged.orders.total": "Всего заказов:",
+    "privileged.orders.filterAll": "Все",
+    "privileged.orders.filterInProgress": "В обработке",
+    "privileged.orders.filterCompleted": "Выполненные",
+    "privileged.orders.order": "Заказ",
+    "privileged.orders.userId": "User ID:",
+    "privileged.orders.statusCompleted": "Выполнен",
+    "privileged.orders.statusInProgress": "В обработке",
+    "privileged.orders.markInProgress": "Вернуть в обработку",
+    "privileged.orders.markCompleted": "Отметить выполненным",
+    "privileged.orders.toggleStatusTitle": "Переключить статус заказа",
+    "privileged.orders.statusUpdated": "Статус заказа обновлен на",
+    "privileged.orders.deliveryAddress": "Адрес доставки:",
+    "privileged.orders.totalPrice": "Сумма:",
+    "privileged.orders.booksSubtotal": "Книги:",
+    "privileged.orders.shippingCost": "Доставка:",
+    "privileged.orders.pcs": "шт.",
+    "privileged.orders.empty": "В этой категории пока нет заказов",
+
+    // Privileged Git Actions Tab
+    "privileged.gitActions.title": "GitHub Actions & Автоматизации",
+    "privileged.gitActions.subtitle":
+      "Автоматические воркфлоу скрапинга и обновления каталога книг",
+    "privileged.gitActions.openGithub": "Открыть GitHub Actions ↗",
+    "privileged.gitActions.runCheck": "Запустить / Проверить ↗",
+    "privileged.gitActions.repoLabel": "Репозиторий проекта на GitHub:",
+    "privileged.gitActions.wfBookPicksDesc":
+      "Сбор и обновление кураторской подборки книг из магазинов Молдовы с обогащением обложек и цен.",
+    "privileged.gitActions.wfHomeBooksDesc":
+      "Актуализация книг для витрины главной страницы сайта с синхронизацией в Supabase.",
+    "privileged.gitActions.wfNewBooksDesc":
+      "Сканирование книжных новинок ведущих молдавских книжных сетей и обновление каталога новинок.",
+    "privileged.gitActions.wfExchangeRateDesc":
+      "Синхронизация официальных курсов валют (MDL/EUR) для корректного пересчёта цен с доставкой в Европу.",
   },
 
   en: {
@@ -503,5 +613,115 @@ export const translations = {
     "footer.aboutTitle": "About Litera",
     "footer.aboutDesc":
       "Online bookstore offering a wide selection of books at great prices.",
+
+    // Privileged / Admin Panel
+    "privileged.checkingAuth": "Checking access permissions...",
+    "privileged.badge": "Privileged Access",
+    "privileged.title": "Control Panel",
+    "privileged.subtitle":
+      "Manage users, coupons, orders, and automations",
+    "privileged.refresh": "Refresh",
+    "privileged.refreshTitle": "Refresh data",
+
+    // Privileged Tabs
+    "privileged.tabs.users": "Users",
+    "privileged.tabs.privileged": "Privileged Users",
+    "privileged.tabs.coupons": "Coupons",
+    "privileged.tabs.orders": "Orders",
+    "privileged.tabs.gitActions": "Git Actions",
+
+    // Privileged Users Tab
+    "privileged.users.searchPlaceholder":
+      "Search by name, email, or phone...",
+    "privileged.users.found": "Users found:",
+    "privileged.users.thUser": "User",
+    "privileged.users.thEmail": "Email",
+    "privileged.users.thPhone": "Phone",
+    "privileged.users.thRegistered": "Registration date",
+    "privileged.users.thRole": "Role",
+    "privileged.users.thAction": "Action",
+    "privileged.users.revokePrivileges": "Revoke privileges",
+    "privileged.users.makePrivileged": "Make privileged",
+    "privileged.users.revokeTitle": "Revoke privileged status",
+    "privileged.users.makeTitle": "Grant privileged status",
+    "privileged.users.empty": "No users found",
+    "privileged.users.noticeRevoked": "Privileges revoked from",
+    "privileged.users.noticeGranted": "now has privileged role!",
+
+    // Privileged Users List Tab
+    "privileged.privilegedUsers.title": "Privileged Users",
+    "privileged.privilegedUsers.subtitle":
+      "Users with extended access permissions",
+    "privileged.privilegedUsers.email": "Email:",
+    "privileged.privilegedUsers.phones": "Phones:",
+    "privileged.privilegedUsers.registered": "Registered:",
+    "privileged.privilegedUsers.id": "ID:",
+    "privileged.privilegedUsers.revokeBtn": "Revoke privileges",
+    "privileged.privilegedUsers.empty": "No users with privileged role",
+
+    // Privileged Coupons Tab
+    "privileged.coupons.title": "Discount Coupons Management",
+    "privileged.coupons.total": "Total coupons:",
+    "privileged.coupons.createBtn": "Create coupon",
+    "privileged.coupons.discountFallback": "Discount",
+    "privileged.coupons.nameFallback": "Promo code",
+    "privileged.coupons.validUntil": "Valid until:",
+    "privileged.coupons.indefinite": "Indefinitely",
+    "privileged.coupons.expired": "Expired",
+    "privileged.coupons.deleteBtn": "Delete",
+    "privileged.coupons.deleteTitle": "Delete coupon",
+    "privileged.coupons.empty": "No coupons created yet",
+    "privileged.coupons.createFirst": "Create first coupon",
+    "privileged.coupons.modalTitle": "New Coupon",
+    "privileged.coupons.codeLabel": "Coupon code (promo code) *",
+    "privileged.coupons.codePlaceholder": "E.g.: AUTUMN15, BOOK2026",
+    "privileged.coupons.descLabel": "Description / Name",
+    "privileged.coupons.descPlaceholder":
+      "Autumn discount for regular readers",
+    "privileged.coupons.discountPercentLabel": "Discount (%)",
+    "privileged.coupons.durationLabel": "Validity period (days)",
+    "privileged.coupons.cancel": "Cancel",
+    "privileged.coupons.submit": "Create coupon",
+    "privileged.coupons.submitting": "Creating...",
+    "privileged.coupons.confirmDelete": "Delete coupon",
+    "privileged.coupons.deleted": "deleted",
+    "privileged.coupons.created": "successfully created!",
+
+    // Privileged Orders Tab
+    "privileged.orders.title": "Customer Orders Management",
+    "privileged.orders.total": "Total orders:",
+    "privileged.orders.filterAll": "All",
+    "privileged.orders.filterInProgress": "In progress",
+    "privileged.orders.filterCompleted": "Completed",
+    "privileged.orders.order": "Order",
+    "privileged.orders.userId": "User ID:",
+    "privileged.orders.statusCompleted": "Completed",
+    "privileged.orders.statusInProgress": "In progress",
+    "privileged.orders.markInProgress": "Reopen order",
+    "privileged.orders.markCompleted": "Mark completed",
+    "privileged.orders.toggleStatusTitle": "Toggle order status",
+    "privileged.orders.statusUpdated": "Order status updated to",
+    "privileged.orders.deliveryAddress": "Delivery address:",
+    "privileged.orders.totalPrice": "Total:",
+    "privileged.orders.booksSubtotal": "Books:",
+    "privileged.orders.shippingCost": "Shipping:",
+    "privileged.orders.pcs": "pcs.",
+    "privileged.orders.empty": "No orders in this category yet",
+
+    // Privileged Git Actions Tab
+    "privileged.gitActions.title": "GitHub Actions & Automations",
+    "privileged.gitActions.subtitle":
+      "Automated workflows for scraping and updating book catalog",
+    "privileged.gitActions.openGithub": "Open GitHub Actions ↗",
+    "privileged.gitActions.runCheck": "Run / Check ↗",
+    "privileged.gitActions.repoLabel": "Project repository on GitHub:",
+    "privileged.gitActions.wfBookPicksDesc":
+      "Collecting and updating curated book picks from Moldovan bookstores with enriched covers and pricing.",
+    "privileged.gitActions.wfHomeBooksDesc":
+      "Updating books for the homepage showcase with Supabase synchronization.",
+    "privileged.gitActions.wfNewBooksDesc":
+      "Scanning new book arrivals from leading Moldovan book chains and updating the new books catalog.",
+    "privileged.gitActions.wfExchangeRateDesc":
+      "Synchronizing official currency exchange rates (MDL/EUR) for accurate price conversion with European delivery.",
   },
 };

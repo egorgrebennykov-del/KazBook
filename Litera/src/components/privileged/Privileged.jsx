@@ -34,7 +34,7 @@ function formatDate(dateString, language = "ru") {
 }
 
 export default function Privileged() {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const loggedIn = isLoggedIn();
   const cookieUser = getCookieUser();
 
@@ -144,8 +144,10 @@ export default function Privileged() {
       );
       showNotice(
         isTargetPrivileged
-          ? `Привилегии сняты с ${targetUser.email}`
-          : `Пользователь ${targetUser.email} теперь имеет роль privileged!`,
+          ? `${t("privileged.users.noticeRevoked")} ${targetUser.email}`
+          : language === "ru"
+            ? `Пользователь ${targetUser.email} ${t("privileged.users.noticeGranted")}`
+            : `User ${targetUser.email} ${t("privileged.users.noticeGranted")}`,
       );
     } catch (err) {
       showNotice(err.message, true);
@@ -158,7 +160,11 @@ export default function Privileged() {
       setOrders((prev) =>
         prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o)),
       );
-      showNotice(`Статус заказа обновлен на "${newStatus}"`);
+      const statusLabel =
+        newStatus === "completed"
+          ? t("privileged.orders.statusCompleted")
+          : t("privileged.orders.statusInProgress");
+      showNotice(`${t("privileged.orders.statusUpdated")} "${statusLabel}"`);
     } catch (err) {
       showNotice(err.message, true);
     }
@@ -188,7 +194,11 @@ export default function Privileged() {
       setShowCouponModal(false);
       setCouponCode("");
       setCouponName("");
-      showNotice(`Купон ${newCoupon.code} успешно создан!`);
+      showNotice(
+        language === "ru"
+          ? `Купон ${newCoupon.code} ${t("privileged.coupons.created")}`
+          : `Coupon ${newCoupon.code} ${t("privileged.coupons.created")}`,
+      );
     } catch (err) {
       showNotice(err.message, true);
     } finally {
@@ -197,11 +207,16 @@ export default function Privileged() {
   };
 
   const handleDeleteCoupon = async (id, code) => {
-    if (!window.confirm(`Удалить купон ${code}?`)) return;
+    const confirmMsg = `${t("privileged.coupons.confirmDelete")} ${code}?`;
+    if (!window.confirm(confirmMsg)) return;
     try {
       await deleteCoupon(id);
       setCoupons((prev) => prev.filter((c) => c.id !== id));
-      showNotice(`Купон ${code} удален`);
+      showNotice(
+        language === "ru"
+          ? `Купон ${code} ${t("privileged.coupons.deleted")}`
+          : `Coupon ${code} ${t("privileged.coupons.deleted")}`,
+      );
     } catch (err) {
       showNotice(err.message, true);
     }
@@ -212,7 +227,7 @@ export default function Privileged() {
       <section className="privileged section container">
         <div className="privileged__spinner-wrap">
           <div className="privileged__spinner" />
-          <p>Проверка прав доступа...</p>
+          <p>{t("privileged.checkingAuth")}</p>
         </div>
       </section>
     );
@@ -262,12 +277,12 @@ export default function Privileged() {
           <div className="privileged__badge-row">
             <span className="privileged__role-badge">
               <i className="ri-shield-check-line" />
-              Privileged Access
+              {t("privileged.badge")}
             </span>
           </div>
-          <h1 className="privileged__title">Панель управления</h1>
+          <h1 className="privileged__title">{t("privileged.title")}</h1>
           <p className="privileged__subtitle">
-            Управление пользователями, купонами, заказами и автоматизациями
+            {t("privileged.subtitle")}
           </p>
         </div>
 
@@ -276,12 +291,12 @@ export default function Privileged() {
           className="button button--ghost privileged__refresh-btn"
           onClick={handleRefresh}
           disabled={loadingData}
-          title="Обновить данные"
+          title={t("privileged.refreshTitle")}
         >
           <i
             className={`ri-refresh-line ${loadingData ? "privileged__spin" : ""}`}
           />
-          Обновить
+          {t("privileged.refresh")}
         </button>
       </div>
 
@@ -295,7 +310,7 @@ export default function Privileged() {
           onClick={() => setActiveSection("users")}
         >
           <i className="ri-user-line" />
-          <span>Пользователи</span>
+          <span>{t("privileged.tabs.users")}</span>
           <span className="privileged__nav-count">{users.length}</span>
         </button>
 
@@ -307,7 +322,7 @@ export default function Privileged() {
           onClick={() => setActiveSection("privileged")}
         >
           <i className="ri-vip-crown-line" />
-          <span>Привилегированные пользователи</span>
+          <span>{t("privileged.tabs.privileged")}</span>
           <span className="privileged__nav-count privileged__nav-count--star">
             {privilegedUsers.length}
           </span>
@@ -321,7 +336,7 @@ export default function Privileged() {
           onClick={() => setActiveSection("coupons")}
         >
           <i className="ri-coupon-3-line" />
-          <span>Купоны</span>
+          <span>{t("privileged.tabs.coupons")}</span>
           <span className="privileged__nav-count">{coupons.length}</span>
         </button>
 
@@ -333,7 +348,7 @@ export default function Privileged() {
           onClick={() => setActiveSection("orders")}
         >
           <i className="ri-shopping-bag-3-line" />
-          <span>Заказы</span>
+          <span>{t("privileged.tabs.orders")}</span>
           <span className="privileged__nav-count">{orders.length}</span>
         </button>
 
@@ -345,7 +360,7 @@ export default function Privileged() {
           onClick={() => setActiveSection("git-actions")}
         >
           <i className="ri-github-fill" />
-          <span>Git Actions</span>
+          <span>{t("privileged.tabs.gitActions")}</span>
           <i className="ri-external-link-line privileged__ext-icon" />
         </button>
       </div>
@@ -360,7 +375,7 @@ export default function Privileged() {
                 <i className="ri-search-line" />
                 <input
                   type="text"
-                  placeholder="Поиск по имени, email или телефону..."
+                  placeholder={t("privileged.users.searchPlaceholder")}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -375,7 +390,7 @@ export default function Privileged() {
                 )}
               </div>
               <span className="privileged__stats-text">
-                Найдено пользователей: <strong>{filteredUsers.length}</strong>
+                {t("privileged.users.found")} <strong>{filteredUsers.length}</strong>
               </span>
             </div>
 
@@ -383,12 +398,12 @@ export default function Privileged() {
               <table className="privileged__table">
                 <thead>
                   <tr>
-                    <th>Пользователь</th>
-                    <th>Email</th>
-                    <th>Телефон</th>
-                    <th>Дата регистрации</th>
-                    <th>Роль</th>
-                    <th>Действие</th>
+                    <th>{t("privileged.users.thUser")}</th>
+                    <th>{t("privileged.users.thEmail")}</th>
+                    <th>{t("privileged.users.thPhone")}</th>
+                    <th>{t("privileged.users.thRegistered")}</th>
+                    <th>{t("privileged.users.thRole")}</th>
+                    <th>{t("privileged.users.thAction")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -452,19 +467,19 @@ export default function Privileged() {
                             onClick={() => handleToggleUserRole(u)}
                             title={
                               isPriv
-                                ? "Снять статус privileged"
-                                : "Назначить privileged"
+                                ? t("privileged.users.revokeTitle")
+                                : t("privileged.users.makeTitle")
                             }
                           >
                             {isPriv ? (
                               <>
                                 <i className="ri-user-unfollow-line" />
-                                Снять привилегии
+                                {t("privileged.users.revokePrivileges")}
                               </>
                             ) : (
                               <>
                                 <i className="ri-vip-crown-line" />
-                                Сделать privileged
+                                {t("privileged.users.makePrivileged")}
                               </>
                             )}
                           </button>
@@ -475,7 +490,7 @@ export default function Privileged() {
                   {filteredUsers.length === 0 && (
                     <tr>
                       <td colSpan="6" className="privileged__no-data">
-                        Пользователи не найдены
+                        {t("privileged.users.empty")}
                       </td>
                     </tr>
                   )}
@@ -491,10 +506,10 @@ export default function Privileged() {
             <div className="privileged__panel-header">
               <h2 className="privileged__panel-title">
                 <i className="ri-vip-crown-fill" />
-                Привилегированные пользователи ({privilegedUsers.length})
+                {t("privileged.privilegedUsers.title")} ({privilegedUsers.length})
               </h2>
               <span className="privileged__stats-text">
-                Пользователи с расширенными правами доступа
+                {t("privileged.privilegedUsers.subtitle")}
               </span>
             </div>
 
@@ -523,21 +538,21 @@ export default function Privileged() {
 
                     <div className="privileged__user-card-details">
                       <div className="privileged__card-row">
-                        <span>Email:</span>
+                        <span>{t("privileged.privilegedUsers.email")}</span>
                         <a href={`mailto:${u.email}`} className="privileged__link">
                           {u.email}
                         </a>
                       </div>
                       <div className="privileged__card-row">
-                        <span>Телефоны:</span>
+                        <span>{t("privileged.privilegedUsers.phones")}</span>
                         <span>{phones.join(", ") || "—"}</span>
                       </div>
                       <div className="privileged__card-row">
-                        <span>Зарегистрирован:</span>
+                        <span>{t("privileged.privilegedUsers.registered")}</span>
                         <span>{formatDate(u.created_at, language)}</span>
                       </div>
                       <div className="privileged__card-row">
-                        <span>ID:</span>
+                        <span>{t("privileged.privilegedUsers.id")}</span>
                         <code className="privileged__code">{u.id}</code>
                       </div>
                     </div>
@@ -549,7 +564,7 @@ export default function Privileged() {
                         onClick={() => handleToggleUserRole(u)}
                       >
                         <i className="ri-close-circle-line" />
-                        Отозвать привилегии
+                        {t("privileged.privilegedUsers.revokeBtn")}
                       </button>
                     </div>
                   </div>
@@ -557,7 +572,7 @@ export default function Privileged() {
               })}
               {privilegedUsers.length === 0 && (
                 <div className="privileged__empty-box">
-                  <p>Нет пользователей с ролью privileged</p>
+                  <p>{t("privileged.privilegedUsers.empty")}</p>
                 </div>
               )}
             </div>
@@ -571,10 +586,10 @@ export default function Privileged() {
               <div>
                 <h2 className="privileged__panel-title">
                   <i className="ri-coupon-3-line" />
-                  Управление скидочными купонами
+                  {t("privileged.coupons.title")}
                 </h2>
                 <span className="privileged__stats-text">
-                  Всего купонов: {coupons.length}
+                  {t("privileged.coupons.total")} {coupons.length}
                 </span>
               </div>
               <button
@@ -583,7 +598,7 @@ export default function Privileged() {
                 onClick={() => setShowCouponModal(true)}
               >
                 <i className="ri-add-line" />
-                Создать купон
+                {t("privileged.coupons.createBtn")}
               </button>
             </div>
 
@@ -595,7 +610,7 @@ export default function Privileged() {
                   ? `${action.percent}%`
                   : action.amount
                     ? `${action.amount} €`
-                    : "Скидка";
+                    : t("privileged.coupons.discountFallback");
                 const isExpired =
                   coupon.ends_at && new Date(coupon.ends_at) < new Date();
 
@@ -614,20 +629,20 @@ export default function Privileged() {
                     </div>
                     <div className="privileged__coupon-body">
                       <strong className="privileged__coupon-name">
-                        {coupon.name || "Промокод"}
+                        {coupon.name || t("privileged.coupons.nameFallback")}
                       </strong>
                       <div className="privileged__coupon-meta">
                         <span>
-                          Действует до:{" "}
+                          {t("privileged.coupons.validUntil")}{" "}
                           <strong>
                             {coupon.ends_at
                               ? formatDate(coupon.ends_at, language)
-                              : "Бессрочно"}
+                              : t("privileged.coupons.indefinite")}
                           </strong>
                         </span>
                         {isExpired && (
                           <span className="privileged__expired-badge">
-                            Истёк
+                            {t("privileged.coupons.expired")}
                           </span>
                         )}
                       </div>
@@ -637,10 +652,10 @@ export default function Privileged() {
                         onClick={() =>
                           handleDeleteCoupon(coupon.id, coupon.code)
                         }
-                        title="Удалить купон"
+                        title={t("privileged.coupons.deleteTitle")}
                       >
                         <i className="ri-delete-bin-line" />
-                        Удалить
+                        {t("privileged.coupons.deleteBtn")}
                       </button>
                     </div>
                   </div>
@@ -649,14 +664,14 @@ export default function Privileged() {
               {coupons.length === 0 && (
                 <div className="privileged__empty-box">
                   <i className="ri-ticket-2-line privileged__empty-icon" />
-                  <p>Купоны пока не созданы</p>
+                  <p>{t("privileged.coupons.empty")}</p>
                   <button
                     type="button"
                     className="button button--ghost"
                     onClick={() => setShowCouponModal(true)}
                   >
                     <i className="ri-add-line" />
-                    Создать первый купон
+                    {t("privileged.coupons.createFirst")}
                   </button>
                 </div>
               )}
@@ -675,7 +690,7 @@ export default function Privileged() {
                   <div className="privileged__modal-header">
                     <h3>
                       <i className="ri-coupon-3-line" />
-                      Новый купон
+                      {t("privileged.coupons.modalTitle")}
                     </h3>
                     <button
                       type="button"
@@ -687,11 +702,11 @@ export default function Privileged() {
                   </div>
                   <form onSubmit={handleCreateCoupon}>
                     <div className="privileged__form-field">
-                      <label htmlFor="couponCode">Код купона (промокод) *</label>
+                      <label htmlFor="couponCode">{t("privileged.coupons.codeLabel")}</label>
                       <input
                         id="couponCode"
                         type="text"
-                        placeholder="Например: AUTUMN15, BOOK2026"
+                        placeholder={t("privileged.coupons.codePlaceholder")}
                         required
                         value={couponCode}
                         onChange={(e) => setCouponCode(e.target.value)}
@@ -699,18 +714,18 @@ export default function Privileged() {
                       />
                     </div>
                     <div className="privileged__form-field">
-                      <label htmlFor="couponName">Описание / Название</label>
+                      <label htmlFor="couponName">{t("privileged.coupons.descLabel")}</label>
                       <input
                         id="couponName"
                         type="text"
-                        placeholder="Осенняя скидка для постоянных читателей"
+                        placeholder={t("privileged.coupons.descPlaceholder")}
                         value={couponName}
                         onChange={(e) => setCouponName(e.target.value)}
                       />
                     </div>
                     <div className="privileged__form-row">
                       <div className="privileged__form-field">
-                        <label htmlFor="couponDiscount">Скидка (%)</label>
+                        <label htmlFor="couponDiscount">{t("privileged.coupons.discountPercentLabel")}</label>
                         <input
                           id="couponDiscount"
                           type="number"
@@ -722,7 +737,7 @@ export default function Privileged() {
                         />
                       </div>
                       <div className="privileged__form-field">
-                        <label htmlFor="couponDays">Срок действия (дней)</label>
+                        <label htmlFor="couponDays">{t("privileged.coupons.durationLabel")}</label>
                         <input
                           id="couponDays"
                           type="number"
@@ -740,14 +755,16 @@ export default function Privileged() {
                         className="button button--ghost"
                         onClick={() => setShowCouponModal(false)}
                       >
-                        Отмена
+                        {t("privileged.coupons.cancel")}
                       </button>
                       <button
                         type="submit"
                         className="button"
                         disabled={couponSubmitting}
                       >
-                        {couponSubmitting ? "Создание..." : "Создать купон"}
+                        {couponSubmitting
+                          ? t("privileged.coupons.submitting")
+                          : t("privileged.coupons.submit")}
                       </button>
                     </div>
                   </form>
@@ -764,10 +781,10 @@ export default function Privileged() {
               <div>
                 <h2 className="privileged__panel-title">
                   <i className="ri-shopping-bag-3-line" />
-                  Управление заказами клиентов
+                  {t("privileged.orders.title")}
                 </h2>
                 <span className="privileged__stats-text">
-                  Всего заказов: {orders.length}
+                  {t("privileged.orders.total")} {orders.length}
                 </span>
               </div>
 
@@ -777,14 +794,14 @@ export default function Privileged() {
                   className={`privileged__filter-pill ${orderStatusFilter === "all" ? "privileged__filter-pill--active" : ""}`}
                   onClick={() => setOrderStatusFilter("all")}
                 >
-                  Все ({orders.length})
+                  {t("privileged.orders.filterAll")} ({orders.length})
                 </button>
                 <button
                   type="button"
                   className={`privileged__filter-pill ${orderStatusFilter === "in_progress" ? "privileged__filter-pill--active" : ""}`}
                   onClick={() => setOrderStatusFilter("in_progress")}
                 >
-                  В обработке (
+                  {t("privileged.orders.filterInProgress")} (
                   {
                     orders.filter(
                       (o) => (o.status || "in_progress").toLowerCase() === "in_progress",
@@ -797,7 +814,7 @@ export default function Privileged() {
                   className={`privileged__filter-pill ${orderStatusFilter === "completed" ? "privileged__filter-pill--active" : ""}`}
                   onClick={() => setOrderStatusFilter("completed")}
                 >
-                  Выполненные (
+                  {t("privileged.orders.filterCompleted")} (
                   {
                     orders.filter(
                       (o) => (o.status || "").toLowerCase() === "completed",
@@ -821,13 +838,13 @@ export default function Privileged() {
                     <div className="privileged__order-card-header">
                       <div className="privileged__order-meta">
                         <span className="privileged__order-num">
-                          Заказ <strong>#{orderNum}</strong>
+                          {t("privileged.orders.order")} <strong>#{orderNum}</strong>
                         </span>
                         <span className="privileged__order-date">
                           {formatDate(order.created_at || content.createdAt, language)}
                         </span>
                         <span className="privileged__order-user-id">
-                          User ID: {order.user_id}
+                          {t("privileged.orders.userId")} {order.user_id}
                         </span>
                       </div>
 
@@ -842,7 +859,9 @@ export default function Privileged() {
                                 : "ri-time-line"
                             }
                           />
-                          {isCompleted ? "Выполнен" : "В обработке"}
+                          {isCompleted
+                            ? t("privileged.orders.statusCompleted")
+                            : t("privileged.orders.statusInProgress")}
                         </span>
 
                         <button
@@ -854,12 +873,12 @@ export default function Privileged() {
                               isCompleted ? "in_progress" : "completed",
                             )
                           }
-                          title="Переключить статус заказа"
+                          title={t("privileged.orders.toggleStatusTitle")}
                         >
                           <i className="ri-swap-line" />
                           {isCompleted
-                            ? "Вернуть в обработку"
-                            : "Отметить выполненным"}
+                            ? t("privileged.orders.markInProgress")
+                            : t("privileged.orders.markCompleted")}
                         </button>
                       </div>
                     </div>
@@ -868,7 +887,7 @@ export default function Privileged() {
                     <div className="privileged__order-details-grid">
                       <div className="privileged__order-section">
                         <span className="privileged__detail-label">
-                          <i className="ri-map-pin-line" /> Адрес доставки:
+                          <i className="ri-map-pin-line" /> {t("privileged.orders.deliveryAddress")}
                         </span>
                         <p className="privileged__detail-text">
                           {address.recipientName && (
@@ -887,7 +906,7 @@ export default function Privileged() {
 
                       <div className="privileged__order-section privileged__order-section--price">
                         <span className="privileged__detail-label">
-                          <i className="ri-money-euro-circle-line" /> Сумма:
+                          <i className="ri-money-euro-circle-line" /> {t("privileged.orders.totalPrice")}
                         </span>
                         <strong className="privileged__order-final-price">
                           {formatPrice(
@@ -897,7 +916,7 @@ export default function Privileged() {
                           )}
                         </strong>
                         <small className="privileged__detail-shipping">
-                          (Книги: {formatPrice(content.itemsSubtotal || 0, "EUR", language)}, Доставка: {formatPrice(content.shippingCost || 0, "EUR", language)})
+                          ({t("privileged.orders.booksSubtotal")} {formatPrice(content.itemsSubtotal || 0, "EUR", language)}, {t("privileged.orders.shippingCost")} {formatPrice(content.shippingCost || 0, "EUR", language)})
                         </small>
                       </div>
                     </div>
@@ -917,7 +936,7 @@ export default function Privileged() {
                                 {decodeHtmlEntities(item.title)}
                               </span>
                               <span className="privileged__item-qty">
-                                {item.quantity} шт. × {formatPrice(item.price, "EUR", language)}
+                                {item.quantity} {t("privileged.orders.pcs")} × {formatPrice(item.price, "EUR", language)}
                               </span>
                             </div>
                             <span className="privileged__item-total">
@@ -937,7 +956,7 @@ export default function Privileged() {
               {filteredOrders.length === 0 && (
                 <div className="privileged__empty-box">
                   <i className="ri-inbox-line privileged__empty-icon" />
-                  <p>В этой категории пока нет заказов</p>
+                  <p>{t("privileged.orders.empty")}</p>
                 </div>
               )}
             </div>
@@ -951,10 +970,10 @@ export default function Privileged() {
               <div>
                 <h2 className="privileged__panel-title">
                   <i className="ri-github-fill" />
-                  GitHub Actions & Автоматизации
+                  {t("privileged.gitActions.title")}
                 </h2>
                 <span className="privileged__stats-text">
-                  Автоматические воркфлоу скрапинга и обновления каталога книг
+                  {t("privileged.gitActions.subtitle")}
                 </span>
               </div>
 
@@ -965,7 +984,7 @@ export default function Privileged() {
                 className="button privileged__github-btn"
               >
                 <i className="ri-github-fill" />
-                Открыть GitHub Actions ↗
+                {t("privileged.gitActions.openGithub")}
               </a>
             </div>
 
@@ -982,7 +1001,7 @@ export default function Privileged() {
                     .github/workflows/update-book-picks.yml
                   </span>
                   <p className="privileged__wf-desc">
-                    Сбор и обновление кураторской подборки книг из магазинов Молдовы с обогащением обложек и цен.
+                    {t("privileged.gitActions.wfBookPicksDesc")}
                   </p>
                 </div>
                 <a
@@ -991,7 +1010,7 @@ export default function Privileged() {
                   rel="noopener noreferrer"
                   className="button button--ghost privileged__btn-sm"
                 >
-                  Запустить / Проверить ↗
+                  {t("privileged.gitActions.runCheck")}
                 </a>
               </div>
 
@@ -1007,7 +1026,7 @@ export default function Privileged() {
                     .github/workflows/update-home-books.yml
                   </span>
                   <p className="privileged__wf-desc">
-                    Актуализация книг для витрины главной страницы сайта с синхронизацией в Supabase.
+                    {t("privileged.gitActions.wfHomeBooksDesc")}
                   </p>
                 </div>
                 <a
@@ -1016,7 +1035,7 @@ export default function Privileged() {
                   rel="noopener noreferrer"
                   className="button button--ghost privileged__btn-sm"
                 >
-                  Запустить / Проверить ↗
+                  {t("privileged.gitActions.runCheck")}
                 </a>
               </div>
 
@@ -1032,7 +1051,7 @@ export default function Privileged() {
                     .github/workflows/update-new-books.yml
                   </span>
                   <p className="privileged__wf-desc">
-                    Сканирование книжных новинок ведущих молдавских книжных сетей и обновление каталога новинок.
+                    {t("privileged.gitActions.wfNewBooksDesc")}
                   </p>
                 </div>
                 <a
@@ -1041,7 +1060,7 @@ export default function Privileged() {
                   rel="noopener noreferrer"
                   className="button button--ghost privileged__btn-sm"
                 >
-                  Запустить / Проверить ↗
+                  {t("privileged.gitActions.runCheck")}
                 </a>
               </div>
 
@@ -1057,7 +1076,7 @@ export default function Privileged() {
                     .github/workflows/update-exchange-rate.yml
                   </span>
                   <p className="privileged__wf-desc">
-                    Синхронизация официальных курсов валют (MDL/EUR) для корректного пересчёта цен с доставкой в Европу.
+                    {t("privileged.gitActions.wfExchangeRateDesc")}
                   </p>
                 </div>
                 <a
@@ -1066,7 +1085,7 @@ export default function Privileged() {
                   rel="noopener noreferrer"
                   className="button button--ghost privileged__btn-sm"
                 >
-                  Запустить / Проверить ↗
+                  {t("privileged.gitActions.runCheck")}
                 </a>
               </div>
             </div>
@@ -1074,7 +1093,7 @@ export default function Privileged() {
             <div className="privileged__git-repo-card">
               <i className="ri-git-repository-line" />
               <div>
-                <strong>Репозиторий проекта на GitHub:</strong>
+                <strong>{t("privileged.gitActions.repoLabel")}</strong>
                 <a
                   href="https://github.com/egorgrebennykov-del/KazBook"
                   target="_blank"

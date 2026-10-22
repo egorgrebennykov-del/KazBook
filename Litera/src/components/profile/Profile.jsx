@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Navigate, useNavigate } from "react-router";
+import { Link, Navigate, useNavigate } from "react-router";
 import { getProfile, isLoggedIn, logout } from "../../../utils/auth";
 import { useLanguage } from "../../context/languageContext";
 import "./Profile.css";
@@ -122,12 +122,16 @@ export default function Profile() {
             )}
 
             {profile.role === "privileged" && (
-              <div className="profile__privileged-badge">
+              <Link
+                to="/privileged"
+                className="profile__privileged-badge"
+                title={t("privileged.title")}
+              >
                 <i className="ri-vip-crown-fill" />
                 <span>
                   {language === "ru" ? "Привилегированный" : "Privileged"}
                 </span>
-              </div>
+              </Link>
             )}
 
             <dl className="profile__details">
