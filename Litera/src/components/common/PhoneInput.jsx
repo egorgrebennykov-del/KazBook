@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { countries } from "../checkout/countryPhoneCodes.js";
 import { useLanguage } from "../../context/languageContext.js";
-import { stripCountryCodeAndLeadingZero } from "../../../utils/phone.js";
+import {
+  findCountryByPhone,
+  normalizePhone,
+  stripCountryCodeAndLeadingZero,
+} from "../../../utils/phone.js";
 
 export default function PhoneInput({
   id = "phone",
@@ -9,15 +13,21 @@ export default function PhoneInput({
   countryIso = "MD",
   onPhoneChange,
   onCountryChange,
+  savedPhones = [],
+  onSelectSavedPhone,
+  onDeleteSavedPhone,
   required = false,
   autoComplete = "tel-national",
   className = "",
+  placeholder = "",
 }) {
   const { language } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
+  const [isSavedPhonesOpen, setIsSavedPhonesOpen] = useState(false);
   const [search, setSearch] = useState("");
   const dropdownRef = useRef(null);
   const searchInputRef = useRef(null);
+  const savedPhonesRef = useRef(null);
 
   const selectedCountry = useMemo(
     () => countries.find((c) => c.iso2 === countryIso) || countries[0],
@@ -58,17 +68,26 @@ export default function PhoneInput({
     const timer = setTimeout(() => {
       searchInputRef.current?.focus();
     }, 50);
+    return () => clearTimeout(timer);
+  }, [isOpen]);
+
+  useEffect(() => {
     const handleOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setIsOpen(false);
       }
+      if (
+        savedPhonesRef.current &&
+        !savedPhonesRef.current.contains(e.target)
+      ) {
+        setIsSavedPhonesOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleOutside);
     return () => {
-      clearTimeout(timer);
       document.removeEventListener("mousedown", handleOutside);
     };
-  }, [isOpen]);
+  }, []);
 
   const handleSelectCountry = (country) => {
     onCountryChange?.(country.iso2);
@@ -102,15 +121,34 @@ export default function PhoneInput({
     onPhoneChange?.(cleaned);
   };
 
+  const handlePickSavedPhone = (savedNumber) => {
+    setIsSavedPhonesOpen(false);
+    const matched = findCountryByPhone(savedNumber);
+    if (matched) {
+      onCountryChange?.(matched.iso2);
+      const sub = stripCountryCodeAndLeadingZero(savedNumber, matched.dialCode);
+      onPhoneChange?.(sub);
+    } else {
+      onPhoneChange?.(savedNumber);
+    }
+    onSelectSavedPhone?.(savedNumber);
+  };
+
   const displayName = language === "ru" ? selectedCountry.ruName : selectedCountry.name;
+  const hasSavedPhones = savedPhones && savedPhones.length > 0;
 
   return (
-    <div className={`checkout__phone-group ${className}`}>
+    <div
+      className={`checkout__phone-group ${hasSavedPhones ? "checkout__phone-group--with-saved" : ""} ${className}`}
+    >
       <div className="checkout__country-select-wrap" ref={dropdownRef}>
         <button
           type="button"
           className="checkout__country-btn"
-          onClick={() => setIsOpen((prev) => !prev)}
+          onClick={() => {
+            setIsOpen((prev) => !prev);
+            setIsSavedPhonesOpen(false);
+          }}
           aria-expanded={isOpen}
           aria-haspopup="listbox"
           title={`${displayName} (${selectedCountry.dialCode})`}
@@ -201,12 +239,103 @@ export default function PhoneInput({
       <input
         id={id}
         type="tel"
-        className="checkout__phone-input"
+        className={`checkout__phone-input ${hasSavedPhones ? "checkout__phone-input--has-saved-btn" : ""}`}
         value={phone}
         onChange={handleInputChange}
         required={required}
         autoComplete={autoComplete}
+        placeholder={placeholder}
       />
+
+      {hasSavedPhones && (
+        <div className="checkout__saved-phones-wrap" ref={savedPhonesRef}>
+          <button
+            type="button"
+            className={`checkout__saved-phones-btn ${isSavedPhonesOpen ? "checkout__saved-phones-btn--open" : ""}`}
+            onClick={() => {
+              setIsSavedPhonesOpen((prev) => !prev);
+              setIsOpen(false);
+            }}
+            aria-expanded={isSavedPhonesOpen}
+            aria-haspopup="listbox"
+            title={
+              language === "ru"
+                ? "Выбрать из сохранённых номеров"
+                : "Select from saved phones"
+            }
+          >
+            <i
+              className={`ri-arrow-down-s-line checkout__saved-phones-arrow ${isSavedPhonesOpen ? "checkout__saved-phones-arrow--open" : ""}`}
+            />
+          </button>
+
+          {isSavedPhonesOpen && (
+            <div className="checkout__saved-phones-dropdown">
+              <div className="checkout__saved-phones-header">
+                <span>
+                  {language === "ru"
+                    ? "Сохранённые номера"
+                    : "Saved phone numbers"}
+                </span>
+              </div>
+              <ul className="checkout__saved-phones-list" role="listbox">
+                {savedPhones.map((savedNumber, index) => {
+                  const matchedCountry = findCountryByPhone(savedNumber);
+                  const isSelected =
+                    normalizePhone(savedNumber) ===
+                    normalizePhone(`${selectedCountry.dialCode} ${phone}`);
+                  return (
+                    <li
+                      key={savedNumber}
+                      role="option"
+                      aria-selected={isSelected}
+                      className={`checkout__saved-phone-option ${isSelected ? "checkout__saved-phone-option--selected" : ""}`}
+                      onClick={() => handlePickSavedPhone(savedNumber)}
+                    >
+                      {matchedCountry && (
+                        <img
+                          src={matchedCountry.flagUrl}
+                          alt={matchedCountry.iso2}
+                          className="checkout__country-flag-img"
+                          width="18"
+                          height="13"
+                          loading="lazy"
+                        />
+                      )}
+                      <span className="checkout__saved-phone-text">
+                        {savedNumber}
+                      </span>
+                      {index === 0 && (
+                        <span className="checkout__saved-phone-badge">
+                          {language === "ru" ? "Основной" : "Primary"}
+                        </span>
+                      )}
+                      {onDeleteSavedPhone && (
+                        <button
+                          type="button"
+                          className="checkout__saved-phone-del-btn"
+                          title={
+                            language === "ru" ? "Удалить номер" : "Delete phone"
+                          }
+                          aria-label={
+                            language === "ru" ? "Удалить номер" : "Delete phone"
+                          }
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteSavedPhone(savedNumber);
+                          }}
+                        >
+                          <i className="ri-delete-bin-line" />
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

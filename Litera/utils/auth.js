@@ -33,11 +33,51 @@ async function findByEmail(email) {
   return (await response.json())[0] ?? null;
 }
 
+export function parseUserPhones(rawPhone) {
+  if (!rawPhone) return [];
+  if (Array.isArray(rawPhone)) {
+    return rawPhone
+      .map((p) =>
+        typeof p === "string"
+          ? p.trim()
+          : (p?.phone || p?.number || "").trim(),
+      )
+      .filter(Boolean);
+  }
+  if (typeof rawPhone === "string") {
+    try {
+      const parsed = JSON.parse(rawPhone);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((p) =>
+            typeof p === "string"
+              ? p.trim()
+              : (p?.phone || p?.number || "").trim(),
+          )
+          .filter(Boolean);
+      }
+      if (typeof parsed === "string" && parsed.trim()) {
+        return [parsed.trim()];
+      }
+    } catch {
+      // not JSON
+    }
+    if (rawPhone.trim()) return [rawPhone.trim()];
+  }
+  if (typeof rawPhone === "object") {
+    const val = rawPhone.phone || rawPhone.number;
+    if (typeof val === "string" && val.trim()) return [val.trim()];
+  }
+  return [];
+}
+
 export async function register({ firstName, lastName, email, password, phone }) {
   const normalized = checkEmail(email);
   if (await findByEmail(normalized)) {
     throw new Error("This email is already registered");
   }
+
+  const phoneArray = phone && phone.trim() ? [phone.trim()] : [];
 
   const response = await fetch(TABLE_URL, {
     method: "POST",
@@ -47,7 +87,7 @@ export async function register({ firstName, lastName, email, password, phone }) 
       lastName: lastName.trim(),
       email: normalized,
       password_hash: await bcrypt.hash(password, 10),
-      phone: phone ? phone.trim() : null,
+      phone: phoneArray,
     }),
   });
   if (
@@ -92,15 +132,82 @@ export async function getProfile() {
     { headers },
   );
   const row = response.ok ? (await response.json())[0] : null;
+  const phones = parseUserPhones(row?.phone);
+  const primaryPhone =
+    phones[0] || (typeof row?.phone === "string" ? row.phone.trim() : "");
+
   return {
     id: cookieUser.id,
     firstName: cookieUser.firstName,
     lastName: "",
     email: "",
-    phone: "",
     adresses: [],
     ...(row || {}),
+    phone: primaryPhone,
+    phones,
   };
+}
+
+export async function getUserPhones(userId) {
+  const id = userId ?? getCookieUser()?.id;
+  if (!id) return [];
+  const response = await fetch(
+    `${TABLE_URL}?select=phone&id=eq.${encodeURIComponent(id)}&limit=1`,
+    { headers },
+  );
+  if (!response.ok) return [];
+  const data = await response.json();
+  return parseUserPhones(data?.[0]?.phone);
+}
+
+export async function saveUserPhone(userId, newPhone) {
+  const id = userId ?? getCookieUser()?.id;
+  if (!id) throw new Error("User ID is required");
+  if (!newPhone || typeof newPhone !== "string" || !newPhone.trim()) {
+    return await getUserPhones(id);
+  }
+  const cleanPhone = newPhone.trim();
+  const current = await getUserPhones(id);
+  const normNew = cleanPhone.replace(/[^\d+]/g, "");
+  const exists = current.some((p) => p.replace(/[^\d+]/g, "") === normNew);
+  if (exists) {
+    return current;
+  }
+  const updated = [...current, cleanPhone];
+  const response = await fetch(
+    `${TABLE_URL}?id=eq.${encodeURIComponent(id)}`,
+    {
+      method: "PATCH",
+      headers: { ...headers, Prefer: "return=representation" },
+      body: JSON.stringify({ phone: updated }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error("Could not save phone to profile");
+  }
+  return updated;
+}
+
+export async function deleteUserPhone(userId, phoneToDelete) {
+  const id = userId ?? getCookieUser()?.id;
+  if (!id) throw new Error("User ID is required");
+  const current = await getUserPhones(id);
+  const normDelete = phoneToDelete.replace(/[^\d+]/g, "");
+  const updated = current.filter(
+    (p) => p.replace(/[^\d+]/g, "") !== normDelete,
+  );
+  const response = await fetch(
+    `${TABLE_URL}?id=eq.${encodeURIComponent(id)}`,
+    {
+      method: "PATCH",
+      headers: { ...headers, Prefer: "return=representation" },
+      body: JSON.stringify({ phone: updated }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error("Could not delete phone");
+  }
+  return updated;
 }
 
 export async function getUserAddresses(userId) {
@@ -126,7 +233,11 @@ export async function saveUserAddress(userId, newAddress) {
     id:
       newAddress.id ||
       `addr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-    ...newAddress,
+    recipientName: newAddress.recipientName || "",
+    country: newAddress.country || "",
+    city: newAddress.city || "",
+    street: newAddress.street || "",
+    postalCode: newAddress.postalCode || "",
     savedAt: new Date().toISOString(),
   };
   const updated = [...current, addressToSave];

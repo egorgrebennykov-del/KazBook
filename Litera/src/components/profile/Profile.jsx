@@ -140,14 +140,30 @@ export default function Profile() {
                   </dd>
                 </div>
               )}
-              {profile.phone && (
+              {profile.phones && profile.phones.length > 0 ? (
+                <div className="profile__row">
+                  <dt>{t("checkout.phone")}</dt>
+                  <dd className="profile__phones-list">
+                    {profile.phones.map((ph, idx) => (
+                      <div key={ph} className="profile__phone-item">
+                        <TruncatedField text={ph} />
+                        {idx === 0 && (
+                          <span className="profile__phone-tag">
+                            {t("checkout.primaryBadge")}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </dd>
+                </div>
+              ) : profile.phone ? (
                 <div className="profile__row">
                   <dt>{t("checkout.phone")}</dt>
                   <dd>
                     <TruncatedField text={profile.phone} />
                   </dd>
                 </div>
-              )}
+              ) : null}
             </dl>
 
             <button

@@ -3,11 +3,14 @@ import { Link, useNavigate } from "react-router";
 import { clearCart, getCart } from "../../../utils/cart";
 import {
   deleteUserAddress,
+  deleteUserPhone,
   getCookieUser,
   getProfile,
   getUserAddresses,
+  getUserPhones,
   isLoggedIn,
   saveUserAddress,
+  saveUserPhone,
 } from "../../../utils/auth";
 import { createOrderInProgress } from "../../../utils/orders";
 import BookImage from "../common/BookImage";
@@ -16,15 +19,11 @@ import { useLanguage } from "../../context/languageContext";
 import PhoneInput from "../common/PhoneInput";
 import {
   findCountryByPhone,
+  normalizePhone,
   stripCountryCodeAndLeadingZero,
 } from "../../../utils/phone.js";
 import { countries } from "./countryPhoneCodes.js";
 import "./Checkout.css";
-
-function normalizePhone(str) {
-  if (!str) return "";
-  return str.replace(/[^\d+]/g, "");
-}
 
 // Base shipping calculation - can be customized by the user with any formula
 function calculateShipping(address) {
@@ -83,6 +82,7 @@ export default function Checkout() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [primaryPhone, setPrimaryPhone] = useState("");
   const [usePrimaryPhone, setUsePrimaryPhone] = useState(false);
+  const [savedPhones, setSavedPhones] = useState([]);
 
   const selectedCountry = useMemo(
     () => countries.find((c) => c.iso2 === selectedCountryIso) || countries[0],
@@ -135,6 +135,27 @@ export default function Checkout() {
     }
   };
 
+  const handleSelectSavedPhone = (savedNumber) => {
+    if (primaryPhone) {
+      const isMatch =
+        normalizePhone(savedNumber) === normalizePhone(primaryPhone);
+      setUsePrimaryPhone(isMatch);
+    }
+  };
+
+  const handleDeleteSavedPhone = async (phoneToDelete) => {
+    if (!user?.id) return;
+    try {
+      const updated = await deleteUserPhone(user.id, phoneToDelete);
+      setSavedPhones(updated);
+      if (normalizePhone(phoneToDelete) === normalizePhone(primaryPhone)) {
+        setPrimaryPhone(updated[0] || "");
+      }
+    } catch (err) {
+      console.error("Could not delete phone:", err);
+    }
+  };
+
   // Order completion state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderComplete, setOrderComplete] = useState(null);
@@ -144,8 +165,12 @@ export default function Checkout() {
     if (!loggedIn) return;
     let cancelled = false;
 
-    Promise.all([getCart(user?.id), getProfile()])
-      .then(([cartRows, profile]) => {
+    Promise.all([
+      getCart(user?.id),
+      getProfile(),
+      getUserPhones(user?.id),
+    ])
+      .then(([cartRows, profile, fetchedPhones]) => {
         if (cancelled) return;
         setItems(cartRows);
         if (profile?.firstName || profile?.lastName) {
@@ -155,17 +180,24 @@ export default function Checkout() {
             recipientName: current.recipientName || defaultName,
           }));
         }
-        if (profile?.phone) {
-          const rawPrimary = profile.phone.trim();
-          setPrimaryPhone(rawPrimary);
+
+        const phoneList =
+          fetchedPhones && fetchedPhones.length > 0
+            ? fetchedPhones
+            : (profile?.phones || []);
+        setSavedPhones(phoneList);
+
+        const primaryRaw = (profile?.phone || phoneList[0] || "").trim();
+        if (primaryRaw) {
+          setPrimaryPhone(primaryRaw);
           setUsePrimaryPhone(true);
-          const matched = findCountryByPhone(rawPrimary);
+          const matched = findCountryByPhone(primaryRaw);
           if (matched) {
             setSelectedCountryIso(matched.iso2);
-            const sub = stripCountryCodeAndLeadingZero(rawPrimary, matched.dialCode);
+            const sub = stripCountryCodeAndLeadingZero(primaryRaw, matched.dialCode);
             setPhoneNumber(sub);
           } else {
-            setPhoneNumber(rawPrimary);
+            setPhoneNumber(primaryRaw);
           }
         }
       })
@@ -237,11 +269,7 @@ export default function Checkout() {
     ? `${selectedCountry.dialCode} ${phoneNumber.trim()}`
     : "";
 
-  const currentAddress =
-    selectedSavedAddress || {
-      ...addressForm,
-      phone: fullPhone,
-    };
+  const currentAddress = selectedSavedAddress || addressForm;
 
   // Shipping cost calculation based on address
   const shippingCost = calculateShipping(currentAddress);
@@ -289,16 +317,24 @@ export default function Checkout() {
       }
     }
 
+    if (!phoneNumber.trim()) {
+      setAddressError(t("checkout.phoneRequired"));
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       let finalShippingAddress = currentAddress;
 
-      // Save address if user opted in for new address
+      // Save address if user opted in for new address (saves address only, not phone)
       if (selectedAddressId === "new" && saveAddressOption) {
         try {
           const addressToSave = {
-            ...addressForm,
-            phone: fullPhone,
+            recipientName: addressForm.recipientName.trim(),
+            country: addressForm.country.trim(),
+            city: addressForm.city.trim(),
+            street: addressForm.street.trim(),
+            postalCode: addressForm.postalCode.trim(),
           };
           const saved = await saveUserAddress(user.id, addressToSave);
           finalShippingAddress = saved;
@@ -307,15 +343,30 @@ export default function Checkout() {
         }
       }
 
+      // Save phone to user's phone list if not already saved
+      if (fullPhone) {
+        try {
+          const updatedPhones = await saveUserPhone(user.id, fullPhone);
+          setSavedPhones(updatedPhones);
+        } catch {
+          // Continue even if saving phone fails
+        }
+      }
+
       // Generate order ID
       const orderNumber = generateOrderNumber();
+
+      const finalOrderAddress = {
+        ...finalShippingAddress,
+        phone: fullPhone,
+      };
 
       // Record order in Supabase orders_in_progress
       await createOrderInProgress({
         userId: user.id,
         orderNumber,
         items,
-        address: finalShippingAddress,
+        address: finalOrderAddress,
         itemsSubtotal,
         shippingCost,
         finalTotal,
@@ -328,7 +379,7 @@ export default function Checkout() {
       setOrderComplete({
         orderNumber,
         items: [...items],
-        address: finalShippingAddress,
+        address: finalOrderAddress,
         itemsSubtotal,
         shippingCost,
         finalTotal,
@@ -595,11 +646,6 @@ export default function Checkout() {
                                 {addr.postalCode}
                               </span>
                             )}
-                            {addr.phone && (
-                              <span className="checkout__address-phone">
-                                <i className="ri-phone-line" /> {addr.phone}
-                              </span>
-                            )}
                           </div>
                           <button
                             type="button"
@@ -701,27 +747,6 @@ export default function Checkout() {
                         }
                       />
                     </div>
-
-                    <div className="checkout__form-field">
-                      <label htmlFor="phone">{t("checkout.phone")}</label>
-                      <PhoneInput
-                        id="phone"
-                        phone={phoneNumber}
-                        countryIso={selectedCountryIso}
-                        onPhoneChange={handlePhoneInputChange}
-                        onCountryChange={handleCountryInputChange}
-                      />
-                      {primaryPhone && (
-                        <label className="checkout__primary-phone-label">
-                          <input
-                            type="checkbox"
-                            checked={usePrimaryPhone}
-                            onChange={handleTogglePrimaryPhone}
-                          />
-                          <span>{t("checkout.usePrimaryPhone")}</span>
-                        </label>
-                      )}
-                    </div>
                   </div>
 
                   <label className="checkout__checkbox-label">
@@ -734,6 +759,37 @@ export default function Checkout() {
                   </label>
                 </div>
               )}
+
+              {/* Contact phone section */}
+              <div className="checkout__form-card checkout__contact-card">
+                <h3 className="checkout__subset-title">
+                  <i className="ri-phone-line" />
+                  {t("checkout.phone")}
+                </h3>
+
+                <div className="checkout__form-field">
+                  <PhoneInput
+                    id="phone"
+                    phone={phoneNumber}
+                    countryIso={selectedCountryIso}
+                    onPhoneChange={handlePhoneInputChange}
+                    onCountryChange={handleCountryInputChange}
+                    savedPhones={savedPhones}
+                    onSelectSavedPhone={handleSelectSavedPhone}
+                    onDeleteSavedPhone={handleDeleteSavedPhone}
+                  />
+                  {primaryPhone && (
+                    <label className="checkout__primary-phone-label">
+                      <input
+                        type="checkbox"
+                        checked={usePrimaryPhone}
+                        onChange={handleTogglePrimaryPhone}
+                      />
+                      <span>{t("checkout.usePrimaryPhone")}</span>
+                    </label>
+                  )}
+                </div>
+              </div>
 
               {addressError && (
                 <p className="checkout__form-error" role="alert">

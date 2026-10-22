@@ -129,6 +129,11 @@ export const translations = {
     "checkout.noCountryFound": "Страна не найдена",
     "checkout.phoneRequired": "Пожалуйста, укажите номер телефона",
     "checkout.usePrimaryPhone": "Использовать мой основной телефон",
+    "checkout.contactTitle": "Контактные данные",
+    "checkout.savedPhones": "Сохранённые номера",
+    "checkout.noSavedPhones": "Нет сохранённых номеров",
+    "checkout.primaryBadge": "Основной",
+    "checkout.deletePhone": "Удалить номер",
 
     // Book Details
     "book.back": "Назад",
@@ -347,6 +352,11 @@ export const translations = {
     "checkout.noCountryFound": "No country found",
     "checkout.phoneRequired": "Please enter your phone number",
     "checkout.usePrimaryPhone": "Use my primary phone",
+    "checkout.contactTitle": "Contact details",
+    "checkout.savedPhones": "Saved phone numbers",
+    "checkout.noSavedPhones": "No saved phone numbers",
+    "checkout.primaryBadge": "Primary",
+    "checkout.deletePhone": "Delete phone",
 
     // Book Details
     "book.back": "Back",

@@ -1,5 +1,10 @@
 import { countries } from "../src/components/checkout/countryPhoneCodes.js";
 
+export function normalizePhone(str) {
+  if (!str) return "";
+  return str.replace(/[^\d+]/g, "");
+}
+
 export function stripCountryCodeAndLeadingZero(inputVal, dialCode) {
   if (!inputVal) return "";
   let val = inputVal.trimStart();
