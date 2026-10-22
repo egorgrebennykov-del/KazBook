@@ -96,6 +96,25 @@
   margin-top: 0.15rem;
 }
 
+.nav__profile-name--gold {
+  background: linear-gradient(135deg, #d4af37 0%, #ffd700 35%, #ff9800 70%, #d4af37 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  filter: drop-shadow(0 1px 2px rgba(212, 175, 55, 0.3));
+}
+
+.nav__profile-crown {
+  -webkit-text-fill-color: initial;
+  color: #f59f00;
+  font-size: 0.95rem;
+  vertical-align: middle;
+}
+
 .nav__profile-menu {
   list-style: none;
   padding: 0.4rem 0;

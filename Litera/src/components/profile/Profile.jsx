@@ -62,7 +62,7 @@ function TruncatedField({ text, className = "", as: Component = "span" }) {
 }
 
 export default function Profile() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const navigate = useNavigate();
   const loggedIn = isLoggedIn();
   const [profile, setProfile] = useState(null);
@@ -99,7 +99,11 @@ export default function Profile() {
           <div className="profile__spinner" />
         ) : (
           <>
-            <div className="profile__avatar">{initials || "?"}</div>
+            <div
+              className={`profile__avatar ${profile.role === "privileged" ? "profile__avatar--privileged" : ""}`}
+            >
+              {initials || "?"}
+            </div>
             <div className="profile__name-wrap">
               <TruncatedField
                 text={fullName}
@@ -114,6 +118,15 @@ export default function Profile() {
                   as="p"
                   className="profile__email"
                 />
+              </div>
+            )}
+
+            {profile.role === "privileged" && (
+              <div className="profile__privileged-badge">
+                <i className="ri-vip-crown-fill" />
+                <span>
+                  {language === "ru" ? "Привилегированный" : "Privileged"}
+                </span>
               </div>
             )}
 

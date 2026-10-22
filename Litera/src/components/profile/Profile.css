@@ -29,6 +29,11 @@
   flex-shrink: 0;
 }
 
+.profile__avatar--privileged {
+  background: linear-gradient(135deg, #ffd700 0%, #f59f00 50%, #d9480f 100%) !important;
+  box-shadow: 0 0 0 4px hsla(38, 92%, 50%, 0.3), 0 8px 24px rgba(245, 159, 0, 0.35);
+}
+
 .profile__name-wrap,
 .profile__email-wrap {
   width: 100%;
@@ -48,6 +53,41 @@
   color: var(--text-color);
   text-align: center;
   font-size: var(--small-font-size);
+}
+
+/* Gold Privileged Badge under email */
+.profile__privileged-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 1.25rem;
+  border-radius: 2rem;
+  background: linear-gradient(135deg, #ffd700 0%, #f59f00 50%, #e67700 100%);
+  color: #fff;
+  font-size: var(--smaller-font-size);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  box-shadow: 0 4px 14px rgba(245, 159, 0, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  margin-top: 0.4rem;
+  margin-bottom: 0.4rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  animation: privGlow 3s ease-in-out infinite alternate;
+}
+
+.profile__privileged-badge i {
+  font-size: 1.05rem;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+}
+
+@keyframes privGlow {
+  from {
+    box-shadow: 0 4px 14px rgba(245, 159, 0, 0.35);
+  }
+  to {
+    box-shadow: 0 6px 20px rgba(245, 159, 0, 0.6);
+  }
 }
 
 .profile__details {

@@ -154,7 +154,17 @@ export default function Header({ theme, isLight, onSearch }) {
                       <span className="nav__profile-welcome">
                         {language === "ru" ? "Здравствуйте," : "Hello,"}
                       </span>
-                      <span className="nav__profile-name">{user.firstName}</span>
+                      <span
+                        className={`nav__profile-name ${isPrivilegedUser ? "nav__profile-name--gold" : ""}`}
+                      >
+                        {user.firstName}
+                        {isPrivilegedUser && (
+                          <i
+                            className="ri-vip-crown-fill nav__profile-crown"
+                            title={language === "ru" ? "Привилегированный" : "Privileged"}
+                          />
+                        )}
+                      </span>
                     </div>
                   )}
                   <ul className="nav__profile-menu">
