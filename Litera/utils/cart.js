@@ -1,4 +1,4 @@
-import { getCookieUser } from "./auth";
+import { getCookieUser, logout } from "./auth.js";
 
 const TABLE_URL = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/cart`;
 const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -21,6 +21,11 @@ async function request(url, options = {}) {
   });
   const body = await response.json().catch(() => null);
   if (!response.ok) {
+    const errorMsg = `${body?.message || ""} ${body?.details || ""} ${body?.hint || ""}`;
+    if (errorMsg.includes("cart_user_id_fkey") || response.status === 409) {
+      logout();
+      throw new Error("Your session has expired. Please sign in again.");
+    }
     throw new Error(body?.message ?? body?.hint ?? "Could not access the cart");
   }
   return body;

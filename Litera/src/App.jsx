@@ -11,6 +11,7 @@ import Search from "./components/search/Search";
 import SearchResults from "./components/searchresults/SearchResults";
 import BookDetails from "./components/bookdetails/BookDetails";
 import Profile from "./components/profile/Profile";
+import Orders from "./components/orders/Orders";
 import Cart from "./components/cart/Cart";
 import Checkout from "./components/checkout/Checkout";
 import SignUp from "./components/signup/SignUp";
@@ -119,6 +120,9 @@ function App() {
         />
         <Route path="/join" element={<Join />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/orders" element={<Orders defaultTab="current" key="orders-current" />} />
+        <Route path="/orders/current" element={<Orders defaultTab="current" key="orders-current" />} />
+        <Route path="/orders/completed" element={<Orders defaultTab="completed" key="orders-completed" />} />
         <Route
           path="/cart"
           element={<Cart onSearch={() => setShowSearch(true)} />}

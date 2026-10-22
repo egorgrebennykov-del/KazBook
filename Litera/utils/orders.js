@@ -1,3 +1,5 @@
+import { getCookieUser } from "./auth.js";
+
 const TABLE_URL = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/orders_in_progress`;
 const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -30,7 +32,7 @@ export async function createOrderInProgress({
           finalTotal,
           createdAt: new Date().toISOString(),
         },
-        ststus: "in_progress",
+        status: "in_progress",
       }),
     });
     if (!response.ok) {
@@ -40,4 +42,38 @@ export async function createOrderInProgress({
   } catch (err) {
     console.warn("Error creating order:", err);
   }
+}
+
+export async function getUserOrders(userId) {
+  const id = userId ?? getCookieUser()?.id;
+  if (!id) return [];
+  try {
+    const params = new URLSearchParams({
+      select: "id,created_at,user_id,content,status,link",
+      user_id: `eq.${id}`,
+      order: "created_at.desc",
+    });
+    const response = await fetch(`${TABLE_URL}?${params}`, {
+      headers: {
+        apikey: KEY,
+        Authorization: `Bearer ${KEY}`,
+      },
+    });
+    if (!response.ok) return [];
+    const data = await response.json();
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.warn("Error fetching user orders:", err);
+    return [];
+  }
+}
+
+export async function getCurrentOrders(userId) {
+  const all = await getUserOrders(userId);
+  return all.filter((o) => (o.status || "in_progress").toLowerCase() !== "completed");
+}
+
+export async function getCompletedOrders(userId) {
+  const all = await getUserOrders(userId);
+  return all.filter((o) => (o.status || "").toLowerCase() === "completed");
 }

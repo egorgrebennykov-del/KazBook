@@ -132,6 +132,10 @@ export async function getProfile() {
     { headers },
   );
   const row = response.ok ? (await response.json())[0] : null;
+  if (response.ok && !row) {
+    logout();
+    return null;
+  }
   const phones = parseUserPhones(row?.phone);
   const primaryPhone =
     phones[0] || (typeof row?.phone === "string" ? row.phone.trim() : "");

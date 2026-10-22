@@ -33,3 +33,136 @@
   opacity: 0.35;
   font-size: 0.7rem;
 }
+
+/* Profile Dropdown Menu */
+.nav__profile-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.nav__profile-btn {
+  background: transparent;
+  border: none;
+  color: var(--title-color);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: color 0.2s ease;
+}
+
+.nav__profile-btn:hover,
+.nav__profile-btn--open {
+  color: var(--first-color);
+}
+
+.nav__profile-dropdown {
+  position: absolute;
+  top: calc(100% + 14px);
+  right: 0;
+  width: 15rem;
+  background-color: var(--container-color);
+  border: 1px solid var(--border-color);
+  border-radius: 0.85rem;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.18);
+  z-index: 200;
+  overflow: hidden;
+  animation: profileDropdownFade 0.2s ease-out;
+}
+
+.nav__profile-header {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--body-color);
+}
+
+.nav__profile-welcome {
+  display: block;
+  font-size: var(--smaller-font-size);
+  color: var(--text-color);
+  line-height: 1.2;
+}
+
+.nav__profile-name {
+  display: block;
+  font-size: var(--normal-font-size);
+  font-weight: var(--font-semi-bold);
+  color: var(--title-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 0.15rem;
+}
+
+.nav__profile-menu {
+  list-style: none;
+  padding: 0.4rem 0;
+  margin: 0;
+}
+
+.nav__profile-item a,
+.nav__profile-item button {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  font-size: var(--small-font-size);
+  color: var(--title-color);
+  text-decoration: none;
+  width: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  font-family: inherit;
+}
+
+.nav__profile-item a i,
+.nav__profile-item button i {
+  font-size: 1.15rem;
+  color: var(--text-color);
+  transition: color 0.15s ease;
+}
+
+.nav__profile-item a:hover,
+.nav__profile-item button:hover {
+  background-color: hsla(230, 62%, 56%, 0.1);
+  color: var(--first-color);
+}
+
+.nav__profile-item a:hover i,
+.nav__profile-item button:hover i {
+  color: var(--first-color);
+}
+
+.nav__profile-divider {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 0.35rem 0;
+}
+
+.nav__profile-logout-btn {
+  color: hsl(0, 70%, 50%) !important;
+}
+
+.nav__profile-logout-btn i {
+  color: hsl(0, 70%, 50%) !important;
+}
+
+.nav__profile-logout-btn:hover {
+  background-color: hsla(0, 70%, 50%, 0.1) !important;
+}
+
+@keyframes profileDropdownFade {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
