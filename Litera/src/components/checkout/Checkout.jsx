@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { clearCart, getCart } from "../../../utils/cart";
 import {
@@ -91,18 +91,59 @@ export default function Checkout() {
   // Country selector & phone state
   const [selectedCountryIso, setSelectedCountryIso] = useState("MD");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [isCountryOpen, setIsCountryOpen] = useState(false);
+  const [countrySearch, setCountrySearch] = useState("");
+  const countrySelectRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   const selectedCountry = useMemo(
     () => countries.find((c) => c.iso2 === selectedCountryIso) || countries[0],
     [selectedCountryIso],
   );
 
-  const handleCountryChange = (e) => {
-    const newIso = e.target.value;
-    setSelectedCountryIso(newIso);
-    const newCountry = countries.find((c) => c.iso2 === newIso) || countries[0];
+  const filteredCountries = useMemo(() => {
+    const q = countrySearch.trim().toLowerCase();
+    if (!q) return countries;
+    return countries.filter((c) => {
+      const en = c.name.toLowerCase();
+      const ru = (c.ruName || "").toLowerCase();
+      const dial = c.dialCode.toLowerCase();
+      const iso = c.iso2.toLowerCase();
+      return (
+        en.includes(q) ||
+        ru.includes(q) ||
+        dial.includes(q) ||
+        iso.includes(q)
+      );
+    });
+  }, [countrySearch]);
+
+  useEffect(() => {
+    if (!isCountryOpen) return;
+    const timer = setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 50);
+    const handleOutside = (e) => {
+      if (
+        countrySelectRef.current &&
+        !countrySelectRef.current.contains(e.target)
+      ) {
+        setIsCountryOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("mousedown", handleOutside);
+    };
+  }, [isCountryOpen]);
+
+  const handleSelectCountry = (country) => {
+    setSelectedCountryIso(country.iso2);
+    setIsCountryOpen(false);
+    setCountrySearch("");
     // Do not duplicate country dialCode in input string
-    setPhoneNumber((prev) => stripCountryCodeAndLeadingZero(prev, newCountry.dialCode));
+    setPhoneNumber((prev) => stripCountryCodeAndLeadingZero(prev, country.dialCode));
   };
 
   const handlePhoneChange = (e) => {
@@ -693,19 +734,101 @@ export default function Checkout() {
                     <div className="checkout__form-field">
                       <label htmlFor="phone">{t("checkout.phone")}</label>
                       <div className="checkout__phone-group">
-                        <select
-                          id="countryCode"
-                          className="checkout__country-select"
-                          value={selectedCountryIso}
-                          onChange={handleCountryChange}
-                          aria-label={t("checkout.selectCountry")}
+                        <div
+                          className="checkout__country-select-wrap"
+                          ref={countrySelectRef}
                         >
-                          {countries.map((country) => (
-                            <option key={country.iso2} value={country.iso2}>
-                              {country.flag} {country.name} ({country.dialCode})
-                            </option>
-                          ))}
-                        </select>
+                          <button
+                            type="button"
+                            className="checkout__country-btn"
+                            onClick={() => setIsCountryOpen((prev) => !prev)}
+                            aria-expanded={isCountryOpen}
+                            aria-haspopup="listbox"
+                            title={`${language === "ru" ? selectedCountry.ruName : selectedCountry.name} (${selectedCountry.dialCode})`}
+                          >
+                            <img
+                              src={selectedCountry.flagUrl}
+                              alt={selectedCountry.iso2}
+                              className="checkout__country-flag-img"
+                              width="20"
+                              height="15"
+                            />
+                            <span className="checkout__country-code">
+                              {selectedCountry.dialCode}
+                            </span>
+                            <i
+                              className={`ri-arrow-down-s-line checkout__country-arrow ${isCountryOpen ? "checkout__country-arrow--open" : ""}`}
+                            />
+                          </button>
+
+                          {isCountryOpen && (
+                            <div className="checkout__country-dropdown">
+                              <div className="checkout__country-search-wrap">
+                                <i className="ri-search-line" />
+                                <input
+                                  ref={searchInputRef}
+                                  type="text"
+                                  className="checkout__country-search-input"
+                                  placeholder={
+                                    language === "ru"
+                                      ? "Поиск страны или кода..."
+                                      : "Search country or code..."
+                                  }
+                                  value={countrySearch}
+                                  onChange={(e) => setCountrySearch(e.target.value)}
+                                />
+                                {countrySearch && (
+                                  <button
+                                    type="button"
+                                    className="checkout__country-search-clear"
+                                    onClick={() => setCountrySearch("")}
+                                    aria-label="Clear"
+                                  >
+                                    ×
+                                  </button>
+                                )}
+                              </div>
+                              <ul className="checkout__country-list" role="listbox">
+                                {filteredCountries.map((c) => {
+                                  const isSelected = c.iso2 === selectedCountry.iso2;
+                                  const cName = language === "ru" ? c.ruName : c.name;
+                                  return (
+                                    <li
+                                      key={c.iso2}
+                                      role="option"
+                                      aria-selected={isSelected}
+                                      className={`checkout__country-option ${isSelected ? "checkout__country-option--selected" : ""}`}
+                                      onClick={() => handleSelectCountry(c)}
+                                    >
+                                      <img
+                                        src={c.flagUrl}
+                                        alt={c.iso2}
+                                        className="checkout__country-flag-img"
+                                        width="20"
+                                        height="15"
+                                        loading="lazy"
+                                      />
+                                      <span className="checkout__country-opt-name">
+                                        {cName}
+                                      </span>
+                                      <span className="checkout__country-opt-code">
+                                        {c.dialCode}
+                                      </span>
+                                    </li>
+                                  );
+                                })}
+                                {filteredCountries.length === 0 && (
+                                  <li className="checkout__country-no-results">
+                                    {language === "ru"
+                                      ? "Ничего не найдено"
+                                      : "No results found"}
+                                  </li>
+                                )}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+
                         <input
                           id="phone"
                           type="tel"
