@@ -449,7 +449,7 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
   }
 
   const isOtherEditionRequest =
-    /(друг(их|ие|ого|им|ое|ую|ая)\s*изд[ея]ни|изд[ея]тельств|переплет|обложк|вариант|оформлен|в другом оформлении|другое издание|другого издательства|такие же книги|подороже|подешевле|подарочн|коллекционн|в твердом переплете|кожан|другие варианты|замени|поменяй)/i.test(
+    /(друг(их|ие|ого|им|ое|ую|ая)?\s*(изд[аея]ни|изд[аея]тельств|переплет|обложк|вариант|оформлен)|в другом оформлении|другое издание|другого издания|другого издательства|такие же книги|подороже|подешевле|подарочн|коллекционн|в твердом переплете|кожан|другие варианты|замени|поменяй|сделай друго)/i.test(
       userQuery || "",
     );
 
@@ -475,23 +475,48 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
       validateProductMatch(p, targetBook),
     );
 
-    // Exclude the edition that is currently shown
+    // Exclude the edition that is currently shown (by exact URL)
     const unshown = validMatches.filter((p) => p.url !== targetBook.url);
     const pool = unshown.length > 0 ? unshown : validMatches;
 
-    // Filter for more expensive editions than the current edition
-    // Prefer noticeably higher-tier editions (e.g. >= 7.5 € or >= prevPrice * 1.5)
-    const threshold = Math.max(7.5, prevPrice > 0 ? prevPrice * 1.5 : 7.5);
-    const premiumEditions = pool.filter((p) => p.price >= threshold);
-    const moreExpensive =
-      premiumEditions.length > 0
-        ? premiumEditions
-        : pool.filter((p) => p.price > (prevPrice > 0 ? prevPrice + 0.5 : 5.0));
+    // The user's exact specification:
+    // Take the next cheapest edition that costs more than the current edition (p.price > prevPrice),
+    // or another edition with the same price (p.price >= prevPrice && p.url !== targetBook.url).
+    // Sort all alternative editions by price ascending (cheapest first).
+    const isExplicitlyLuxury =
+      /(подарочн|коллекционн|в твердом переплете|кожан|люкс|самое дорогое)/i.test(
+        userQuery || "",
+      );
 
-    const finalPool = moreExpensive.length > 0 ? moreExpensive : pool;
-    // Sort ascending from the higher tier so we pick a realistic higher edition (e.g. 10–15 €)
-    finalPool.sort((a, b) => a.price - b.price);
-    const replacementBook = finalPool[0] || targetBook;
+    let replacementBook;
+    if (isExplicitlyLuxury) {
+      pool.sort((a, b) => b.price - a.price);
+      replacementBook = pool[0];
+    } else {
+      // Find editions with price >= prevPrice (excluding current edition)
+      // Sort ascending to get the second cheapest edition (or next price tier)
+      const sameOrMoreExpensive = pool.filter((p) => p.price >= prevPrice);
+      sameOrMoreExpensive.sort((a, b) => a.price - b.price);
+
+      // If there are editions with price > prevPrice, prefer the next one above prevPrice
+      const strictlyMoreExpensive = sameOrMoreExpensive.filter(
+        (p) => p.price > prevPrice,
+      );
+
+      if (strictlyMoreExpensive.length > 0) {
+        replacementBook = strictlyMoreExpensive[0];
+      } else if (sameOrMoreExpensive.length > 0) {
+        replacementBook = sameOrMoreExpensive[0];
+      } else {
+        // Fallback to any alternative edition from pool
+        pool.sort((a, b) => b.price - a.price);
+        replacementBook = pool[0];
+      }
+    }
+
+    if (!replacementBook) {
+      replacementBook = targetBook;
+    }
 
     const updatedList = lastRecommendedList.map((book, idx) => {
       if (idx === targetIndex) {
@@ -499,7 +524,7 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
           ...replacementBook,
           candidateTitle: targetBook.candidateTitle || targetBook.title,
           candidateAuthor: targetBook.candidateAuthor || targetBook.author,
-          relevance: "Альтернативное (более премиальное) издание",
+          relevance: "Альтернативное издание произведения",
           isReplacement: true,
         };
       }
@@ -710,7 +735,7 @@ async function analyzeSearchIntent(messages) {
 
   // Fast-path 4: Explicit book requests and follow-ups
   const hasExplicitBookRequest =
-    /(посоветуй|порекомендуй|найди|хочу.*книг|подскажи что почитать|что почитать|подобрать книгу|выбери книгу|какие книги|книги про|книгу про|книги о|книги по|книга про|книга о|книга по|хочу книгу|друг(их|ие|ого|им)\s*(издани|издательств|сери|переплет|обложк|вариант|оформлени)|в другом оформлении|другое издание|другого издательства|такие же книги|подороже|подешевле|еще книг|другие книги)/i.test(
+    /(посоветуй|порекомендуй|найди|хочу.*книг|подскажи что почитать|что почитать|подобрать книгу|выбери книгу|какие книги|книги про|книгу про|книги о|книги по|книга про|книга о|книга по|хочу книгу|друг(их|ие|ого|им|ое|ую|ая)?\s*(изд[аея]ни|изд[аея]тельств|переплет|обложк|вариант|оформлен)|в другом оформлении|другое издание|другого издания|другого издательства|такие же книги|подороже|подешевле|еще книг|другие книги|сделай друго|замени|поменяй)/i.test(
       lower,
     );
   if (hasExplicitBookRequest) {
