@@ -642,38 +642,83 @@
   background: var(--litera-bubble-bg);
 }
 
-/* Suggestion Chips */
-.litera-chips-row {
-  padding: 8px 16px;
+/* Suggestion Questions Row (Above input, horizontally scrollable) */
+.litera-questions-bar {
+  position: relative;
+  background: var(--litera-purple-bg);
+  border-top: 1px solid var(--litera-border);
+  padding: 8px 0;
+  overflow: hidden;
+}
+
+.litera-questions-bar::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 24px;
+  background: linear-gradient(to right, transparent, var(--litera-purple-bg));
+  pointer-events: none;
+  z-index: 2;
+}
+
+.litera-questions-track {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   overflow-x: auto;
   white-space: nowrap;
-  border-top: 1px solid var(--litera-border);
-  background: var(--litera-purple-bg);
-  scrollbar-width: none;
+  padding: 2px 14px 4px 14px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--litera-border) transparent;
 }
 
-.litera-chips-row::-webkit-scrollbar {
-  display: none;
+.litera-questions-track::-webkit-scrollbar {
+  height: 4px;
 }
 
-.litera-chip {
+.litera-questions-track::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.litera-questions-track::-webkit-scrollbar-thumb {
+  background: var(--litera-border);
+  border-radius: 4px;
+}
+
+.litera-question-chip {
+  flex-shrink: 0;
+  scroll-snap-align: start;
   background: var(--litera-panel-bg);
   border: 1px solid var(--litera-border);
-  color: var(--litera-purple);
-  padding: 6px 12px;
-  border-radius: 14px;
-  font-size: 0.75rem;
+  color: var(--litera-text);
+  padding: 7px 13px;
+  border-radius: 16px;
+  font-size: 0.76rem;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s, transform 0.15s;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  max-width: 280px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  user-select: none;
 }
 
-.litera-chip:hover {
-  background: var(--litera-purple);
-  color: #ffffff;
+.litera-question-chip:hover {
+  background: linear-gradient(135deg, rgba(121, 82, 179, 0.12), rgba(157, 124, 216, 0.1));
+  border-color: var(--litera-purple);
+  color: var(--litera-purple);
   transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(121, 82, 179, 0.15);
+}
+
+.litera-question-chip:active {
+  transform: translateY(0);
 }
 
 /* Input Footer */

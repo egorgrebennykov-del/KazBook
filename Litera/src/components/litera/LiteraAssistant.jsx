@@ -277,11 +277,14 @@ export default function LiteraAssistant() {
     });
   };
 
-  const suggestionChips = [
-    t("assistant.chip1"),
-    t("assistant.chip2"),
-    t("assistant.chip3"),
-    t("assistant.chip4"),
+  const isNewDialog = messages.filter((m) => m.role === "user").length === 0;
+
+  const initialQuestions = [
+    t("assistant.q1"),
+    t("assistant.q2"),
+    t("assistant.q3"),
+    t("assistant.q4"),
+    t("assistant.q5"),
   ];
 
   return (
@@ -577,19 +580,22 @@ export default function LiteraAssistant() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Quick Suggestion Chips (when only 1 or 2 messages) */}
-            {messages.length <= 2 && !loading && (
-              <div className="litera-chips-row">
-                {suggestionChips.map((chip, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    className="litera-chip"
-                    onClick={() => handleSendMessage(chip)}
-                  >
-                    {chip}
-                  </button>
-                ))}
+            {/* 5 Suggestion Questions in a Scrollable Row (When starting a new dialog) */}
+            {isNewDialog && !loading && (
+              <div className="litera-questions-bar">
+                <div className="litera-questions-track">
+                  {initialQuestions.map((q, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      className="litera-question-chip"
+                      onClick={() => handleSendMessage(q)}
+                      title={q}
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
