@@ -1,4 +1,5 @@
 import { getCookieUser } from "./auth";
+import { moderateReview } from "./geminiModeration";
 
 const TABLE_URL = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/feedbacks`;
 const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -35,19 +36,34 @@ export async function addFeedback({
     throw new Error("Please provide review text or a star rating");
   }
 
+  // Moderate & translate with Google AI
+  let moderation = null;
+  if (cleanFeedback) {
+    try {
+      moderation = await moderateReview(cleanFeedback);
+    } catch (err) {
+      console.warn("AI moderation error in addFeedback:", err);
+    }
+  }
+
+  const payload = {
+    user_id: userId,
+    user_first_name: (userFirstName || "Пользователь").trim(),
+    user_last_name: userLastName ? userLastName.trim() : null,
+    feedback: cleanFeedback,
+    stars: validStars,
+    ststus: moderation?.decision || "approved",
+    feedback_ru: moderation?.russian_translation || cleanFeedback,
+    feedback_en: moderation?.english_translation || cleanFeedback,
+  };
+
   const response = await fetch(TABLE_URL, {
     method: "POST",
     headers: {
       ...headers,
       Prefer: "return=representation",
     },
-    body: JSON.stringify({
-      user_id: userId,
-      user_first_name: (userFirstName || "Пользователь").trim(),
-      user_last_name: userLastName ? userLastName.trim() : null,
-      feedback: cleanFeedback,
-      stars: validStars,
-    }),
+    body: JSON.stringify(payload),
   });
 
   const body = await response.json().catch(() => null);
@@ -74,6 +90,24 @@ export async function updateFeedback({
     throw new Error("Please provide review text or a star rating");
   }
 
+  // Re-moderate & translate with Google AI on update
+  let moderation = null;
+  if (cleanFeedback) {
+    try {
+      moderation = await moderateReview(cleanFeedback);
+    } catch (err) {
+      console.warn("AI moderation error in updateFeedback:", err);
+    }
+  }
+
+  const payload = {
+    feedback: cleanFeedback,
+    stars: validStars,
+    ststus: moderation?.decision || "approved",
+    feedback_ru: moderation?.russian_translation || cleanFeedback,
+    feedback_en: moderation?.english_translation || cleanFeedback,
+  };
+
   const response = await fetch(
     `${TABLE_URL}?id=eq.${id}&user_id=eq.${userId}`,
     {
@@ -82,10 +116,7 @@ export async function updateFeedback({
         ...headers,
         Prefer: "return=representation",
       },
-      body: JSON.stringify({
-        feedback: cleanFeedback,
-        stars: validStars,
-      }),
+      body: JSON.stringify(payload),
     },
   );
 

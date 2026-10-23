@@ -58,6 +58,7 @@ export default function Testimonial() {
   const [savingId, setSavingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [actionError, setActionError] = useState("");
+  const [showOriginalMap, setShowOriginalMap] = useState({});
 
   const currentUserId = user?.id ?? getCookieUser()?.id;
 
@@ -400,22 +401,63 @@ export default function Testimonial() {
         {!loading && !loadError && feedbacks.length > 0 && (
           <div className="testimonial__reviews-grid">
             {feedbacks.map((item) => {
-              const authorName = [item.user_first_name, item.user_last_name]
-                .filter(Boolean)
-                .join(" ") || t("testimonial.anonymous");
+              const isOwnReview = Boolean(
+                loggedIn &&
+                  currentUserId != null &&
+                  String(item.user_id) === String(currentUserId),
+              );
+
+              const status = item.ststus || "approved";
+              const isRejected = status === "rejected";
+              const isManualReview = status === "manual_review";
+
+              // Do not display rejected reviews to the public
+              if (isRejected && !isOwnReview) {
+                return null;
+              }
+
+              const authorName =
+                [item.user_first_name, item.user_last_name]
+                  .filter(Boolean)
+                  .join(" ") || t("testimonial.anonymous");
               const initials = getInitials(
                 item.user_first_name,
                 item.user_last_name,
               );
               const rating = Number(item.stars);
-              const hasRating = Number.isInteger(rating) && rating >= 1 && rating <= 5;
-              const feedbackText = decodeHtmlEntities(item.feedback || "");
-              const isOwnReview =
-                Boolean(loggedIn && currentUserId != null && String(item.user_id) === String(currentUserId));
+              const hasRating =
+                Number.isInteger(rating) && rating >= 1 && rating <= 5;
+              const originalText = decodeHtmlEntities(item.feedback || "");
+              const translatedText = decodeHtmlEntities(
+                (language === "ru" ? item.feedback_ru : item.feedback_en) ||
+                  item.feedback ||
+                  "",
+              );
               const isEditing = editingId === item.id;
+              const showOriginal = Boolean(showOriginalMap[item.id]);
+              const displayText = showOriginal ? originalText : translatedText;
+              const hasTranslation = Boolean(
+                translatedText &&
+                  originalText &&
+                  translatedText.trim() !== originalText.trim(),
+              );
 
               return (
                 <article className="testimonial__review-card" key={item.id}>
+                  {isOwnReview && isRejected && (
+                    <div className="testimonial__moderation-notice testimonial__moderation-notice--rejected">
+                      <i className="ri-error-warning-line" />
+                      <span>{t("testimonial.rejectedNotice")}</span>
+                    </div>
+                  )}
+
+                  {isOwnReview && isManualReview && (
+                    <div className="testimonial__moderation-notice testimonial__moderation-notice--pending">
+                      <i className="ri-time-line" />
+                      <span>{t("testimonial.underReviewNotice")}</span>
+                    </div>
+                  )}
+
                   <header className="testimonial__review-header">
                     <div className="testimonial__author-box">
                       <div className="testimonial__author-avatar" aria-hidden="true">
@@ -585,9 +627,38 @@ export default function Testimonial() {
                       </div>
                     </div>
                   ) : (
-                    feedbackText && (
-                      <p className="testimonial__review-text">{feedbackText}</p>
-                    )
+                    <>
+                      {displayText && (
+                        <p className="testimonial__review-text">
+                          {displayText}
+                        </p>
+                      )}
+                      {hasTranslation && !isEditing && (
+                        <div className="testimonial__translation-meta">
+                          <span
+                            className="testimonial__translation-badge"
+                            title="Google Gemini AI"
+                          >
+                            <i className="ri-translate-2" />
+                            <span>{t("testimonial.translatedByAi")}</span>
+                          </span>
+                          <button
+                            type="button"
+                            className="testimonial__translation-toggle"
+                            onClick={() =>
+                              setShowOriginalMap((prev) => ({
+                                ...prev,
+                                [item.id]: !prev[item.id],
+                              }))
+                            }
+                          >
+                            {showOriginal
+                              ? t("testimonial.showTranslation")
+                              : t("testimonial.showOriginal")}
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
                 </article>
               );

@@ -236,6 +236,15 @@ export const translations = {
     "testimonial.deleting": "Удаление...",
     "testimonial.updated": "Отзыв успешно обновлен!",
     "testimonial.deleted": "Отзыв удален",
+    "testimonial.showOriginal": "Показать оригинал",
+    "testimonial.showTranslation": "Показать перевод",
+    "testimonial.translatedByAi": "Переведено Google AI",
+    "testimonial.rejectedNotice":
+      "Отзыв не опубликован: не прошёл автоматическую модерацию",
+    "testimonial.underReviewNotice": "Отзыв ожидает проверки модератором",
+    "testimonial.statusApproved": "Одобрен",
+    "testimonial.statusRejected": "Отклонён",
+    "testimonial.statusManualReview": "На проверке",
 
     // Join
     "join.title": "Подпишитесь, чтобы получать\nсвежие обновления",
@@ -668,6 +677,15 @@ export const translations = {
     "testimonial.deleting": "Deleting...",
     "testimonial.updated": "Review updated successfully!",
     "testimonial.deleted": "Review deleted",
+    "testimonial.showOriginal": "Show original",
+    "testimonial.showTranslation": "Show translation",
+    "testimonial.translatedByAi": "Translated by Google AI",
+    "testimonial.rejectedNotice":
+      "Review not published: rejected by automated moderation",
+    "testimonial.underReviewNotice": "Review is pending manual moderation",
+    "testimonial.statusApproved": "Approved",
+    "testimonial.statusRejected": "Rejected",
+    "testimonial.statusManualReview": "Pending review",
 
     // Join
     "join.title": "Subscribe To Receive \nThe Latest Updates",
