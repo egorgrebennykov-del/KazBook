@@ -287,11 +287,27 @@ export async function searchSuppliersByTitleOnly(title, exchangeRate = DEFAULT_R
   return deduped;
 }
 
+export const FOREIGN_LANGUAGE_PATTERN =
+  /\((?:на\s+(?:англ|франц|нем|исп|итал|кит)[^\)]*|eng|english|lb\.\s*romana|in\s+limba\s+romana|limba\s+romana|in\s+romana|in\s+english|romana|en|fr|de|ro)\)|(?:^|[^\p{L}\p{N}])(?:на\s+англ(?:ийском)?(?:\s+яз(?:ыке)?)?|на\s+немецком(?:\s+яз(?:ыке)?)?|на\s+французском(?:\s+яз(?:ыке)?)?|на\s+испанском(?:\s+яз(?:ыке)?)?|на\s+румынском(?:\s+яз(?:ыке)?)?|in\s+english|english\s+edition|english\s+version)(?=[^\p{L}\p{N}]|$)/iu;
+
+function stripTitleEquivalents(s) {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/(?:^|\s)градус[а-я]*(?:\s|$)/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /**
  * 3. Validate product match against intended discovered candidate book.
  */
-function validateProductMatch(product, candidate) {
+function validateProductMatch(product, candidate, allowForeign = false) {
   if (!product?.title || !candidate?.title) return false;
+
+  // Unless foreign language is explicitly requested, reject foreign language editions
+  if (!allowForeign && FOREIGN_LANGUAGE_PATTERN.test(product.title)) {
+    return false;
+  }
 
   const clean = (s) =>
     String(s || "")
@@ -303,6 +319,10 @@ function validateProductMatch(product, candidate) {
   const pTitle = clean(product.title);
   const cTitle = clean(candidate.title);
   const altTitle = clean(candidate.alternativeTitle);
+
+  const pNorm = stripTitleEquivalents(clean(product.title));
+  const cNorm = stripTitleEquivalents(clean(candidate.title));
+  const altNorm = altTitle ? stripTitleEquivalents(clean(candidate.alternativeTitle)) : "";
 
   // Author compatibility check
   const authorWords = candidate.author
@@ -318,9 +338,9 @@ function validateProductMatch(product, candidate) {
     }
   }
 
-  const checkMatch = (target) => {
+  const checkMatch = (target, targetNorm) => {
     if (!target) return false;
-    if (pTitle === target) return true;
+    if (pTitle === target || (targetNorm && pNorm === targetNorm)) return true;
 
     const tWords = target.split(/\s+/);
     const pWords = pTitle.split(/\s+/);
@@ -338,15 +358,26 @@ function validateProductMatch(product, candidate) {
     if (pTitle.startsWith(target + " ") || target.startsWith(pTitle + " ")) {
       return true;
     }
+    if (targetNorm && (pNorm.startsWith(targetNorm + " ") || targetNorm.startsWith(pNorm + " "))) {
+      return true;
+    }
+
     if (pTitle.includes(target)) {
       // Must not be an accidental substring inside an unrelated word
       const wholeWordPattern = new RegExp(`(?:^|\\s)${target}(?:\\s|$)`, "i");
-      return wholeWordPattern.test(pTitle);
+      if (wholeWordPattern.test(pTitle)) return true;
+    }
+    if (targetNorm && pNorm.includes(targetNorm)) {
+      const wholeWordPattern = new RegExp(`(?:^|\\s)${targetNorm}(?:\\s|$)`, "i");
+      if (wholeWordPattern.test(pNorm)) return true;
     }
     return false;
   };
 
-  return checkMatch(cTitle) || (altTitle ? checkMatch(altTitle) : false);
+  return (
+    checkMatch(cTitle, cNorm) ||
+    (altTitle ? checkMatch(altTitle, altNorm) : false)
+  );
 }
 
 export function findTargetBookIndex(query, bookList) {
@@ -460,6 +491,11 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
       userQuery || "",
     );
 
+  const isForeignLanguageRequested =
+    /(на\s+английском|на\s+англ|на\s+немецком|на\s+французском|на\s+румынском|in\s+english|english\s+books|english)/i.test(
+      userQuery || "",
+    );
+
   // Check if user specifically requested to replace/update a SINGLE book in the previous list
   const targetIndex = findTargetBookIndex(userQuery, lastRecommendedList);
   if (
@@ -474,7 +510,7 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
       activeRate,
     );
     const validMatches = storeProducts.filter((p) =>
-      validateProductMatch(p, targetBook),
+      validateProductMatch(p, targetBook, isForeignLanguageRequested),
     );
 
     // Exclude the edition that is currently shown (by exact URL)
@@ -638,7 +674,7 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
     }
 
     const validMatches = storeProducts.filter((p) =>
-      validateProductMatch(p, candidate),
+      validateProductMatch(p, candidate, isForeignLanguageRequested),
     );
 
     if (validMatches.length === 0) return [];
