@@ -438,6 +438,29 @@ export const translations = {
       "Синхронизация официальных курсов валют (MDL/EUR) для корректного пересчёта цен с доставкой в Европу.",
     "privileged.gitActions.wfDiscountsDesc":
       "Сбор и актуализация акционных книг со скидками и спецпредложениями для витрины скидок в Supabase.",
+
+    // Litera AI Assistant
+    "assistant.name": "Литера",
+    "assistant.title": "Книжный спутник",
+    "assistant.statusOnline": "В сети",
+    "assistant.openChat": "Спросить Литеру",
+    "assistant.closeChat": "Свернуть",
+    "assistant.clearHistory": "Очистить чат",
+    "assistant.clearHistoryConfirm": "Начать новый разговор с Литерой?",
+    "assistant.welcome": "Привет! 💜 Я Литера, ваш книжный спутник. Расскажите, что вам интересно почитать, или о каком сюжете вы мечтаете — и я с удовольствием найду для вас идеальные книги в нашем каталоге!",
+    "assistant.placeholder": "Спросите о книгах, жанрах или авторах...",
+    "assistant.send": "Отправить",
+    "assistant.chip1": "Посоветуй уютное фэнтези ☕",
+    "assistant.chip2": "Что почитать из новинок? 📖",
+    "assistant.chip3": "Помоги выбрать подарок 🎁",
+    "assistant.chip4": "Захватывающий детектив 🔍",
+    "assistant.thinking": "Литера ищет в каталоге...",
+    "assistant.addToCart": "В корзину",
+    "assistant.addedToCart": "В корзине!",
+    "assistant.viewBook": "Подробнее",
+    "assistant.loginRequired": "Войдите, чтобы добавить книгу в корзину",
+    "assistant.badge": "Привет! Я здесь 💜",
+    "assistant.recommendationsTitle": "Найденные книги в каталоге Litera:",
   },
 
   en: {
@@ -873,5 +896,28 @@ export const translations = {
       "Synchronizing official currency exchange rates (MDL/EUR) for accurate price conversion with European delivery.",
     "privileged.gitActions.wfDiscountsDesc":
       "Collecting and updating discounted books and special offers for the discounts showcase in Supabase.",
+
+    // Litera AI Assistant
+    "assistant.name": "Litera",
+    "assistant.title": "Bookstore Companion",
+    "assistant.statusOnline": "Online",
+    "assistant.openChat": "Ask Litera",
+    "assistant.closeChat": "Minimize",
+    "assistant.clearHistory": "Clear chat",
+    "assistant.clearHistoryConfirm": "Start a fresh conversation with Litera?",
+    "assistant.welcome": "Hi! 💜 I'm Litera, your bookstore companion. Tell me what kind of stories you enjoy or what you're in the mood to read — and I'll gladly find the perfect books in our catalogue!",
+    "assistant.placeholder": "Ask Litera about books, genres, or authors...",
+    "assistant.send": "Send",
+    "assistant.chip1": "Cozy fantasy recommendation ☕",
+    "assistant.chip2": "What's new to read? 📖",
+    "assistant.chip3": "Help me pick a gift 🎁",
+    "assistant.chip4": "Gripping mystery novel 🔍",
+    "assistant.thinking": "Litera is searching the catalogue...",
+    "assistant.addToCart": "Add to Cart",
+    "assistant.addedToCart": "Added!",
+    "assistant.viewBook": "Details",
+    "assistant.loginRequired": "Sign in to add this book to your cart",
+    "assistant.badge": "Hi! I'm here 💜",
+    "assistant.recommendationsTitle": "Matched books in Litera catalogue:",
   },
 };

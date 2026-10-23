@@ -1,0 +1,574 @@
+import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router";
+import LiteraCharacter from "./LiteraCharacter";
+import { useLanguage } from "../../context/languageContext";
+import { addToCart } from "../../../utils/cart";
+import { isLoggedIn } from "../../../utils/auth";
+import "./LiteraAssistant.css";
+
+const STORAGE_KEY = "litera_assistant_history_v2";
+
+let idCounter = 0;
+const generateId = (prefix) => `${prefix}-${Date.now()}-${++idCounter}`;
+const getNowIso = () => new Date().toISOString();
+
+const STORE_NAMES = {
+  "librarius.md": "Librarius",
+  "carturesti.md": "Cărturești",
+  "ulysses.md": "Ulysses",
+  "carteamea.md": "CarteaMea",
+  "biblion.md": "Biblion",
+};
+
+export default function LiteraAssistant() {
+  const { language, t } = useLanguage();
+  const navigate = useNavigate();
+
+  const [isOpen, setIsOpen] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false);
+  const [showGreetingBubble, setShowGreetingBubble] = useState(true);
+  const [emotion, setEmotion] = useState("greeting");
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [cartAddingId, setCartAddingId] = useState(null);
+  const [cartSuccessId, setCartSuccessId] = useState(null);
+  const [loginAlert, setLoginAlert] = useState("");
+
+  const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
+
+  // Initialize messages from sessionStorage or default welcome
+  const [messages, setMessages] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // Ignore sessionStorage errors
+    }
+    return [
+      {
+        id: "msg-welcome",
+        role: "assistant",
+        content: t("assistant.welcome"),
+        emotion: "greeting",
+        timestamp: getNowIso(),
+        books: [],
+      },
+    ];
+  });
+
+  // Save conversation in sessionStorage
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+    } catch {
+      // Ignore sessionStorage errors
+    }
+  }, [messages]);
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    if (isOpen) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, isOpen, loading]);
+
+  // Focus input when opened
+  useEffect(() => {
+    if (isOpen) {
+      const timer = setTimeout(() => inputRef.current?.focus(), 150);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
+  const handleOpen = () => {
+    setIsOpen(true);
+    setHasUnread(false);
+    setShowGreetingBubble(false);
+    setEmotion("happy");
+  };
+
+  const handleClose = () => {
+    setIsOpen(false);
+    setEmotion("neutral");
+  };
+
+  const handleClearHistory = () => {
+    if (window.confirm(t("assistant.clearHistoryConfirm"))) {
+      const freshWelcome = [
+        {
+          id: generateId("msg"),
+          role: "assistant",
+          content: t("assistant.welcome"),
+          emotion: "greeting",
+          timestamp: getNowIso(),
+          books: [],
+        },
+      ];
+      setMessages(freshWelcome);
+      setEmotion("greeting");
+      sessionStorage.removeItem(STORAGE_KEY);
+    }
+  };
+
+  const handleSendMessage = async (textToSend) => {
+    const queryText = (textToSend || input).trim();
+    if (!queryText || loading) return;
+
+    setInput("");
+    const userMsg = {
+      id: generateId("user"),
+      role: "user",
+      content: queryText,
+      timestamp: getNowIso(),
+    };
+
+    const nextMessages = [...messages, userMsg];
+    setMessages(nextMessages);
+    setLoading(true);
+    setEmotion("thinking");
+
+    try {
+      const payload = {
+        messages: nextMessages.map((m) => ({
+          role: m.role === "assistant" ? "assistant" : "user",
+          content: m.content,
+        })),
+        language,
+      };
+
+      const response = await fetch("/api/litera-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error ${response.status}`);
+      }
+
+      const data = await response.json();
+      const assistantEmotion = data.emotion || "happy";
+      setEmotion(assistantEmotion);
+
+      const assistantMsg = {
+        id: generateId("assistant"),
+        role: "assistant",
+        content: data.message,
+        emotion: assistantEmotion,
+        books: Array.isArray(data.books) ? data.books : [],
+        timestamp: getNowIso(),
+      };
+
+      setMessages((prev) => [...prev, assistantMsg]);
+      if (!isOpen) {
+        setHasUnread(true);
+      }
+    } catch (err) {
+      console.error("Litera chat error:", err);
+      setEmotion("concerned");
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: generateId("assistant"),
+          role: "assistant",
+          content:
+            language === "ru"
+              ? "Ой, кажется, возникла ошибка соединения! 💜 Попробуйте повторить запрос."
+              : "Oops, a connection error occurred! 💜 Please try again.",
+          emotion: "concerned",
+          books: [],
+          timestamp: getNowIso(),
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  const handleAddToCart = async (book) => {
+    if (!isLoggedIn()) {
+      setLoginAlert(t("assistant.loginRequired"));
+      setTimeout(() => setLoginAlert(""), 4000);
+      return;
+    }
+
+    try {
+      setCartAddingId(book.id || book.url);
+      await addToCart({
+        url: book.url,
+        title: book.title,
+        price: book.price,
+        image: book.image,
+        store: book.store,
+        quantity: 1,
+      });
+
+      setCartSuccessId(book.id || book.url);
+      setTimeout(() => setCartSuccessId(null), 2500);
+    } catch (err) {
+      console.error("Failed to add book to cart:", err);
+      alert(err.message || "Failed to add book to cart");
+    } finally {
+      setCartAddingId(null);
+    }
+  };
+
+  const handleViewBook = (book) => {
+    navigate(`/book?url=${encodeURIComponent(book.url)}`, {
+      state: { book },
+    });
+  };
+
+  const suggestionChips = [
+    t("assistant.chip1"),
+    t("assistant.chip2"),
+    t("assistant.chip3"),
+    t("assistant.chip4"),
+  ];
+
+  return (
+    <div className={`litera-assistant-root ${isOpen ? "litera-assistant-root--open" : ""}`}>
+      {/* Floating trigger button when closed */}
+      {!isOpen && (
+        <div className="litera-trigger-container">
+          {showGreetingBubble && (
+            <div className="litera-trigger-bubble">
+              <span>{t("assistant.badge")}</span>
+              <button
+                type="button"
+                className="litera-trigger-bubble__close"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowGreetingBubble(false);
+                }}
+                aria-label="Close bubble"
+              >
+                ×
+              </button>
+            </div>
+          )}
+          <button
+            type="button"
+            className="litera-trigger-btn"
+            onClick={handleOpen}
+            aria-label={t("assistant.openChat")}
+            title={t("assistant.openChat")}
+          >
+            <LiteraCharacter
+              emotion={emotion}
+              size={64}
+              className="litera-trigger-avatar"
+            />
+            {hasUnread && <span className="litera-unread-badge" />}
+          </button>
+        </div>
+      )}
+
+      {/* Interactive Chat Window */}
+      {isOpen && (
+        <div className="litera-window-wrapper">
+          {/* Side character companion (Desktop) */}
+          <div className="litera-companion-dock">
+            <div className="litera-companion-dock__character-box">
+              <LiteraCharacter
+                emotion={loading ? "thinking" : emotion}
+                size={170}
+                className="litera-companion-dock__character"
+              />
+              <div className="litera-companion-dock__name-tag">
+                <span className="litera-companion-dock__name">{t("assistant.name")}</span>
+                <span className="litera-companion-dock__status">
+                  <span className="litera-status-dot" />
+                  {loading ? t("assistant.thinking") : t("assistant.statusOnline")}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Chat Panel */}
+          <div className="litera-chat-panel">
+            {/* Header */}
+            <div className="litera-chat-header">
+              <div className="litera-chat-header__info">
+                <div className="litera-chat-header__avatar-wrap">
+                  <LiteraCharacter
+                    emotion={loading ? "thinking" : emotion}
+                    size={38}
+                    className="litera-chat-header__avatar"
+                  />
+                  <span className="litera-status-dot litera-status-dot--online" />
+                </div>
+                <div>
+                  <h3 className="litera-chat-header__title">{t("assistant.name")}</h3>
+                  <p className="litera-chat-header__subtitle">{t("assistant.title")}</p>
+                </div>
+              </div>
+
+              <div className="litera-chat-header__actions">
+                <button
+                  type="button"
+                  className="litera-header-btn"
+                  onClick={handleClearHistory}
+                  title={t("assistant.clearHistory")}
+                  aria-label={t("assistant.clearHistory")}
+                >
+                  <i className="ri-refresh-line" />
+                </button>
+                <button
+                  type="button"
+                  className="litera-header-btn litera-header-btn--close"
+                  onClick={handleClose}
+                  title={t("assistant.closeChat")}
+                  aria-label={t("assistant.closeChat")}
+                >
+                  <i className="ri-close-line" />
+                </button>
+              </div>
+            </div>
+
+            {/* Login Required Notice */}
+            {loginAlert && (
+              <div className="litera-alert-banner">
+                <span>{loginAlert}</span>
+                <button
+                  type="button"
+                  className="litera-alert-banner__link"
+                  onClick={() => navigate("/login")}
+                >
+                  {t("nav.login")}
+                </button>
+              </div>
+            )}
+
+            {/* Messages Body */}
+            <div className="litera-chat-body">
+              {messages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`litera-msg-row litera-msg-row--${msg.role}`}
+                >
+                  {msg.role === "assistant" && (
+                    <LiteraCharacter
+                      emotion={msg.emotion || "neutral"}
+                      size={32}
+                      className="litera-msg-avatar"
+                    />
+                  )}
+
+                  <div className="litera-msg-bubble-wrap">
+                    <div className="litera-msg-bubble">
+                      <p className="litera-msg-text">{msg.content}</p>
+
+                      {/* Recommended Real Book Cards */}
+                      {Array.isArray(msg.books) && msg.books.length > 0 && (
+                        <div className="litera-books-container">
+                          <div className="litera-books-container__label">
+                            <i className="ri-book-read-line" />
+                            <span>{t("assistant.recommendationsTitle")}</span>
+                          </div>
+                          <div className="litera-books-grid">
+                            {msg.books.map((book) => {
+                              const storeLabel =
+                                STORE_NAMES[book.store] || book.store;
+                              const isAdding =
+                                cartAddingId === (book.id || book.url);
+                              const isSuccess =
+                                cartSuccessId === (book.id || book.url);
+
+                              return (
+                                <div
+                                  key={book.id || book.url}
+                                  className="litera-book-card"
+                                >
+                                  <div
+                                    className="litera-book-card__cover-wrap"
+                                    onClick={() => handleViewBook(book)}
+                                    role="button"
+                                    tabIndex={0}
+                                  >
+                                    <img
+                                      src={
+                                        book.image
+                                          ? `/api/enhance-image?url=${encodeURIComponent(book.image)}`
+                                          : "/assets/img/book-1.png"
+                                      }
+                                      alt={book.title}
+                                      className="litera-book-card__cover"
+                                      loading="lazy"
+                                      onError={(e) => {
+                                        // Fallback directly to raw image or default placeholder
+                                        if (e.target.src.includes("/api/enhance-image")) {
+                                          e.target.src = book.image || "/assets/img/book-1.png";
+                                        } else {
+                                          e.target.src = "/assets/img/book-1.png";
+                                        }
+                                      }}
+                                    />
+                                    <span className="litera-book-card__store-badge">
+                                      {storeLabel}
+                                    </span>
+                                  </div>
+
+                                  <div className="litera-book-card__details">
+                                    <h4
+                                      className="litera-book-card__title"
+                                      onClick={() => handleViewBook(book)}
+                                      title={book.title}
+                                    >
+                                      {book.title}
+                                    </h4>
+                                    {book.author && (
+                                      <p className="litera-book-card__author">
+                                        {book.author}
+                                      </p>
+                                    )}
+                                    <div className="litera-book-card__price-row">
+                                      <span className="litera-book-card__price">
+                                        €{Number(book.price).toFixed(2)}
+                                      </span>
+                                    </div>
+
+                                    <div className="litera-book-card__actions">
+                                      <button
+                                        type="button"
+                                        className={`litera-book-card__btn-cart ${
+                                          isSuccess
+                                            ? "litera-book-card__btn-cart--success"
+                                            : ""
+                                        }`}
+                                        onClick={() => handleAddToCart(book)}
+                                        disabled={isAdding}
+                                      >
+                                        <i
+                                          className={
+                                            isSuccess
+                                              ? "ri-check-line"
+                                              : isAdding
+                                                ? "ri-loader-4-line ri-spin"
+                                                : "ri-shopping-cart-2-line"
+                                          }
+                                        />
+                                        <span>
+                                          {isSuccess
+                                            ? t("assistant.addedToCart")
+                                            : t("assistant.addToCart")}
+                                        </span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="litera-book-card__btn-view"
+                                        onClick={() => handleViewBook(book)}
+                                        title={t("assistant.viewBook")}
+                                      >
+                                        <i className="ri-external-link-line" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <span className="litera-msg-timestamp">
+                      {msg.timestamp
+                        ? new Date(msg.timestamp).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : ""}
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+              {/* Thinking / Searching animation */}
+              {loading && (
+                <div className="litera-msg-row litera-msg-row--assistant">
+                  <LiteraCharacter
+                    emotion="thinking"
+                    size={32}
+                    className="litera-msg-avatar"
+                  />
+                  <div className="litera-msg-bubble-wrap">
+                    <div className="litera-msg-bubble litera-msg-bubble--thinking">
+                      <div className="litera-typing-dots">
+                        <span />
+                        <span />
+                        <span />
+                      </div>
+                      <span className="litera-typing-text">
+                        {t("assistant.thinking")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Quick Suggestion Chips (when only 1 or 2 messages) */}
+            {messages.length <= 2 && !loading && (
+              <div className="litera-chips-row">
+                {suggestionChips.map((chip, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    className="litera-chip"
+                    onClick={() => handleSendMessage(chip)}
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Input Bar */}
+            <div className="litera-chat-footer">
+              <form
+                className="litera-chat-input-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendMessage();
+                }}
+              >
+                <textarea
+                  ref={inputRef}
+                  className="litera-chat-textarea"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={t("assistant.placeholder")}
+                  rows={1}
+                  disabled={loading}
+                />
+                <button
+                  type="submit"
+                  className="litera-send-btn"
+                  disabled={!input.trim() || loading}
+                  aria-label={t("assistant.send")}
+                  title={t("assistant.send")}
+                >
+                  <i className="ri-send-plane-fill" />
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

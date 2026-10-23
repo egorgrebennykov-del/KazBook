@@ -16,6 +16,7 @@ import Privileged from "./components/privileged/Privileged";
 import Cart from "./components/cart/Cart";
 import Checkout from "./components/checkout/Checkout";
 import SignUp from "./components/signup/SignUp";
+import LiteraAssistant from "./components/litera/LiteraAssistant";
 import { useEffect, useState } from "react";
 import {
   Routes,
@@ -140,6 +141,7 @@ function App() {
       </Routes>
 
       <main className="main"></main>
+      <LiteraAssistant />
       <Footer />
       <a href="#" className="scrollup" id="scroll-up">
         <i className="ri-arrow-up-line" />

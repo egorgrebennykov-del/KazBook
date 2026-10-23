@@ -40,6 +40,7 @@ import {
   searchBiblion,
   getBiblionDetails,
 } from "./biblionService.js";
+import { processLiteraChat } from "./literaAssistantService.js";
 
 const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 dotenv.config({ path: path.resolve(appDir, ".env") });
@@ -512,6 +513,21 @@ const server = createServer(async (req, res) => {
     } catch (err) {
       console.error("Failed to run action:", err);
       respond(res, 500, { error: err.message });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/litera-chat") {
+    try {
+      const body = await readJson(req);
+      const result = await processLiteraChat(body);
+      respond(res, 200, result);
+    } catch (err) {
+      console.error("Failed to process Litera chat:", err);
+      respond(res, 500, {
+        error: "Litera assistant failed to respond",
+        message: err.message,
+      });
     }
     return;
   }
