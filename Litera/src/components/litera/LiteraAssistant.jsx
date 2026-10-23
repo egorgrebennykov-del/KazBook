@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import LiteraCharacter from "./LiteraCharacter";
+import BookImage from "../common/BookImage";
 import { useLanguage } from "../../context/languageContext";
 import { addToCart, getCart } from "../../../utils/cart";
 import { isLoggedIn, getCookieUser } from "../../../utils/auth";
@@ -41,6 +42,7 @@ export default function LiteraAssistant() {
   const [loadingStatus, setLoadingStatus] = useState("typing");
   const [cartAddingId, setCartAddingId] = useState(null);
   const [cartSuccessId, setCartSuccessId] = useState(null);
+  const [cartLoginAlertId, setCartLoginAlertId] = useState(null);
   const [loginAlert, setLoginAlert] = useState("");
 
   const messagesEndRef = useRef(null);
@@ -201,6 +203,8 @@ export default function LiteraAssistant() {
                 price: b.price,
                 store: b.store,
                 url: b.url,
+                image: b.image || "",
+                currency: b.currency || "EUR",
               }))
             : [],
         })),
@@ -314,7 +318,11 @@ export default function LiteraAssistant() {
   const handleAddToCart = async (book) => {
     if (!isLoggedIn()) {
       setLoginAlert(t("assistant.loginRequired"));
-      setTimeout(() => setLoginAlert(""), 4000);
+      setCartLoginAlertId(book.id || book.url);
+      setTimeout(() => {
+        setLoginAlert("");
+        setCartLoginAlertId(null);
+      }, 4000);
       return;
     }
 
@@ -324,12 +332,14 @@ export default function LiteraAssistant() {
         url: book.url,
         title: book.title,
         price: book.price,
-        image: book.image,
+        image: book.image || "",
         store: book.store,
+        currency: book.currency || "EUR",
         quantity: 1,
       });
 
       setCartSuccessId(book.id || book.url);
+      window.dispatchEvent(new Event("cart-updated"));
       setTimeout(() => setCartSuccessId(null), 2500);
     } catch (err) {
       console.error("Failed to add book to cart:", err);
@@ -512,6 +522,9 @@ export default function LiteraAssistant() {
                               const isSuccess =
                                 cartSuccessId === (book.id || book.url);
 
+                              const isLoginPrompt =
+                                cartLoginAlertId === (book.id || book.url);
+
                               return (
                                 <div
                                   key={book.id || book.url}
@@ -523,23 +536,11 @@ export default function LiteraAssistant() {
                                     role="button"
                                     tabIndex={0}
                                   >
-                                    <img
-                                      src={
-                                        book.image
-                                          ? `/api/enhance-image?url=${encodeURIComponent(book.image)}`
-                                          : "/assets/img/book-1.png"
-                                      }
+                                    <BookImage
+                                      src={book.image}
                                       alt={book.title}
                                       className="litera-book-card__cover"
                                       loading="lazy"
-                                      onError={(e) => {
-                                        // Fallback directly to raw image or default placeholder
-                                        if (e.target.src.includes("/api/enhance-image")) {
-                                          e.target.src = book.image || "/assets/img/book-1.png";
-                                        } else {
-                                          e.target.src = "/assets/img/book-1.png";
-                                        }
-                                      }}
                                     />
                                     <span className="litera-book-card__store-badge">
                                       {storeLabel}
@@ -571,7 +572,9 @@ export default function LiteraAssistant() {
                                         className={`litera-book-card__btn-cart ${
                                           isSuccess
                                             ? "litera-book-card__btn-cart--success"
-                                            : ""
+                                            : isLoginPrompt
+                                              ? "litera-book-card__btn-cart--login-prompt"
+                                              : ""
                                         }`}
                                         onClick={() => handleAddToCart(book)}
                                         disabled={isAdding}
@@ -580,15 +583,19 @@ export default function LiteraAssistant() {
                                           className={
                                             isSuccess
                                               ? "ri-check-line"
-                                              : isAdding
-                                                ? "ri-loader-4-line ri-spin"
-                                                : "ri-shopping-cart-2-line"
+                                              : isLoginPrompt
+                                                ? "ri-login-box-line"
+                                                : isAdding
+                                                  ? "ri-loader-4-line ri-spin"
+                                                  : "ri-shopping-cart-2-line"
                                           }
                                         />
                                         <span>
                                           {isSuccess
                                             ? t("assistant.addedToCart")
-                                            : t("assistant.addToCart")}
+                                            : isLoginPrompt
+                                              ? t("assistant.loginRequired")
+                                              : t("assistant.addToCart")}
                                         </span>
                                       </button>
                                       <button

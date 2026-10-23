@@ -406,6 +406,54 @@ export function findTargetBookIndex(query, bookList) {
 }
 
 /**
+ * Discover alternative works for an author when a specific book title has only 1 edition in stock
+ */
+export async function discoverAlternativeWorksForAuthor(
+  author,
+  currentTitle,
+  excludeTitles = [],
+) {
+  const cleanAuthor = (author || "").trim();
+  const apiKey = process.env.GEMINI_API_KEY || DEFAULT_API_KEY;
+
+  const prompt = `
+A customer in an online bookstore requested another edition or alternative book for «${currentTitle}» by author "${cleanAuthor}".
+However, our bookstore catalogue has only ONE edition of «${currentTitle}».
+TASK:
+Suggest 4 other real, famous, widely published Russian book titles by this author (or in the exact same genre/style if author is not specified).
+Do NOT suggest any of these titles already shown to the user:
+${excludeTitles.map((t) => `- ${t}`).join("\n")}
+
+Return JSON:
+{
+  "titles": ["Title 1", "Title 2", "Title 3", "Title 4"]
+}
+Strictly return book titles only in Russian, with no author names inside the title strings.
+`;
+
+  try {
+    const res = await callGeminiJson({
+      apiKey,
+      prompt,
+      responseSchema: {
+        type: "OBJECT",
+        properties: {
+          titles: {
+            type: "ARRAY",
+            items: { type: "STRING" },
+          },
+        },
+        required: ["titles"],
+      },
+    });
+    return Array.isArray(res?.titles) ? res.titles : [];
+  } catch (err) {
+    console.warn("discoverAlternativeWorksForAuthor error:", err.message);
+    return [];
+  }
+}
+
+/**
  * 4. Main AI Discovery & Supplier Verification pipeline.
  * Discovers real books by meaning, searches suppliers strictly by title only,
  * validates products, and excludes any books not available on suppliers.
@@ -477,12 +525,40 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
 
     // Exclude the edition that is currently shown (by exact URL)
     const unshown = validMatches.filter((p) => p.url !== targetBook.url);
-    const pool = unshown.length > 0 ? unshown : validMatches;
+    let pool = unshown;
+    let isDifferentWork = false;
 
-    // The user's exact specification:
-    // Take the next cheapest edition that costs more than the current edition (p.price > prevPrice),
-    // or another edition with the same price (p.price >= prevPrice && p.url !== targetBook.url).
-    // Sort all alternative editions by price ascending (cheapest first).
+    // If no other edition exists for this exact title across all suppliers,
+    // search for alternative acclaimed works by the same author in bookstore catalogue!
+    if (pool.length === 0) {
+      const author = (targetBook.author || targetBook.candidateAuthor || "").trim();
+      const excludeTitles = lastRecommendedList.map((b) => (b.title || "").toLowerCase());
+      const altCandidates = await discoverAlternativeWorksForAuthor(
+        author,
+        targetBook.title,
+        excludeTitles,
+      );
+
+      for (const candTitle of altCandidates) {
+        const altProducts = await searchSuppliersByTitleOnly(candTitle, activeRate);
+        const validAlt = altProducts.filter((p) =>
+          validateProductMatch(p, { title: candTitle, author }),
+        );
+        const availableAlt = validAlt.filter(
+          (p) => !lastRecommendedList.some((b) => b.url === p.url),
+        );
+        if (availableAlt.length > 0) {
+          pool = availableAlt;
+          isDifferentWork = true;
+          break;
+        }
+      }
+    }
+
+    if (pool.length === 0) {
+      pool = validMatches.length > 0 ? validMatches : [targetBook];
+    }
+
     const isExplicitlyLuxury =
       /(подарочн|коллекционн|в твердом переплете|кожан|люкс|самое дорогое)/i.test(
         userQuery || "",
@@ -518,18 +594,48 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
       replacementBook = targetBook;
     }
 
-    const updatedList = lastRecommendedList.map((book, idx) => {
-      if (idx === targetIndex) {
+    const updatedList = await Promise.all(
+      lastRecommendedList.map(async (book, idx) => {
+        if (idx === targetIndex) {
+          return {
+            ...replacementBook,
+            candidateTitle: isDifferentWork
+              ? replacementBook.title
+              : (targetBook.candidateTitle || targetBook.title),
+            candidateAuthor: targetBook.candidateAuthor || targetBook.author,
+            relevance: isDifferentWork
+              ? `Альтернативное произведение автора (для книги «${targetBook.title}» в каталоге представлено только одно издание)`
+              : "Альтернативное издание произведения",
+            isReplacement: true,
+            replacedTitleOnlyEdition: isDifferentWork,
+            previousTitle: targetBook.title,
+          };
+        }
+
+        // Preserve all existing book properties, and recover image if it was missing
+        let img = book.image;
+        if (!img && book.title) {
+          try {
+            const cachedProducts = await searchSuppliersByTitleOnly(
+              book.title,
+              activeRate,
+            );
+            const found =
+              cachedProducts.find((p) => p.url === book.url) ||
+              cachedProducts[0];
+            if (found?.image) img = found.image;
+          } catch {
+            // ignore
+          }
+        }
+
         return {
-          ...replacementBook,
-          candidateTitle: targetBook.candidateTitle || targetBook.title,
-          candidateAuthor: targetBook.candidateAuthor || targetBook.author,
-          relevance: "Альтернативное издание произведения",
-          isReplacement: true,
+          ...book,
+          image: img || "",
+          currency: book.currency || "EUR",
         };
-      }
-      return book;
-    });
+      }),
+    );
 
     return updatedList.map((b, idx) => ({
       id: `catalog-book-${idx}`,
@@ -779,7 +885,7 @@ Return JSON: { "needSearch": boolean }
 /**
  * Call Gemini API with automatic model fallback
  */
-async function callGeminiJson({ apiKey, systemInstruction, prompt, responseSchema }) {
+export async function callGeminiJson({ apiKey, systemInstruction, prompt, responseSchema }) {
   const requestBody = {
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: {
@@ -929,7 +1035,19 @@ ${JSON.stringify(
         (b) => b.isReplacement,
       );
       if (targetedReplacementItem) {
-        promptText += `
+        if (targetedReplacementItem.replacedTitleOnlyEdition) {
+          promptText += `
+CRITICAL TARGETED BOOK REPLACEMENT INSTRUCTION:
+- The customer asked to replace book «${targetedReplacementItem.previousTitle}» with another edition.
+- In our bookstore catalogue, «${targetedReplacementItem.previousTitle}» is only available in ONE edition.
+- Therefore, you kept all other books in their exact positions and replaced this book with another celebrated work by the same author: «${targetedReplacementItem.title}» (${targetedReplacementItem.price} €)!
+- YOU MUST RETURN ALL ${catalogueResults.length} BOOKS in "bookIds":
+  "bookIds": ${JSON.stringify(catalogueResults.map((b) => b.id))}
+- In your conversational response:
+  Explain politely and warmly that for «${targetedReplacementItem.previousTitle}» our catalogue currently has only one edition in stock, so you kept their other books and selected another wonderful, acclaimed work by the author — «${targetedReplacementItem.title}»!
+`;
+        } else {
+          promptText += `
 CRITICAL TARGETED BOOK REPLACEMENT INSTRUCTION:
 - The customer asked to replace a specific book in their list (book «${targetedReplacementItem.title}») with another (higher-priced/different) edition.
 - The catalogue list above contains ALL ${catalogueResults.length} books in their EXACT original order, with the targeted book successfully replaced by its alternative edition («${targetedReplacementItem.title}» at ${targetedReplacementItem.price} €)!
@@ -938,6 +1056,7 @@ CRITICAL TARGETED BOOK REPLACEMENT INSTRUCTION:
 - In your conversational response:
   Explain warmly that you kept the earlier books and replaced the requested book with another, more premium and quality-bound edition as requested!
 `;
+        }
       } else {
         promptText += `
 CRITICAL INSTRUCTIONS:

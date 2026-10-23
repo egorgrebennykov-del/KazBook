@@ -623,6 +623,12 @@
   background: #2ed573 !important;
 }
 
+.litera-book-card__btn-cart--login-prompt {
+  background: #fdf2e9 !important;
+  color: #c05621 !important;
+  border: 1px solid #fbd38d !important;
+}
+
 .litera-book-card__btn-view {
   background: var(--litera-purple-bg);
   border: 1px solid var(--litera-border);
