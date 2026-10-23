@@ -21,6 +21,8 @@ let cacheExpiry = 0;
 // Pending promise deduplication: concurrent callers share one in-flight request.
 let inflight = null;
 
+export const DEFAULT_RATE = 20.2;
+
 export default async function getExchangeRate() {
   // Return from cache if still fresh.
   if (cachedRate !== null && Date.now() < cacheExpiry) return cachedRate;
@@ -30,7 +32,7 @@ export default async function getExchangeRate() {
 
   if (!SUPABASE_KEY) {
     console.warn("VITE_SUPABASE_ANON_KEY не задан в .env — курс не загружен");
-    return null;
+    return DEFAULT_RATE;
   }
 
   inflight = (async () => {
@@ -57,7 +59,7 @@ export default async function getExchangeRate() {
     } catch (error) {
       console.warn("Ошибка загрузки курса валют:", error.message);
     }
-    return null;
+    return cachedRate || DEFAULT_RATE;
   })().finally(() => {
     inflight = null;
   });

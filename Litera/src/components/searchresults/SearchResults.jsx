@@ -180,6 +180,7 @@ export default function SearchResults() {
           title: book.title,
           url: book.url,
           price: book.price,
+          currency: book.currency || "EUR",
           image: book.image,
           store: book.store,
           quantity,

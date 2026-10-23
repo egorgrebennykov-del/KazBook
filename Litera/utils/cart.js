@@ -1,4 +1,5 @@
 import { getCookieUser, logout } from "./auth.js";
+import getExchangeRate, { DEFAULT_RATE } from "./getExchangeRate.js";
 
 const TABLE_URL = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/cart`;
 const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -7,6 +8,18 @@ const headers = {
   Authorization: `Bearer ${KEY}`,
   "Content-Type": "application/json",
 };
+
+const DEFAULT_MDL_EUR_RATE = DEFAULT_RATE;
+
+async function getRate() {
+  try {
+    const rate = await getExchangeRate();
+    if (Number.isFinite(rate) && rate > 0) return rate;
+  } catch {
+    // fallback below
+  }
+  return DEFAULT_MDL_EUR_RATE;
+}
 
 function requireUserId(userId) {
   const id = userId ?? getCookieUser()?.id;
@@ -38,7 +51,31 @@ export async function getCart(userId = getCookieUser()?.id) {
     user_id: `eq.${id}`,
     order: "id.desc",
   });
-  return (await request(`${TABLE_URL}?${params}`)) ?? [];
+  const rows = (await request(`${TABLE_URL}?${params}`)) ?? [];
+
+  const needsHeal = rows.some((item) => Number(item.price) > 45);
+  if (needsHeal) {
+    const rate = await getRate();
+    for (const item of rows) {
+      const p = Number(item.price);
+      if (Number.isFinite(p) && p > 45) {
+        const healedPrice = Math.round((p / rate) * 100) / 100;
+        item.price = healedPrice;
+        const patchParams = new URLSearchParams({
+          id: `eq.${item.id}`,
+          user_id: `eq.${id}`,
+        });
+        request(`${TABLE_URL}?${patchParams}`, {
+          method: "PATCH",
+          body: JSON.stringify({ price: healedPrice }),
+        }).catch((err) =>
+          console.warn("Failed to persist auto-healed cart price:", err),
+        );
+      }
+    }
+  }
+
+  return rows;
 }
 
 export async function getCartItem(url, userId = getCookieUser()?.id) {
@@ -59,6 +96,22 @@ export async function hasCartItem(url, userId = getCookieUser()?.id) {
 
 export async function addToCart(book, userId = getCookieUser()?.id) {
   const id = requireUserId(userId);
+  let rawPrice = Number(book.price);
+  if (!Number.isFinite(rawPrice)) rawPrice = 0;
+
+  let finalPrice = rawPrice;
+  // If explicitly MDL, or if currency is not EUR and price > 45, or if price is abnormally high (> 45)
+  if (
+    book.currency === "MDL" ||
+    (book.currency !== "EUR" && finalPrice > 45) ||
+    finalPrice > 45
+  ) {
+    const rate = await getRate();
+    finalPrice = Math.round((finalPrice / rate) * 100) / 100;
+  } else {
+    finalPrice = Math.round(finalPrice * 100) / 100;
+  }
+
   const params = new URLSearchParams({
     select: "id,link,price,user_id,image,title,shop,quantity",
     user_id: `eq.${id}`,
@@ -73,11 +126,11 @@ export async function addToCart(book, userId = getCookieUser()?.id) {
     headers: { Prefer: "return=representation" },
     body: JSON.stringify({
       link: book.url,
-      price: book.price,
+      price: finalPrice,
       user_id: id,
       image: book.image,
       title: book.title,
-      shop: book.store,
+      shop: book.store || book.shop,
       quantity: Math.max(1, Math.floor(Number(book.quantity) || 1)),
     }),
   });

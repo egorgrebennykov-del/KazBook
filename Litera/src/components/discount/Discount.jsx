@@ -173,11 +173,17 @@ export default function Discount() {
         1,
         Math.floor(Number(quantities.get(book.url)) || 1),
       );
+      const activeRate = rate || 20.2;
+      const euroPrice =
+        book.currency === "EUR"
+          ? Math.round(book.price * 100) / 100
+          : Math.round((book.price / activeRate) * 100) / 100;
       const inserted = await addToCart(
         {
           title: book.title,
           url: book.url,
-          price: book.price,
+          price: euroPrice,
+          currency: "EUR",
           image: book.image,
           store: book.store,
           quantity,
@@ -256,11 +262,10 @@ export default function Discount() {
       ) : (
         <div className="deals__grid">
           {products.map((book) => {
-            const currency = rate ? "EUR" : book.currency;
-            const price = rate ? book.price / rate : book.price;
-            const regularPrice = rate
-              ? book.regularPrice / rate
-              : book.regularPrice;
+            const activeRate = rate || 20.2;
+            const currency = "EUR";
+            const price = Math.round((book.price / activeRate) * 100) / 100;
+            const regularPrice = Math.round((book.regularPrice / activeRate) * 100) / 100;
             const preview = {
               title: book.title,
               url: book.url,
@@ -275,7 +280,7 @@ export default function Discount() {
               Number(quantities.get(book.url) ?? cartItem?.quantity) || 1,
             );
             const isBusy = addingUrls.has(book.url) || !cartReady;
-            const canAddToCart = Boolean(rate) || book.currency === "EUR";
+            const canAddToCart = true;
             const isPending = pendingUrls.has(book.url);
 
             return (

@@ -146,17 +146,19 @@ export default function BookDetails() {
     product?.mainImage?.url ?? product?.images?.[0]?.url ?? preview?.image;
 
   const rawPrice = Number.parseFloat(product?.price);
-  const toEur = (value) => Math.round((value / rate) * 100) / 100;
+  const activeRate = rate || 20.2;
+  const toEur = (value) => Math.round((value / activeRate) * 100) / 100;
   let price = null;
   if (preview && Number.isFinite(preview.price)) {
     price =
-      preview.currency !== "EUR" && rate
+      preview.currency !== "EUR"
         ? formatPrice(toEur(preview.price), "EUR", language)
         : formatPrice(preview.price, preview.currency, language);
-  } else if (Number.isFinite(rawPrice) && rate) {
-    price = formatPrice(toEur(rawPrice), "EUR", language);
   } else if (Number.isFinite(rawPrice)) {
-    price = formatPrice(rawPrice, product?.currency ?? "MDL", language);
+    price =
+      product?.currency === "EUR"
+        ? formatPrice(rawPrice, "EUR", language)
+        : formatPrice(toEur(rawPrice), "EUR", language);
   }
 
   const seen = new Set();
@@ -208,19 +210,29 @@ export default function BookDetails() {
     }
 
     setAddingToCart(true);
-    const cartPrice =
-      preview?.price ??
-      (Number.isFinite(rawPrice) && rate
-        ? Math.round((rawPrice / rate) * 100) / 100
-        : rawPrice);
+    let euroPrice;
+    if (preview && Number.isFinite(preview.price)) {
+      euroPrice =
+        preview.currency === "EUR"
+          ? preview.price
+          : Math.round((preview.price / activeRate) * 100) / 100;
+    } else if (Number.isFinite(rawPrice)) {
+      euroPrice =
+        product?.currency === "EUR"
+          ? rawPrice
+          : Math.round((rawPrice / activeRate) * 100) / 100;
+    } else {
+      euroPrice = 0;
+    }
+
     try {
       const item = await addToCart({
         title,
         url,
         image,
         store: preview?.store ?? product?.brand?.name ?? "Bookstore",
-        price: cartPrice,
-        currency: preview?.currency ?? (rate ? "EUR" : "MDL"),
+        price: euroPrice,
+        currency: "EUR",
         quantity: pendingQuantity,
       });
       setCartStatus({ url, exists: true, id: item?.id ?? null });
