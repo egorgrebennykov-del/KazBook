@@ -347,6 +347,64 @@ function validateProductMatch(product, candidate) {
   return checkMatch(cTitle) || (altTitle ? checkMatch(altTitle) : false);
 }
 
+export function findTargetBookIndex(query, bookList) {
+  if (!Array.isArray(bookList) || bookList.length === 0) return -1;
+  const q = String(query || "").toLowerCase();
+
+  // 1. Positional references in Russian
+  if (/(последн(ей|яя|юю|его|ее|ий|ем|их|ие))/i.test(q)) {
+    return bookList.length - 1;
+  }
+  if (/(предпоследн(ей|яя|юю|его|ее|ий|ем|их|ие))/i.test(q)) {
+    return Math.max(0, bookList.length - 2);
+  }
+  if (/(перв(ой|ая|ую|ого|ое|ый|ом))/i.test(q)) {
+    return 0;
+  }
+  if (/(втор(ой|ая|ую|ого|ое|ый|ом))/i.test(q)) {
+    return bookList.length > 1 ? 1 : -1;
+  }
+  if (/(трет(ьей|ья|ью|ьего|ье|ий|ьем))/i.test(q)) {
+    return bookList.length > 2 ? 2 : -1;
+  }
+  if (/(четверт(ой|ая|ую|ого|ое|ый|ом))/i.test(q)) {
+    return bookList.length > 3 ? 3 : -1;
+  }
+  if (/(пят(ой|ая|ую|ого|ое|ый|ом))/i.test(q)) {
+    return bookList.length > 4 ? 4 : -1;
+  }
+  if (/(шест(ой|ая|ую|ого|ое|ый|ом))/i.test(q)) {
+    return bookList.length > 5 ? 5 : -1;
+  }
+
+  // Number references: "1-й", "2-ю", "книга 3", "номер 5"
+  const numMatch = q.match(
+    /(?:книг[а-я]*\s*(?:номер|№)?\s*(\d+)|(?:номер|№)\s*(\d+)|(\d+)[-–]?(?:я|й|ую|ая|ое|ой)\s*книг)/i,
+  );
+  if (numMatch) {
+    const n = Number(numMatch[1] || numMatch[2] || numMatch[3]);
+    if (Number.isFinite(n) && n >= 1 && n <= bookList.length) {
+      return n - 1;
+    }
+  }
+
+  // 2. Title matching by stem
+  for (let i = 0; i < bookList.length; i++) {
+    const words = (bookList[i].title || "")
+      .toLowerCase()
+      .replace(/[^a-zа-я0-9\s]/gi, " ")
+      .trim()
+      .split(/\s+/)
+      .filter((w) => w.length >= 3);
+    for (const w of words) {
+      const stem = w.length > 4 ? w.slice(0, -1) : w.slice(0, 3);
+      if (q.includes(stem)) return i;
+    }
+  }
+
+  return -1;
+}
+
 /**
  * 4. Main AI Discovery & Supplier Verification pipeline.
  * Discovers real books by meaning, searches suppliers strictly by title only,
@@ -356,10 +414,22 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
   const activeRate =
     exchangeRate || (await getExchangeRate().catch(() => DEFAULT_RATE));
 
-  // Extract previously recommended books and their URLs from conversation history
+  // Extract the most recent recommended book list from immediate last assistant turn
+  let lastRecommendedList = [];
   const previouslyRecommended = [];
   const previousUrls = new Set();
   if (Array.isArray(history)) {
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (
+        history[i].role === "assistant" &&
+        Array.isArray(history[i].books) &&
+        history[i].books.length > 0
+      ) {
+        if (lastRecommendedList.length === 0) {
+          lastRecommendedList = history[i].books;
+        }
+      }
+    }
     for (const msg of history) {
       if (Array.isArray(msg.books)) {
         for (const b of msg.books) {
@@ -379,7 +449,7 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
   }
 
   const isOtherEditionRequest =
-    /(друг(их|ие|ого|им)\s*(издани|издательств|сери|переплет|обложк|вариант|оформлени)|в другом оформлении|другое издание|другого издательства|такие же книги|подороже|подарочн|коллекционн|в твердом переплете|кожан|другие варианты)/i.test(
+    /(друг(их|ие|ого|им|ое|ую|ая)\s*изд[ея]ни|изд[ея]тельств|переплет|обложк|вариант|оформлен|в другом оформлении|другое издание|другого издательства|такие же книги|подороже|подешевле|подарочн|коллекционн|в твердом переплете|кожан|другие варианты|замени|поменяй)/i.test(
       userQuery || "",
     );
 
@@ -387,6 +457,60 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
     /(подарочн|коллекционн|эксклюзивн|кожан|в коробе|люкс|дорог(ое|ую|ой|ие)|collector|luxury|gift)/i.test(
       userQuery || "",
     );
+
+  // Check if user specifically requested to replace/update a SINGLE book in the previous list
+  const targetIndex = findTargetBookIndex(userQuery, lastRecommendedList);
+  if (
+    targetIndex >= 0 &&
+    targetIndex < lastRecommendedList.length &&
+    isOtherEditionRequest
+  ) {
+    const targetBook = lastRecommendedList[targetIndex];
+    const prevPrice = Number(targetBook.price) || 0;
+    const storeProducts = await searchSuppliersByTitleOnly(
+      targetBook.title,
+      activeRate,
+    );
+    const validMatches = storeProducts.filter((p) =>
+      validateProductMatch(p, targetBook),
+    );
+
+    // Exclude the edition that is currently shown
+    const unshown = validMatches.filter((p) => p.url !== targetBook.url);
+    const pool = unshown.length > 0 ? unshown : validMatches;
+
+    // Filter for more expensive editions than the current edition
+    // Prefer noticeably higher-tier editions (e.g. >= 7.5 € or >= prevPrice * 1.5)
+    const threshold = Math.max(7.5, prevPrice > 0 ? prevPrice * 1.5 : 7.5);
+    const premiumEditions = pool.filter((p) => p.price >= threshold);
+    const moreExpensive =
+      premiumEditions.length > 0
+        ? premiumEditions
+        : pool.filter((p) => p.price > (prevPrice > 0 ? prevPrice + 0.5 : 5.0));
+
+    const finalPool = moreExpensive.length > 0 ? moreExpensive : pool;
+    // Sort ascending from the higher tier so we pick a realistic higher edition (e.g. 10–15 €)
+    finalPool.sort((a, b) => a.price - b.price);
+    const replacementBook = finalPool[0] || targetBook;
+
+    const updatedList = lastRecommendedList.map((book, idx) => {
+      if (idx === targetIndex) {
+        return {
+          ...replacementBook,
+          candidateTitle: targetBook.candidateTitle || targetBook.title,
+          candidateAuthor: targetBook.candidateAuthor || targetBook.author,
+          relevance: "Альтернативное (более премиальное) издание",
+          isReplacement: true,
+        };
+      }
+      return book;
+    });
+
+    return updatedList.map((b, idx) => ({
+      id: `catalog-book-${idx}`,
+      ...b,
+    }));
+  }
 
   const candidates = await discoverBooksByMeaning(
     userQuery,
@@ -774,15 +898,32 @@ ${JSON.stringify(
   null,
   2,
 )}
+`;
 
+      const targetedReplacementItem = catalogueResults.find(
+        (b) => b.isReplacement,
+      );
+      if (targetedReplacementItem) {
+        promptText += `
+CRITICAL TARGETED BOOK REPLACEMENT INSTRUCTION:
+- The customer asked to replace a specific book in their list (book «${targetedReplacementItem.title}») with another (higher-priced/different) edition.
+- The catalogue list above contains ALL ${catalogueResults.length} books in their EXACT original order, with the targeted book successfully replaced by its alternative edition («${targetedReplacementItem.title}» at ${targetedReplacementItem.price} €)!
+- YOU MUST RETURN ALL ${catalogueResults.length} BOOKS in "bookIds":
+  "bookIds": ${JSON.stringify(catalogueResults.map((b) => b.id))}
+- In your conversational response:
+  Explain warmly that you kept the earlier books and replaced the requested book with another, more premium and quality-bound edition as requested!
+`;
+      } else {
+        promptText += `
 CRITICAL INSTRUCTIONS:
-- MINIMUM 3 BOOKS REQUIREMENT: Whenever books are present in the catalogue list, YOU MUST RECOMMEND AT LEAST 3 BOOKS (return at least 3 IDs in "bookIds", e.g. ["catalog-book-0", "catalog-book-1", "catalog-book-2"]) unless fewer than 3 books total are available in the list. Never return only 1 book if 3 or more are available!
+- QUANTITY REQUIREMENT: Whenever books are present in the catalogue list, YOU MUST RECOMMEND ALL OF THEM (at least 3, up to 6 books). Return their IDs in "bookIds": ${JSON.stringify(catalogueResults.slice(0, 6).map((b) => b.id))}. Never return fewer books than provided in the catalogue list!
 - In "bookIds", return an array containing their exact IDs.
 - CONVERSATION MEMORY: If the user asked for other editions, different publishers, or more expensive books ("другого издательства", "подороже", "такие же книги"), acknowledge this naturally and warmly in your message text, explaining that you have selected alternative, premium editions for them!
 - PRICE & VALUE PREFERENCE: By default, prefer affordable editions. But if the customer requested other editions or more expensive books ("другого издательства", "подороже", "подарочное"), recommend the alternative / higher-priced editions from the list!
 - Explain why these specific books/editions are great picks in your friendly, warm voice (you may reference the relevanceReason).
 - Speak naturally about the books, their mood, and plot. Do NOT mention "европейский каталог", "на русском языке", or price/currencies in your message text — just focus on the books themselves!
 `;
+      }
     } else {
       promptText += `
 LITERA STORE CATALOGUE SEARCH RESULT:
