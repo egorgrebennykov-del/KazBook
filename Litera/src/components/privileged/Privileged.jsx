@@ -350,6 +350,34 @@ export default function Privileged() {
           couponMaxAmount !== ""
             ? Number(couponMaxAmount)
             : undefined,
+        hasCondition: hasGiftCondition,
+        condition: hasGiftCondition
+          ? {
+              type: giftConditionType,
+              amount:
+                giftConditionType === "purchased"
+                  ? Number(giftPurchasedAmount) || 0
+                  : undefined,
+              clientMode:
+                giftConditionType === "client" ? giftClientMode : undefined,
+              sinceDate:
+                giftConditionType === "client" &&
+                giftClientMode === "since"
+                  ? giftClientSinceDate
+                  : undefined,
+              duration:
+                giftConditionType === "client" &&
+                giftClientMode === "already"
+                  ? {
+                      years: Number(giftDurationYears) || 0,
+                      months: Number(giftDurationMonths) || 0,
+                      days: Number(giftDurationDays) || 0,
+                      hours: Number(giftDurationHours) || 0,
+                      minutes: Number(giftDurationMinutes) || 0,
+                    }
+                  : undefined,
+            }
+          : null,
         gift:
           couponType === "gift"
             ? {
@@ -462,6 +490,144 @@ export default function Privileged() {
     const s = (o.status || "in_progress").toLowerCase();
     return s === orderStatusFilter;
   });
+
+  const renderConditionFields = () => (
+    <>
+      <label className="privileged__checkbox-label">
+        <input
+          type="checkbox"
+          checked={hasGiftCondition}
+          onChange={(e) => setHasGiftCondition(e.target.checked)}
+        />
+        <span>{t("privileged.coupons.giftConditionCheckbox")}</span>
+      </label>
+
+      {hasGiftCondition && (
+        <div className="privileged__condition-box">
+          <div className="privileged__condition-row">
+            <span className="privileged__condition-label">
+              {t("privileged.coupons.ifText")}
+            </span>
+            <select
+              value={giftConditionType}
+              onChange={(e) => setGiftConditionType(e.target.value)}
+              className="privileged__condition-select"
+            >
+              <option value="purchased">
+                {t("privileged.coupons.condPurchased")}
+              </option>
+              <option value="client">
+                {t("privileged.coupons.condOurClient")}
+              </option>
+            </select>
+
+            {giftConditionType === "purchased" && (
+              <>
+                <span className="privileged__condition-label">
+                  {t("privileged.coupons.onAmountText")}
+                </span>
+                <input
+                  type="number"
+                  min="1"
+                  step="0.5"
+                  placeholder="50"
+                  value={giftPurchasedAmount}
+                  onChange={(e) => setGiftPurchasedAmount(e.target.value)}
+                  required
+                  className="privileged__condition-number-input"
+                />
+              </>
+            )}
+
+            {giftConditionType === "client" && (
+              <select
+                value={giftClientMode}
+                onChange={(e) => setGiftClientMode(e.target.value)}
+                className="privileged__condition-select"
+              >
+                <option value="since">
+                  {t("privileged.coupons.clientSinceOption")}
+                </option>
+                <option value="already">
+                  {t("privileged.coupons.clientAlreadyOption")}
+                </option>
+              </select>
+            )}
+          </div>
+
+          {giftConditionType === "client" && giftClientMode === "since" && (
+            <div className="privileged__condition-subfield">
+              <label>{t("privileged.coupons.clientSinceDateLabel")}</label>
+              <input
+                type="datetime-local"
+                value={giftClientSinceDate}
+                onChange={(e) => setGiftClientSinceDate(e.target.value)}
+                required
+                className="privileged__condition-date-input"
+              />
+            </div>
+          )}
+
+          {giftConditionType === "client" && giftClientMode === "already" && (
+            <div className="privileged__condition-subfield">
+              <label>{t("privileged.coupons.clientAlreadyOption")}</label>
+              <div className="privileged__duration-grid">
+                <div className="privileged__duration-item">
+                  <input
+                    type="number"
+                    min="0"
+                    value={giftDurationYears}
+                    onChange={(e) => setGiftDurationYears(e.target.value)}
+                  />
+                  <span>{t("privileged.coupons.durationYears")}</span>
+                </div>
+                <div className="privileged__duration-item">
+                  <input
+                    type="number"
+                    min="0"
+                    max="11"
+                    value={giftDurationMonths}
+                    onChange={(e) => setGiftDurationMonths(e.target.value)}
+                  />
+                  <span>{t("privileged.coupons.durationMonths")}</span>
+                </div>
+                <div className="privileged__duration-item">
+                  <input
+                    type="number"
+                    min="0"
+                    max="31"
+                    value={giftDurationDays}
+                    onChange={(e) => setGiftDurationDays(e.target.value)}
+                  />
+                  <span>{t("privileged.coupons.durationDays")}</span>
+                </div>
+                <div className="privileged__duration-item">
+                  <input
+                    type="number"
+                    min="0"
+                    max="23"
+                    value={giftDurationHours}
+                    onChange={(e) => setGiftDurationHours(e.target.value)}
+                  />
+                  <span>{t("privileged.coupons.durationHours")}</span>
+                </div>
+                <div className="privileged__duration-item">
+                  <input
+                    type="number"
+                    min="0"
+                    max="59"
+                    value={giftDurationMinutes}
+                    onChange={(e) => setGiftDurationMinutes(e.target.value)}
+                  />
+                  <span>{t("privileged.coupons.durationMinutes")}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
 
   return (
     <section className="privileged section container">
@@ -842,6 +1008,10 @@ export default function Privileged() {
                   target.applyToAll !== false ||
                   !target.userIds ||
                   target.userIds.length === 0;
+                const couponCondition =
+                  (action.hasCondition && action.condition) ||
+                  (action.gift?.hasCondition && action.gift?.condition) ||
+                  action.condition;
 
                 return (
                   <div
@@ -898,42 +1068,42 @@ export default function Privileged() {
                           </span>
                         )}
 
-                        {isGift && action.gift?.hasCondition && action.gift.condition && (
+                        {couponCondition && (
                           <span className="privileged__coupon-tag privileged__coupon-tag--condition">
                             <i className="ri-information-line" />
-                            {action.gift.condition.type === "purchased" && (
+                            {couponCondition.type === "purchased" && (
                               <>
-                                {t("privileged.coupons.condPurchased")}: {action.gift.condition.amount} €
+                                {t("privileged.coupons.condPurchased")}: {couponCondition.amount} €
                               </>
                             )}
-                            {action.gift.condition.type === "client" &&
-                              action.gift.condition.clientMode === "since" && (
+                            {couponCondition.type === "client" &&
+                              couponCondition.clientMode === "since" && (
                                 <>
                                   {t("privileged.coupons.condOurClient")}{" "}
                                   {t("privileged.coupons.clientSinceOption")}{" "}
-                                  {formatDate(action.gift.condition.sinceDate, language)}
+                                  {formatDate(couponCondition.sinceDate, language)}
                                 </>
                               )}
-                            {action.gift.condition.type === "client" &&
-                              action.gift.condition.clientMode === "already" && (
+                            {couponCondition.type === "client" &&
+                              couponCondition.clientMode === "already" && (
                                 <>
                                   {t("privileged.coupons.condOurClient")}{" "}
                                   {t("privileged.coupons.clientAlreadyOption")}:{" "}
                                   {[
-                                    action.gift.condition.duration?.years
-                                      ? `${action.gift.condition.duration.years} ${t("privileged.coupons.durationYears")}`
+                                    couponCondition.duration?.years
+                                      ? `${couponCondition.duration.years} ${t("privileged.coupons.durationYears")}`
                                       : null,
-                                    action.gift.condition.duration?.months
-                                      ? `${action.gift.condition.duration.months} ${t("privileged.coupons.durationMonths")}`
+                                    couponCondition.duration?.months
+                                      ? `${couponCondition.duration.months} ${t("privileged.coupons.durationMonths")}`
                                       : null,
-                                    action.gift.condition.duration?.days
-                                      ? `${action.gift.condition.duration.days} ${t("privileged.coupons.durationDays")}`
+                                    couponCondition.duration?.days
+                                      ? `${couponCondition.duration.days} ${t("privileged.coupons.durationDays")}`
                                       : null,
-                                    action.gift.condition.duration?.hours
-                                      ? `${action.gift.condition.duration.hours} ${t("privileged.coupons.durationHours")}`
+                                    couponCondition.duration?.hours
+                                      ? `${couponCondition.duration.hours} ${t("privileged.coupons.durationHours")}`
                                       : null,
-                                    action.gift.condition.duration?.minutes
-                                      ? `${action.gift.condition.duration.minutes} ${t("privileged.coupons.durationMinutes")}`
+                                    couponCondition.duration?.minutes
+                                      ? `${couponCondition.duration.minutes} ${t("privileged.coupons.durationMinutes")}`
                                       : null,
                                   ]
                                     .filter(Boolean)
@@ -1274,6 +1444,7 @@ export default function Privileged() {
                             }
                           />
                         </div>
+                        {renderConditionFields()}
                       </div>
                     )}
 
@@ -1333,6 +1504,7 @@ export default function Privileged() {
                             }
                           />
                         </div>
+                        {renderConditionFields()}
                       </div>
                     )}
 
@@ -1353,182 +1525,7 @@ export default function Privileged() {
                             required
                           />
                         </div>
-
-                        <label className="privileged__checkbox-label">
-                          <input
-                            type="checkbox"
-                            checked={hasGiftCondition}
-                            onChange={(e) =>
-                              setHasGiftCondition(e.target.checked)
-                            }
-                          />
-                          <span>{t("privileged.coupons.giftConditionCheckbox")}</span>
-                        </label>
-
-                        {hasGiftCondition && (
-                          <div className="privileged__condition-box">
-                            <div className="privileged__condition-row">
-                              <span className="privileged__condition-label">
-                                {t("privileged.coupons.ifText")}
-                              </span>
-                              <select
-                                value={giftConditionType}
-                                onChange={(e) =>
-                                  setGiftConditionType(e.target.value)
-                                }
-                                className="privileged__condition-select"
-                              >
-                                <option value="purchased">
-                                  {t("privileged.coupons.condPurchased")}
-                                </option>
-                                <option value="client">
-                                  {t("privileged.coupons.condOurClient")}
-                                </option>
-                              </select>
-
-                              {giftConditionType === "purchased" && (
-                                <>
-                                  <span className="privileged__condition-label">
-                                    {t("privileged.coupons.onAmountText")}
-                                  </span>
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    step="0.5"
-                                    placeholder="50"
-                                    value={giftPurchasedAmount}
-                                    onChange={(e) =>
-                                      setGiftPurchasedAmount(e.target.value)
-                                    }
-                                    required
-                                    className="privileged__condition-number-input"
-                                  />
-                                </>
-                              )}
-
-                              {giftConditionType === "client" && (
-                                <select
-                                  value={giftClientMode}
-                                  onChange={(e) =>
-                                    setGiftClientMode(e.target.value)
-                                  }
-                                  className="privileged__condition-select"
-                                >
-                                  <option value="since">
-                                    {t("privileged.coupons.clientSinceOption")}
-                                  </option>
-                                  <option value="already">
-                                    {t("privileged.coupons.clientAlreadyOption")}
-                                  </option>
-                                </select>
-                              )}
-                            </div>
-
-                            {giftConditionType === "client" &&
-                              giftClientMode === "since" && (
-                                <div className="privileged__condition-subfield">
-                                  <label>
-                                    {t(
-                                      "privileged.coupons.clientSinceDateLabel",
-                                    )}
-                                  </label>
-                                  <input
-                                    type="datetime-local"
-                                    value={giftClientSinceDate}
-                                    onChange={(e) =>
-                                      setGiftClientSinceDate(e.target.value)
-                                    }
-                                    required
-                                    className="privileged__condition-date-input"
-                                  />
-                                </div>
-                              )}
-
-                            {giftConditionType === "client" &&
-                              giftClientMode === "already" && (
-                                <div className="privileged__condition-subfield">
-                                  <label>
-                                    {t(
-                                      "privileged.coupons.clientAlreadyOption",
-                                    )}
-                                  </label>
-                                  <div className="privileged__duration-grid">
-                                    <div className="privileged__duration-item">
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        value={giftDurationYears}
-                                        onChange={(e) =>
-                                          setGiftDurationYears(e.target.value)
-                                        }
-                                      />
-                                      <span>
-                                        {t("privileged.coupons.durationYears")}
-                                      </span>
-                                    </div>
-                                    <div className="privileged__duration-item">
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        max="11"
-                                        value={giftDurationMonths}
-                                        onChange={(e) =>
-                                          setGiftDurationMonths(e.target.value)
-                                        }
-                                      />
-                                      <span>
-                                        {t("privileged.coupons.durationMonths")}
-                                      </span>
-                                    </div>
-                                    <div className="privileged__duration-item">
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        max="31"
-                                        value={giftDurationDays}
-                                        onChange={(e) =>
-                                          setGiftDurationDays(e.target.value)
-                                        }
-                                      />
-                                      <span>
-                                        {t("privileged.coupons.durationDays")}
-                                      </span>
-                                    </div>
-                                    <div className="privileged__duration-item">
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        max="23"
-                                        value={giftDurationHours}
-                                        onChange={(e) =>
-                                          setGiftDurationHours(e.target.value)
-                                        }
-                                      />
-                                      <span>
-                                        {t("privileged.coupons.durationHours")}
-                                      </span>
-                                    </div>
-                                    <div className="privileged__duration-item">
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        max="59"
-                                        value={giftDurationMinutes}
-                                        onChange={(e) =>
-                                          setGiftDurationMinutes(e.target.value)
-                                        }
-                                      />
-                                      <span>
-                                        {t(
-                                          "privileged.coupons.durationMinutes",
-                                        )}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                          </div>
-                        )}
+                        {renderConditionFields()}
                       </div>
                     )}
 
