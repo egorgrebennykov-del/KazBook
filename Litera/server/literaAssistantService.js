@@ -97,231 +97,265 @@ const storeSearchCache = new Map();
 const STORE_SEARCH_CACHE_TTL = 10 * 60 * 1000; // 10 minutes cache
 
 /**
- * Normalizes book queries: removes stopwords/prepositions and converts inflected case forms to nominative lemmas
+ * 1. Discover relevant real books by meaning using Gemini.
+ * Analyzes natural-language requests, themes, moods, emotions, metaphors, or ideas.
+ * Strictly returns books in Russian (even if query was in English, Romanian, etc.).
  */
-export function normalizeSearchQuery(rawQuery) {
-  if (!rawQuery) return "";
-  const q = rawQuery.toLowerCase().trim();
+export async function discoverBooksByMeaning(userQuery) {
+  const cleanQ = (userQuery || "").trim();
+  if (!cleanQ) return [];
 
-  // Strip common conversational filler and search prepositions
-  const stopwords = new Set([
-    "пожалуйста", "подскажи", "посоветуй", "порекомендуй", "найди", "хочу",
-    "почитать", "что-нибудь", "купить", "книги", "книга", "книгу", "книжек",
-    "книгах", "книгам", "книгами", "литература", "литературу", "литературы",
-    "литературе", "сборник", "сборники", "издание", "издания",
-    "по", "про", "о", "об", "обо", "для", "в", "на", "из", "с", "со", "от", "что"
-  ]);
+  const apiKey = process.env.GEMINI_API_KEY || DEFAULT_API_KEY;
 
-  const words = q.split(/[\s,.;:!?]+/).filter((w) => w && !stopwords.has(w));
-  if (words.length === 0) {
-    // If all words were stopwords, fallback to the stripped raw query
-    return q.replace(/^(посоветуй|порекомендуй|найди|книги|книга|что-нибудь)\s*/gi, "").trim() || rawQuery.trim();
-  }
+  const prompt = `
+You are the AI literary discovery engine for the European bookstore "Litera".
+The user submitted this natural-language book request: "${cleanQ}".
 
-  const normalizedWords = words.map((w) => {
-    // -офии -> -офия (философии -> философия, теософии -> теософия)
-    if (w.endsWith("офии")) return w.slice(0, -1) + "я";
-    // -огии -> -огия (психологии -> психология, мифологии -> мифология)
-    if (w.endsWith("огии")) return w.slice(0, -1) + "я";
-    // -ии -> -ия (истории -> история, кулинарии -> кулинария, поэзии -> поэзия)
-    if (w.endsWith("ии")) return w.slice(0, -1) + "я";
-    // Accusative -офию / -огию / -ию -> -офия / -огия / -ия
-    if (w.endsWith("офию")) return w.slice(0, -1) + "я";
-    if (w.endsWith("огию")) return w.slice(0, -1) + "я";
-    if (w.endsWith("ию")) return w.slice(0, -1) + "я";
-    // Plural noun endings to singular base
-    if (w.endsWith("детективы") || w.endsWith("детективов")) return "детектив";
-    if (w.endsWith("романы") || w.endsWith("романов")) return "роман";
-    if (w.endsWith("триллеры") || w.endsWith("триллеров")) return "триллер";
-    if (w.endsWith("ужасы") || w.endsWith("ужасов")) return "ужасы";
-    if (w.endsWith("комиксы") || w.endsWith("комиксов")) return "комикс";
-    if (w.endsWith("сказки") || w.endsWith("сказок")) return "сказки";
-    if (w.endsWith("рассказы") || w.endsWith("рассказов")) return "рассказы";
-    if (w.endsWith("стихи") || w.endsWith("стихов")) return "стихи";
-    if (w.endsWith("энциклопедии") || w.endsWith("энциклопедий")) return "энциклопедия";
-    if (w.endsWith("фантастику") || w.endsWith("фантастики") || w.endsWith("фантастике")) return "фантастика";
-    if (w.endsWith("классику") || w.endsWith("классики") || w.endsWith("классике")) return "классика";
-    if (w.endsWith("биографии") || w.endsWith("биографий") || w.endsWith("биографию")) return "биография";
-    if (w.endsWith("мемуары") || w.endsWith("мемуаров")) return "мемуары";
-    if (w.endsWith("саморазвитию") || w.endsWith("саморазвития")) return "саморазвитие";
-    return w;
-  });
+TASK:
+1. Understand the underlying meaning, philosophy, emotions, mood, historical/cultural context, or subject.
+2. Identify 4 to 6 real, acclaimed books in RUSSIAN (even if the user query was in English, Romanian, or another language) that best match this theme, mood, or idea, and are commonly available in bookstores.
+   Examples of logical matching:
+   - "про грусть" -> "Белые ночи" (Достоевский), "Муму" (Тургенев), "Цветы для Элджернона" (Киз), "Три товарища" (Ремарк), "Одиночество в Сети" (Вишневский)
+   - "про животных" -> "Скотный двор" (Оруэлл), "Белый Клык" (Лондон), "Собачье сердце" (Булгаков), "Жизнь Пи" (Мартел), "Каштанка" (Чехов)
+   - "про Ближний Восток" -> "Арабы. История. XVI-XXI вв." (Роган), "Бегущий за ветром" (Хоссейни), "Тысяча и одна ночь", "Мифы Ближнего Востока"
+   - "meaning of life" -> "Три товарища", "Сто лет одиночества", "Маленький принц", "Сказать жизни «Да!»"
 
-  return normalizedWords.join(" ");
-}
-
-function scoreBookRelevance(book, queries) {
-  const title = (book.title || "").toLowerCase();
-  const author = (book.author || "").toLowerCase();
-  let score = 0;
-  for (const q of queries) {
-    const qLower = q.toLowerCase();
-    const words = qLower.split(/\s+/).filter((w) => w.length > 2);
-    // Exact or phrase match in title
-    if (title.includes(qLower)) score += 50;
-    if (author.includes(qLower)) score += 40;
-    for (const w of words) {
-      if (title.includes(w)) score += 15;
-      if (author.includes(w)) score += 10;
+Return strictly JSON matching this schema:
+{
+  "candidates": [
+    {
+      "title": "Exact book title in Russian (strictly title only, no author in this field)",
+      "author": "Author name in Russian",
+      "alternativeTitle": "Alternative or shortened Russian title if helpful (or empty string)",
+      "relevance": "1 concise sentence explaining why this book matches the user's theme"
     }
+  ]
+}
+Verify book titles and authors. Do NOT invent fake books or authors.
+`;
+
+  try {
+    const res = await callGeminiJson({
+      apiKey,
+      prompt,
+      responseSchema: {
+        type: "OBJECT",
+        properties: {
+          candidates: {
+            type: "ARRAY",
+            items: {
+              type: "OBJECT",
+              properties: {
+                title: { type: "STRING" },
+                author: { type: "STRING" },
+                alternativeTitle: { type: "STRING" },
+                relevance: { type: "STRING" },
+              },
+              required: ["title", "author", "relevance"],
+            },
+          },
+        },
+        required: ["candidates"],
+      },
+    });
+
+    return Array.isArray(res?.candidates) ? res.candidates : [];
+  } catch (err) {
+    console.warn("discoverBooksByMeaning fallback:", err.message);
+    return [{ title: cleanQ, author: "", alternativeTitle: "", relevance: "" }];
   }
-  return score;
 }
 
 /**
- * Searches the bookstore stores, dedupes, scores, and normalizes into trusted book cards
+ * 2. Search supported supplier websites strictly by title only.
+ * Critical requirement: supplier searches must use book titles only!
+ * Do NOT search supplier websites by plot, subject, description, or author.
  */
-export async function searchStoreCatalogue(queryOrQueries, exchangeRate = 19.5) {
-  const queryList = Array.isArray(queryOrQueries)
-    ? queryOrQueries
-    : [queryOrQueries];
+export async function searchSuppliersByTitleOnly(title, exchangeRate = 19.5) {
+  const cleanTitle = (title || "").trim();
+  if (!cleanTitle) return [];
 
-  const rawQueries = queryList
-    .map((q) => (typeof q === "string" ? q.trim() : ""))
-    .filter(Boolean);
-
-  if (rawQueries.length === 0) return [];
-
-  async function searchSingleTerm(term) {
-    const normalizedQ = normalizeSearchQuery(term);
-    const searchKey = (normalizedQ || term).toLowerCase();
-
-    const cached = storeSearchCache.get(searchKey);
-    if (cached && Date.now() < cached.expiresAt) {
-      return cached.data;
-    }
-
-    async function queryStores(q) {
-      const timeoutPromise = (promise, ms = 3200) =>
-        Promise.race([
-          promise,
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Timeout")), ms),
-          ),
-        ]);
-
-      const [librariusRaw, ulyssesRaw, carteameaRaw, biblionRaw] =
-        await Promise.all([
-          timeoutPromise(searchLibrarius(q, 1), 3000).catch(() => []),
-          timeoutPromise(searchUlysses(q), 3000).catch(() => []),
-          timeoutPromise(searchCarteamea(q), 3000).catch(() => []),
-          timeoutPromise(searchBiblion(q, 1), 3000).catch(() => []),
-        ]);
-
-      const normalizeStoreItems = (items, storeName) =>
-        (items ?? []).map((p) => {
-          const mdlPrice = parseMdlPrice(p.price);
-          const eurPrice =
-            exchangeRate && mdlPrice > 0
-              ? Math.round((mdlPrice / exchangeRate) * 100) / 100
-              : mdlPrice;
-          const rawImg = p.mainImage?.url ?? p.images?.[0]?.url ?? "";
-          const img = decodeImageForStore(rawImg, storeName);
-          return {
-            title: (p.name || "").trim(),
-            author: (p.author || "").trim(),
-            price: eurPrice > 0 ? eurPrice : 15.0,
-            currency: "EUR",
-            image: img,
-            url: p.url || "",
-            store: storeName,
-          };
-        });
-
-      const rawCombined = [
-        ...normalizeStoreItems(librariusRaw, "librarius.md"),
-        ...normalizeStoreItems(ulyssesRaw, "ulysses.md"),
-        ...normalizeStoreItems(carteameaRaw, "carteamea.md"),
-        ...normalizeStoreItems(biblionRaw, "biblion.md"),
-      ].filter(
-        (b) =>
-          b.title &&
-          b.url &&
-          Number.isFinite(b.price) &&
-          b.price > 0 &&
-          Boolean(b.image) &&
-          !b.image.includes("empty-cover"),
-      );
-
-      // Deduplication by normalized title and URL
-      const seenTitles = new Set();
-      const dedupedItems = [];
-      for (const b of rawCombined) {
-        const key = b.title.toLowerCase().replace(/[^a-zа-я0-9]/gi, "").slice(0, 35);
-        if (!seenTitles.has(key)) {
-          seenTitles.add(key);
-          dedupedItems.push(b);
-          if (dedupedItems.length >= 8) break;
-        }
-      }
-
-      return dedupedItems;
-    }
-
-    let items = await queryStores(normalizedQ);
-
-    // If 0 results and normalizedQ has multiple words, try fallback with the primary longest word
-    if (items.length === 0 && normalizedQ.includes(" ")) {
-      const primaryWord = normalizedQ.split(/\s+/).sort((a, b) => b.length - a.length)[0];
-      if (primaryWord && primaryWord.length >= 4) {
-        items = await queryStores(primaryWord);
-      }
-    }
-
-    // If still 0 results and term differs from normalizedQ, try term as fallback
-    if (items.length === 0 && term.toLowerCase() !== normalizedQ.toLowerCase()) {
-      items = await queryStores(term.toLowerCase());
-    }
-
-    if (items.length > 0) {
-      storeSearchCache.set(searchKey, {
-        data: items,
-        expiresAt: Date.now() + STORE_SEARCH_CACHE_TTL,
-      });
-    }
-
-    return items;
+  const cacheKey = `title_only::${cleanTitle.toLowerCase()}`;
+  const cached = storeSearchCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.data;
   }
 
-  // Run searches for all terms in parallel
-  const resultsPerTerm = await Promise.all(
-    rawQueries.map((term) => searchSingleTerm(term)),
+  const timeoutPromise = (promise, ms = 3200) =>
+    Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout")), ms),
+      ),
+    ]);
+
+  const [librariusRaw, ulyssesRaw, carteameaRaw, biblionRaw] =
+    await Promise.all([
+      timeoutPromise(searchLibrarius(cleanTitle, 1), 3000).catch(() => []),
+      timeoutPromise(searchUlysses(cleanTitle), 3000).catch(() => []),
+      timeoutPromise(searchCarteamea(cleanTitle), 3000).catch(() => []),
+      timeoutPromise(searchBiblion(cleanTitle, 1), 3000).catch(() => []),
+    ]);
+
+  const normalizeStoreItems = (items, storeName) =>
+    (items ?? []).map((p) => {
+      const mdlPrice = parseMdlPrice(p.price);
+      const eurPrice =
+        exchangeRate && mdlPrice > 0
+          ? Math.round((mdlPrice / exchangeRate) * 100) / 100
+          : mdlPrice;
+      const rawImg = p.mainImage?.url ?? p.images?.[0]?.url ?? "";
+      const img = decodeImageForStore(rawImg, storeName);
+      return {
+        title: (p.name || "").trim(),
+        author: (p.author || "").trim(),
+        price: eurPrice > 0 ? eurPrice : 15.0,
+        currency: "EUR",
+        image: img,
+        url: p.url || "",
+        store: storeName,
+      };
+    });
+
+  const rawCombined = [
+    ...normalizeStoreItems(librariusRaw, "librarius.md"),
+    ...normalizeStoreItems(ulyssesRaw, "ulysses.md"),
+    ...normalizeStoreItems(carteameaRaw, "carteamea.md"),
+    ...normalizeStoreItems(biblionRaw, "biblion.md"),
+  ].filter(
+    (b) =>
+      b.title &&
+      b.url &&
+      Number.isFinite(b.price) &&
+      b.price > 0 &&
+      Boolean(b.image) &&
+      !b.image.includes("empty-cover"),
   );
 
-  // Merge and deduplicate by title
-  const seenKeys = new Set();
-  const allBooks = [];
-  for (const list of resultsPerTerm) {
-    for (const b of list) {
-      const key = b.title.toLowerCase().replace(/[^a-zа-я0-9]/gi, "").slice(0, 35);
-      if (!seenKeys.has(key)) {
-        seenKeys.add(key);
-        allBooks.push(b);
-      }
+  // Fast deduplication by URL
+  const seenUrls = new Set();
+  const deduped = [];
+  for (const b of rawCombined) {
+    if (!seenUrls.has(b.url)) {
+      seenUrls.add(b.url);
+      deduped.push(b);
     }
   }
 
-  // Score relevance against the queries
-  const scored = allBooks.map((b) => ({
-    book: b,
-    score: scoreBookRelevance(b, rawQueries),
-  }));
-  scored.sort((a, b) => b.score - a.score);
+  if (deduped.length > 0) {
+    storeSearchCache.set(cacheKey, {
+      data: deduped,
+      expiresAt: Date.now() + STORE_SEARCH_CACHE_TTL,
+    });
+  }
 
-  // If there are books with positive relevance score, prioritize them over 0-score accidental matches
-  const hasPositive = scored.some((s) => s.score > 0);
-  const candidateBooks = (hasPositive ? scored.filter((s) => s.score > 0) : scored)
-    .map((s) => s.book)
-    .slice(0, 10);
+  return deduped;
+}
 
-  return candidateBooks.map((b, idx) => ({
+/**
+ * 3. Validate product match against intended discovered candidate book.
+ */
+function validateProductMatch(product, candidate) {
+  if (!product?.title || !candidate?.title) return false;
+
+  const clean = (s) =>
+    String(s || "")
+      .toLowerCase()
+      .replace(/[^a-zа-я0-9\s]/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const pTitle = clean(product.title);
+  const cTitle = clean(candidate.title);
+  const altTitle = clean(candidate.alternativeTitle);
+
+  // Title must match candidate title or alternative title
+  const matchesTitle =
+    pTitle.includes(cTitle) ||
+    cTitle.includes(pTitle) ||
+    (altTitle && (pTitle.includes(altTitle) || altTitle.includes(pTitle)));
+
+  if (!matchesTitle) return false;
+
+  // If candidate specifies author and supplier product has author, verify author compatibility
+  if (candidate.author && product.author) {
+    const authorWords = clean(candidate.author).split(/\s+/).filter((w) => w.length > 3);
+    const prodAuthor = clean(product.author);
+    if (
+      authorWords.length > 0 &&
+      !authorWords.some((w) => prodAuthor.includes(w) || pTitle.includes(w))
+    ) {
+      return false; // Author conflict
+    }
+  }
+
+  return true;
+}
+
+/**
+ * 4. Main AI Discovery & Supplier Verification pipeline.
+ * Discovers real books by meaning, searches suppliers strictly by title only,
+ * validates products, and excludes any books not available on suppliers.
+ */
+export async function discoverAndMatchBooks(userQuery, exchangeRate = 19.5) {
+  const candidates = await discoverBooksByMeaning(userQuery);
+  if (!candidates || candidates.length === 0) return [];
+
+  // Search suppliers for each candidate strictly by title only
+  const searchPromises = candidates.map(async (candidate) => {
+    let storeProducts = await searchSuppliersByTitleOnly(candidate.title, exchangeRate);
+    if (
+      storeProducts.length === 0 &&
+      candidate.alternativeTitle &&
+      candidate.alternativeTitle !== candidate.title
+    ) {
+      storeProducts = await searchSuppliersByTitleOnly(
+        candidate.alternativeTitle,
+        exchangeRate,
+      );
+    }
+
+    const validMatches = storeProducts.filter((p) =>
+      validateProductMatch(p, candidate),
+    );
+
+    if (validMatches.length > 0) {
+      return {
+        ...validMatches[0],
+        candidateTitle: candidate.title,
+        candidateAuthor: candidate.author,
+        relevance: candidate.relevance,
+      };
+    }
+    return null;
+  });
+
+  const resolved = await Promise.all(searchPromises);
+  const verifiedProducts = resolved.filter(Boolean);
+
+  // Deduplicate by title
+  const seenKeys = new Set();
+  const deduped = [];
+  for (const b of verifiedProducts) {
+    const key = b.title.toLowerCase().replace(/[^a-zа-я0-9]/gi, "").slice(0, 35);
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      deduped.push(b);
+    }
+  }
+
+  // Return up to 8 top candidate books with indexed IDs
+  return deduped.slice(0, 8).map((b, idx) => ({
     id: `catalog-book-${idx}`,
     ...b,
   }));
 }
 
+// Backward-compatible alias
+export const searchStoreCatalogue = discoverAndMatchBooks;
+
 /**
- * Accurate intent analyzer with fast-paths and Gemini LLM semantic verification
+ * Determines whether the user message requires book discovery from the catalogue.
  */
 async function analyzeSearchIntent(messages) {
   const latestMessage = messages[messages.length - 1]?.content || "";
@@ -337,113 +371,39 @@ async function analyzeSearchIntent(messages) {
     ) ||
     /(где находится|куда доставляете|доставка|оплата|валют[ае]|в росси[ие]|из росси[ие]|в евро|на каких языках|язык книг|сколько стоит доставка)/i.test(
       lower,
+    ) ||
+    /^(какая твоя любимая|что ты думаешь|кто твой любимый|ты любишь читать|расскажи о себе|как погода)/i.test(
+      lower,
     );
 
   if (isConversational) {
-    return { needSearch: false, searchQuery: "" };
+    return { needSearch: false };
   }
 
-  // Fast-path 2: Suggested quick chips
-  if (/литера,?\s*что\s*почитать/i.test(lower)) {
-    return { needSearch: true, searchQuery: "бестселлер", searchQueries: ["бестселлер", "роман"] };
-  }
-  if (/литера,?\s*посоветуй\s*книгу/i.test(lower)) {
-    return { needSearch: true, searchQuery: "роман", searchQueries: ["роман", "бестселлер"] };
-  }
-  if (/литера,?\s*что\s*(сейчас\s*)?в\s*топе/i.test(lower)) {
-    return { needSearch: true, searchQuery: "бестселлер", searchQueries: ["бестселлер"] };
-  }
-  if (/литера,?\s*помоги\s*с\s*подарком/i.test(lower)) {
-    return { needSearch: true, searchQuery: "подарочное издание", searchQueries: ["подарочное издание"] };
-  }
-  if (/литера,?\s*найди\s*детектив/i.test(lower)) {
-    return { needSearch: true, searchQuery: "детектив", searchQueries: ["детектив"] };
-  }
-
-  // Fast-path 2b: Direct book topics and genres with multi-term expansions
-  const genreMatches = [
-    { regex: /ближн(ем|ий|его|ему)?\s*восток/i, query: "ближний восток", queries: ["ближний восток", "арабы"] },
-    { regex: /араб/i, query: "арабы", queries: ["арабы", "ближний восток"] },
-    { regex: /скандинав|викинг/i, query: "скандинавия", queries: ["скандинавия", "викинги"] },
-    { regex: /древн(ей|яя)?\s*греци|античн/i, query: "древняя греция", queries: ["древняя греция", "античность", "мифы"] },
-    { regex: /древн(ем|ий|его)?\s*рим/i, query: "древний рим", queries: ["древний рим", "рим", "цезарь"] },
-    { regex: /средневеков/i, query: "средневековье", queries: ["средневековье", "рыцари"] },
-    { regex: /философ/i, query: "философия", queries: ["философия", "стоицизм"] },
-    { regex: /психолог/i, query: "психология", queries: ["психология"] },
-    { regex: /детектив/i, query: "детектив", queries: ["детектив"] },
-    { regex: /фантастик/i, query: "фантастика", queries: ["фантастика"] },
-    { regex: /фэнтези/i, query: "фэнтези", queries: ["фэнтези"] },
-    { regex: /саморазвит|привычк|мотивац/i, query: "саморазвитие", queries: ["саморазвитие", "привычки"] },
-    { regex: /биографи/i, query: "биография", queries: ["биография"] },
-    { regex: /мемуар/i, query: "мемуары", queries: ["мемуары"] },
-    { regex: /истори[ияею]/i, query: "история", queries: ["история"] },
-    { regex: /поэзи|стих/i, query: "поэзия", queries: ["поэзия", "стихи"] },
-    { regex: /триллер/i, query: "триллер", queries: ["триллер"] },
-    { regex: /классик/i, query: "классика", queries: ["классика"] },
-    { regex: /мифолог/i, query: "мифология", queries: ["мифология", "мифы"] },
-    { regex: /сказк/i, query: "сказки", queries: ["сказки"] },
-    { regex: /космос|вселенн/i, query: "космос", queries: ["космос", "вселенная", "астрономия"] },
-    { regex: /бизнес|маркетинг/i, query: "бизнес", queries: ["бизнес", "маркетинг"] },
-    { regex: /кулинар/i, query: "кулинария", queries: ["кулинария"] },
-    { regex: /искусств|живопис/i, query: "искусство", queries: ["искусство", "живопись"] },
-  ];
-
-  const asksForBook =
-    /(посоветуй|порекомендуй|найди|хочу почитать|подскажи|что почитать|книги|книгу|книг|что-нибудь|почитать|про|о|об)\b/i.test(
-      lower,
-    ) ||
-    /^(книги\s+(по|про|о|об)\s+|что-нибудь\s+(по|про|о|об)\s+)/i.test(lower);
-
-  if (asksForBook) {
-    for (const item of genreMatches) {
-      if (item.regex.test(lower)) {
-        return {
-          needSearch: true,
-          searchQuery: item.query,
-          searchQueries: item.queries || [item.query],
-        };
-      }
-    }
-  }
-
-  // Fast-path 3: Obvious non-book questions (e.g. asking Litera personal questions)
+  // Fast-path 2: Suggested quick chips (Direct search needed)
   if (
-    /^(какая твоя любимая|что ты думаешь|кто твой любимый|какие книги ты любишь|ты любишь читать|расскажи о себе|как погода)/i.test(
+    /литера,?\s*(что\s*почитать|посоветуй\s*книгу|что\s*(сейчас\s*)?в\s*топе|помоги\s*с\s*подарком|найди\s*детектив)/i.test(
       lower,
     )
   ) {
-    return { needSearch: false, searchQuery: "", searchQueries: [] };
+    return { needSearch: true };
   }
 
-  // Use fast Gemini flash-lite to determine intent accurately without guessing
+  // Fast-path 3: Book keywords, themes, emotions, questions
+  const hasBookKeywords =
+    /(книг|посоветуй|порекомендуй|найди|хочу почитать|подскажи|что почитать|про |о |об |роман|детектив|фантастик|автор|купить|подарок|грусть|животн|восток|смысл|любовь|истори)/i.test(
+      lower,
+    );
+  if (hasBookKeywords) {
+    return { needSearch: true };
+  }
+
+  // Fallback: use Gemini to classify intent
   const apiKey = process.env.GEMINI_API_KEY || DEFAULT_API_KEY;
-
   const prompt = `
-You are an intent analyzer for the bookstore AI assistant "Litera".
-Determine if the customer's message explicitly requests finding, recommending, buying, or checking availability of real books from the store catalogue.
-
-RULES:
-- set needSearch = true ONLY if the user asks for book recommendations, asks to find a book to buy/read from the store, or searches inventory (e.g. "посоветуй 2 книги про космос", "найди детектив", "есть ли у вас Гарри Поттер", "порекомендуй что-нибудь почитать", "найди что-нибудь про Ближний Восток").
-  When needSearch is true, provide:
-  - searchQuery: primary normalized nominative keyword or key title/author in Russian (e.g. "ближний восток", "арабы", "философия", "космос").
-  - searchQueries: array of 1 to 3 targeted Russian search keywords to effectively find relevant books in the store catalogue (including key related cultural terms, subtopics, or synonyms).
-    Examples:
-    - "найди что-нибудь про Ближний Восток" -> searchQuery: "ближний восток", searchQueries: ["ближний восток", "арабы"]
-    - "посоветуй книги про викингов и север" -> searchQuery: "викинги", searchQueries: ["викинги", "скандинавия"]
-    - "что почитать по философии" -> searchQuery: "философия", searchQueries: ["философия"]
-    - "книга Арабы" -> searchQuery: "арабы", searchQueries: ["арабы"]
-    - "посоветуй детективы" -> searchQuery: "детектив", searchQueries: ["детектив"]
-    - "книги про космос" -> searchQuery: "космос", searchQueries: ["космос", "вселенная"]
-- set needSearch = false if the user is just chatting, greeting, asking about the assistant's tastes or opinions, asking trivia/facts, asking about store policies/delivery/location, or discussing general topics (e.g. "какая твоя любимая книга", "кто написал Войну и мир", "что думаешь о Достоевском", "привет", "где ваш магазин").
-
+Determine if the customer's message requests book recommendations, searches for books to read or buy, or asks about literature topics:
 Customer message: "${latestMessage}"
-
-Return JSON:
-{
-  "needSearch": boolean,
-  "searchQuery": string,
-  "searchQueries": string[]
-}
+Return JSON: { "needSearch": boolean }
 `;
 
   try {
@@ -452,46 +412,13 @@ Return JSON:
       prompt,
       responseSchema: {
         type: "OBJECT",
-        properties: {
-          needSearch: { type: "BOOLEAN" },
-          searchQuery: { type: "STRING" },
-          searchQueries: {
-            type: "ARRAY",
-            items: { type: "STRING" },
-          },
-        },
-        required: ["needSearch", "searchQuery"],
+        properties: { needSearch: { type: "BOOLEAN" } },
+        required: ["needSearch"],
       },
     });
-
-    const rawSearchQuery = (res?.searchQuery || "").trim();
-    const cleanSearchQuery = normalizeSearchQuery(rawSearchQuery) || rawSearchQuery;
-    const rawQueries = Array.isArray(res?.searchQueries) ? res.searchQueries : [];
-    const cleanQueries = rawQueries
-      .map((q) => normalizeSearchQuery(q) || q)
-      .filter(Boolean);
-
-    if (cleanSearchQuery && !cleanQueries.includes(cleanSearchQuery)) {
-      cleanQueries.unshift(cleanSearchQuery);
-    }
-
-    return {
-      needSearch: Boolean(res?.needSearch),
-      searchQuery: cleanSearchQuery,
-      searchQueries: cleanQueries.length > 0 ? cleanQueries : [cleanSearchQuery],
-    };
-  } catch (err) {
-    console.warn("Intent analysis fallback:", err.message);
-    const hasExplicitRequest =
-      /(посоветуй|порекомендуй|найди|хочу почитать|подскажи что почитать|есть ли у вас|купить книгу)\b/i.test(
-        lower,
-      );
-    const fallbackQ = hasExplicitRequest ? normalizeSearchQuery(lower) : "";
-    return {
-      needSearch: hasExplicitRequest,
-      searchQuery: fallbackQ,
-      searchQueries: fallbackQ ? [fallbackQ] : [],
-    };
+    return { needSearch: Boolean(res?.needSearch) };
+  } catch {
+    return { needSearch: true };
   }
 }
 
@@ -563,7 +490,7 @@ export async function processLiteraChat({ messages, language = "ru", onStatus } 
   const latestMessage = history[history.length - 1]?.content || "";
 
   // 1. Analyze user intent
-  const { needSearch, searchQuery, searchQueries } = await analyzeSearchIntent(history);
+  const { needSearch } = await analyzeSearchIntent(history);
 
   if (typeof onStatus === "function") {
     try {
@@ -575,15 +502,7 @@ export async function processLiteraChat({ messages, language = "ru", onStatus } 
 
   let catalogueResults = [];
   if (needSearch) {
-    const queries =
-      Array.isArray(searchQueries) && searchQueries.length > 0
-        ? searchQueries
-        : searchQuery
-          ? [searchQuery]
-          : [];
-    if (queries.length > 0) {
-      catalogueResults = await searchStoreCatalogue(queries).catch(() => []);
-    }
+    catalogueResults = await discoverAndMatchBooks(latestMessage).catch(() => []);
   }
 
   // 2. Build prompt for Litera
@@ -598,13 +517,14 @@ ${JSON.stringify(history.slice(0, -1))}
   if (needSearch) {
     if (catalogueResults.length > 0) {
       promptText += `
-LITERA STORE REAL CATALOGUE SEARCH RESULTS for query "${searchQuery}":
+LITERA STORE REAL CATALOGUE SEARCH RESULTS for customer request "${latestMessage}":
 ${JSON.stringify(
-  catalogueResults.slice(0, 10).map((b) => ({
+  catalogueResults.slice(0, 8).map((b) => ({
     id: b.id,
     title: b.title,
-    author: b.author || "Unknown",
+    author: b.author || b.candidateAuthor || "Unknown",
     price: `${b.price} ${b.currency}`,
+    relevanceReason: b.relevance || "",
   })),
   null,
   2,
@@ -613,14 +533,13 @@ ${JSON.stringify(
 CRITICAL INSTRUCTIONS:
 - You must recommend ONLY books from the catalogue list above that match the user's interests.
 - In "bookIds", return an array containing their exact IDs (e.g. ["${catalogueResults[0].id}"]).
-- If user asked for 3 books and only 1 or 2 are available in the catalogue list, recommend ONLY those 1 or 2! NEVER invent fake books.
-- Explain why these specific books are great picks in your friendly, warm voice.
+- Explain why these specific books are great picks in your friendly, warm voice (you may reference the relevanceReason).
 - Speak naturally about the books, their mood, and plot. Do NOT mention "европейский каталог", "на русском языке", or price/currencies in your message text — just focus on the books themselves!
 `;
     } else {
       promptText += `
 LITERA STORE CATALOGUE SEARCH RESULT:
-No books were found in Litera's catalogue matching query "${searchQuery}".
+No books were found in Litera's catalogue matching request "${latestMessage}".
 
 CRITICAL INSTRUCTIONS WHEN NO BOOKS ARE FOUND:
 - Honestly and gently tell the user in 1-2 friendly, charming sentences that Litera currently does not have books matching this exact query in stock.
