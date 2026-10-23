@@ -8,6 +8,11 @@ import "./LiteraAssistant.css";
 
 const STORAGE_KEY = "litera_assistant_history_v2";
 
+const isSearchQuery = (text) =>
+  /(посоветуй|порекомендуй|найди|книг[иау]|купить|автор|роман|фэнтези|детектив|recommend|suggest|search|find|book|looking for|carte|recomanda)/i.test(
+    text,
+  );
+
 let idCounter = 0;
 const generateId = (prefix) => `${prefix}-${Date.now()}-${++idCounter}`;
 const getNowIso = () => new Date().toISOString();
@@ -30,6 +35,7 @@ export default function LiteraAssistant() {
   const [emotion, setEmotion] = useState("greeting");
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState("typing");
   const [cartAddingId, setCartAddingId] = useState(null);
   const [cartSuccessId, setCartSuccessId] = useState(null);
   const [loginAlert, setLoginAlert] = useState("");
@@ -128,8 +134,11 @@ export default function LiteraAssistant() {
 
     const nextMessages = [...messages, userMsg];
     setMessages(nextMessages);
+
+    const initialStatus = isSearchQuery(queryText) ? "searching" : "typing";
+    setLoadingStatus(initialStatus);
     setLoading(true);
-    setEmotion("thinking");
+    setEmotion(initialStatus === "searching" ? "thinking" : "speaking");
 
     try {
       const payload = {
@@ -142,7 +151,10 @@ export default function LiteraAssistant() {
 
       const response = await fetch("/api/litera-chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json; charset=utf-8" },
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          Accept: "text/event-stream, application/json",
+        },
         body: JSON.stringify(payload),
       });
 
@@ -150,16 +162,51 @@ export default function LiteraAssistant() {
         throw new Error(`HTTP error ${response.status}`);
       }
 
-      const data = await response.json();
-      const assistantEmotion = data.emotion || "happy";
+      const contentType = response.headers.get("content-type") || "";
+      let data = null;
+
+      if (contentType.includes("text/event-stream") && response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          const chunks = buffer.split("\n\n");
+          buffer = chunks.pop() || "";
+
+          for (const chunk of chunks) {
+            const trimmed = chunk.trim();
+            if (!trimmed.startsWith("data:")) continue;
+            try {
+              const eventData = JSON.parse(trimmed.replace(/^data:\s*/, ""));
+              if (eventData.type === "status") {
+                setLoadingStatus(eventData.status);
+                setEmotion(eventData.status === "searching" ? "thinking" : "speaking");
+              } else if (eventData.type === "result") {
+                data = eventData;
+              }
+            } catch {
+              // Ignore malformed chunk
+            }
+          }
+        }
+      } else {
+        data = await response.json();
+      }
+
+      const assistantEmotion = data?.emotion || "happy";
       setEmotion(assistantEmotion);
 
       const assistantMsg = {
         id: generateId("assistant"),
         role: "assistant",
-        content: data.message,
+        content: data?.message || "",
         emotion: assistantEmotion,
-        books: Array.isArray(data.books) ? data.books : [],
+        books: Array.isArray(data?.books) ? data.books : [],
         timestamp: getNowIso(),
       };
 
@@ -282,7 +329,7 @@ export default function LiteraAssistant() {
           <div className="litera-companion-dock">
             <div className="litera-companion-dock__character-box">
               <LiteraCharacter
-                emotion={loading ? "thinking" : emotion}
+                emotion={loading ? (loadingStatus === "searching" ? "thinking" : "speaking") : emotion}
                 size={170}
                 className="litera-companion-dock__character"
               />
@@ -290,7 +337,20 @@ export default function LiteraAssistant() {
                 <span className="litera-companion-dock__name">{t("assistant.name")}</span>
                 <span className="litera-companion-dock__status">
                   <span className="litera-status-dot" />
-                  {loading ? t("assistant.thinking") : t("assistant.statusOnline")}
+                  {loading ? (
+                    <span className="litera-status-inline">
+                      {loadingStatus === "searching"
+                        ? t("assistant.searching")
+                        : t("assistant.typing")}
+                      <span className="litera-animated-dots" aria-hidden="true">
+                        <span>.</span>
+                        <span>.</span>
+                        <span>.</span>
+                      </span>
+                    </span>
+                  ) : (
+                    t("assistant.statusOnline")
+                  )}
                 </span>
               </div>
             </div>
@@ -303,7 +363,7 @@ export default function LiteraAssistant() {
               <div className="litera-chat-header__info">
                 <div className="litera-chat-header__avatar-wrap">
                   <LiteraCharacter
-                    emotion={loading ? "thinking" : emotion}
+                    emotion={loading ? (loadingStatus === "searching" ? "thinking" : "speaking") : emotion}
                     size={38}
                     className="litera-chat-header__avatar"
                   />
@@ -494,11 +554,11 @@ export default function LiteraAssistant() {
                 </div>
               ))}
 
-              {/* Thinking / Searching animation */}
+              {/* Thinking / Searching / Typing animation */}
               {loading && (
                 <div className="litera-msg-row litera-msg-row--assistant">
                   <LiteraCharacter
-                    emotion="thinking"
+                    emotion={loadingStatus === "searching" ? "thinking" : "speaking"}
                     size={32}
                     className="litera-msg-avatar"
                   />
@@ -510,7 +570,14 @@ export default function LiteraAssistant() {
                         <span />
                       </div>
                       <span className="litera-typing-text">
-                        {t("assistant.thinking")}
+                        {loadingStatus === "searching"
+                          ? t("assistant.searching")
+                          : t("assistant.typing")}
+                        <span className="litera-animated-dots" aria-hidden="true">
+                          <span>.</span>
+                          <span>.</span>
+                          <span>.</span>
+                        </span>
                       </span>
                     </div>
                   </div>

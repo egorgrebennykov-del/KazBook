@@ -288,13 +288,21 @@ async function callGeminiJson({ apiKey, systemInstruction, prompt, responseSchem
 /**
  * Main handler for Litera Assistant chat requests
  */
-export async function processLiteraChat({ messages, language = "ru" }) {
+export async function processLiteraChat({ messages, language = "ru", onStatus } = {}) {
   const apiKey = process.env.GEMINI_API_KEY || DEFAULT_API_KEY;
   const history = Array.isArray(messages) ? messages.slice(-10) : [];
   const latestMessage = history[history.length - 1]?.content || "";
 
   // 1. Analyze user intent
   const { needSearch, searchQuery } = await analyzeSearchIntent(history);
+
+  if (typeof onStatus === "function") {
+    try {
+      onStatus(needSearch ? "searching" : "typing");
+    } catch {
+      // Ignore callback errors
+    }
+  }
 
   let catalogueResults = [];
   if (needSearch && searchQuery) {
@@ -394,6 +402,7 @@ Set "bookIds": [].
       message: aiResponse.message || "Здравствуйте! Чем я могу помочь вам в выборе книги? 💜",
       emotion: aiResponse.emotion || "happy",
       books: verifiedBooks,
+      wasSearching: needSearch,
     };
   } catch (err) {
     console.error("Litera chat error:", err.message);

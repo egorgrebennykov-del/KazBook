@@ -520,6 +520,25 @@ const server = createServer(async (req, res) => {
   if (req.method === "POST" && req.url === "/api/litera-chat") {
     try {
       const body = await readJson(req);
+      const isSse = req.headers.accept?.includes("text/event-stream");
+
+      if (isSse) {
+        res.writeHead(200, {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive",
+        });
+
+        const onStatus = (status) => {
+          res.write(`data: ${JSON.stringify({ type: "status", status })}\n\n`);
+        };
+
+        const result = await processLiteraChat({ ...body, onStatus });
+        res.write(`data: ${JSON.stringify({ type: "result", ...result })}\n\n`);
+        res.end();
+        return;
+      }
+
       const result = await processLiteraChat(body);
       respond(res, 200, result);
     } catch (err) {
