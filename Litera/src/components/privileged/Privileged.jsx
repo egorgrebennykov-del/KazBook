@@ -1957,6 +1957,13 @@ export default function Privileged() {
                   descKey: "privileged.gitActions.wfExchangeRateDesc",
                   icon: "ri-exchange-dollar-line",
                 },
+                {
+                  id: "update-discounts",
+                  title: "Update Discount Books",
+                  file: ".github/workflows/update-discounts.yml",
+                  descKey: "privileged.gitActions.wfDiscountsDesc",
+                  icon: "ri-percent-line",
+                },
               ].map((wf) => {
                 const info = actionStatuses[wf.id] || {};
                 const isRunning = info.status === "running";

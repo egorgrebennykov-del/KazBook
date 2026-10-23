@@ -7,10 +7,12 @@ import { createClient } from "@supabase/supabase-js";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(scriptDir, "../.env") });
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 const API_KEY = process.env.ZYTE_API_KEY;
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const SUPABASE_SECRET_KEY =
+  process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SOURCE_URL =
   process.env.DISCOUNT_SOURCE_URL ||
   "https://librarius.md/ru/catalog/hot-offers?sortBy=create_date_desc&perPage=36&lang%5B%5D=RU&lang%5B%5D=RU";

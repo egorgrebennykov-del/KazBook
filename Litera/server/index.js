@@ -69,6 +69,12 @@ const ACTIONS = {
     workflowFile: "update-exchange-rate.yml",
     script: "updateExchangeRate.js",
   },
+  "update-discounts": {
+    id: "update-discounts",
+    name: "Update Discount Books",
+    workflowFile: "update-discounts.yml",
+    script: "updateDiscounts.js",
+  },
 };
 
 const actionStatuses = {
@@ -76,6 +82,7 @@ const actionStatuses = {
   "update-home-books": { status: "idle", lastRun: null, error: null, output: "" },
   "update-new-books": { status: "idle", lastRun: null, error: null, output: "" },
   "update-exchange-rate": { status: "idle", lastRun: null, error: null, output: "" },
+  "update-discounts": { status: "idle", lastRun: null, error: null, output: "" },
 };
 const PORT = Number(process.env.BOOK_COMPARE_PORT) || 3001;
 const MAX_BODY_SIZE = 2 * 1024 * 1024;

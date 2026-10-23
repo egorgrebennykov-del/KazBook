@@ -411,6 +411,8 @@ export const translations = {
       "Сканирование книжных новинок ведущих молдавских книжных сетей и обновление каталога новинок.",
     "privileged.gitActions.wfExchangeRateDesc":
       "Синхронизация официальных курсов валют (MDL/EUR) для корректного пересчёта цен с доставкой в Европу.",
+    "privileged.gitActions.wfDiscountsDesc":
+      "Сбор и актуализация акционных книг со скидками и спецпредложениями для витрины скидок в Supabase.",
   },
 
   en: {
@@ -825,5 +827,7 @@ export const translations = {
       "Scanning new book arrivals from leading Moldovan book chains and updating the new books catalog.",
     "privileged.gitActions.wfExchangeRateDesc":
       "Synchronizing official currency exchange rates (MDL/EUR) for accurate price conversion with European delivery.",
+    "privileged.gitActions.wfDiscountsDesc":
+      "Collecting and updating discounted books and special offers for the discounts showcase in Supabase.",
   },
 };
