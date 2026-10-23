@@ -47,7 +47,9 @@ CRITICAL RULES ON RECOMMENDATIONS VS STORE/CART/SITE QUESTIONS:
 4. When book recommendations ARE requested (needSearch = true):
    - Recommend books EXCLUSIVELY from the provided search results list.
    - Use their exact "id" in "bookIds".
-   - PRICE AND VALUE PREFERENCE: Always prioritize accessible, affordable editions and books for customers! If there is a choice between an affordable edition (e.g. ~10 €) and an expensive one (e.g. 50–100 €), ALWAYS choose and recommend the affordable one. Customers want smart, budget-friendly choices. Never push expensive luxury editions when affordable options are available.
+   - MINIMUM 3 BOOKS REQUIREMENT: Whenever books are present in the search results list, YOU MUST ALWAYS RECOMMEND AT LEAST 3 BOOKS (return at least 3 IDs in "bookIds", e.g. ["catalog-book-0", "catalog-book-1", "catalog-book-2"]) unless fewer than 3 books total are available in the catalogue results. Always give the reader a great selection of at least 3 books!
+   - CONVERSATION MEMORY & CONTINUITY: Pay close attention to recent messages and previously recommended books. If the user asks for "другие издания", "такие же книги но другого издательства", "подороже", "покажи еще", acknowledge the connection to their previous request warmly and present the alternative editions!
+   - PRICE AND VALUE PREFERENCE: By default, prioritize accessible, affordable editions (~7-15 €). But if the user explicitly asks for other editions, hardcover, premium, or more expensive editions ("другие издания", "другого издательства", "подороже", "подарочное"), recommend the higher-priced, high-quality editions from the provided catalogue list!
 
 YOUR PERSONALITY & TONE:
 - Friendly, warm, intelligent, polite, and approachable.
@@ -105,20 +107,46 @@ const STORE_SEARCH_CACHE_TTL = 10 * 60 * 1000; // 10 minutes cache
  * Analyzes natural-language requests, themes, moods, emotions, metaphors, or ideas.
  * Strictly returns books in Russian (even if query was in English, Romanian, etc.).
  */
-export async function discoverBooksByMeaning(userQuery) {
+export async function discoverBooksByMeaning(
+  userQuery,
+  history = [],
+  previouslyRecommended = [],
+) {
   const cleanQ = (userQuery || "").trim();
   if (!cleanQ) return [];
 
   const apiKey = process.env.GEMINI_API_KEY || DEFAULT_API_KEY;
 
+  let contextSection = "";
+  if (previouslyRecommended && previouslyRecommended.length > 0) {
+    contextSection += `
+PREVIOUSLY RECOMMENDED BOOKS IN THIS CONVERSATION:
+${previouslyRecommended.map((b) => `- «${b.title}» by ${b.author || "Unknown"} (current shown price: ${b.price} EUR, store: ${b.store})`).join("\n")}
+`;
+  }
+  if (history && history.length > 1) {
+    const formattedHistory = history
+      .slice(-4)
+      .map((m) => `${m.role === "assistant" ? "Litera" : "User"}: ${m.content}`)
+      .join("\n");
+    contextSection += `
+RECENT CONVERSATION HISTORY:
+${formattedHistory}
+`;
+  }
+
   const prompt = `
 You are the AI literary discovery engine for the European bookstore "Litera".
 The user submitted this natural-language book request: "${cleanQ}".
 
+${contextSection}
+
 TASK:
-1. Understand the user's request:
+1. Understand the user's request, considering the conversation context:
+   - If the user refers to previous recommendations or books (e.g. "хочу такие же книги но другого издательства", "другие издания", "подороже", "подешевле", "покажи еще", "в другом оформлении"):
+     You MUST include the exact titles from PREVIOUSLY RECOMMENDED BOOKS as candidate #1 (and #2, etc.) so we can search supplier catalogues for other editions of those exact same titles!
    - If the user explicitly names, asks for, or searches for a specific book title (e.g. "Идиот", "найди книгу Идиот", "Мастер и Маргарита", "1984", "книга Скотный двор"), you MUST include that exact book as candidate #1!
-   - Identify 3 to 5 additional real, acclaimed books in RUSSIAN that match the theme, mood, author, or idea, and are commonly available in bookstores.
+   - ALWAYS identify at least 4 to 6 real, acclaimed books in RUSSIAN that match the theme, mood, author, or idea, and are commonly available in bookstores.
    Examples of logical matching:
    - "про грусть" -> "Белые ночи" (Достоевский), "Муму" (Тургенев), "Цветы для Элджернона" (Киз), "Три товарища" (Ремарк), "Одиночество в Сети" (Вишневский)
    - "про животных" -> "Скотный двор" (Оруэлл), "Белый Клык" (Лондон), "Собачье сердце" (Булгаков), "Жизнь Пи" (Мартел), "Каштанка" (Чехов)
@@ -274,17 +302,11 @@ function validateProductMatch(product, candidate) {
   const cTitle = clean(candidate.title);
   const altTitle = clean(candidate.alternativeTitle);
 
-  // Title must match candidate title or alternative title
-  const matchesTitle =
-    pTitle.includes(cTitle) ||
-    cTitle.includes(pTitle) ||
-    (altTitle && (pTitle.includes(altTitle) || altTitle.includes(pTitle)));
-
-  if (!matchesTitle) return false;
-
-  // If candidate specifies author and supplier product has author, verify author compatibility
+  // Author compatibility check
+  const authorWords = candidate.author
+    ? clean(candidate.author).split(/\s+/).filter((w) => w.length > 3)
+    : [];
   if (candidate.author && product.author) {
-    const authorWords = clean(candidate.author).split(/\s+/).filter((w) => w.length > 3);
     const prodAuthor = clean(product.author);
     if (
       authorWords.length > 0 &&
@@ -294,7 +316,35 @@ function validateProductMatch(product, candidate) {
     }
   }
 
-  return true;
+  const checkMatch = (target) => {
+    if (!target) return false;
+    if (pTitle === target) return true;
+
+    const tWords = target.split(/\s+/);
+    const pWords = pTitle.split(/\s+/);
+
+    // If target is 1 word (e.g. "идиот"), title must start with that word or have the author mentioned
+    if (tWords.length === 1) {
+      if (pWords[0] === target) return true;
+      if (authorWords.length > 0 && authorWords.some((w) => pTitle.includes(w)) && pWords.includes(target)) {
+        return true;
+      }
+      return false;
+    }
+
+    // For multi-word titles
+    if (pTitle.startsWith(target + " ") || target.startsWith(pTitle + " ")) {
+      return true;
+    }
+    if (pTitle.includes(target)) {
+      // Must not be an accidental substring inside an unrelated word
+      const wholeWordPattern = new RegExp(`(?:^|\\s)${target}(?:\\s|$)`, "i");
+      return wholeWordPattern.test(pTitle);
+    }
+    return false;
+  };
+
+  return checkMatch(cTitle) || (altTitle ? checkMatch(altTitle) : false);
 }
 
 /**
@@ -302,16 +352,66 @@ function validateProductMatch(product, candidate) {
  * Discovers real books by meaning, searches suppliers strictly by title only,
  * validates products, and excludes any books not available on suppliers.
  */
-export async function discoverAndMatchBooks(userQuery, exchangeRate) {
+export async function discoverAndMatchBooks(userQuery, exchangeRate, history = []) {
   const activeRate =
     exchangeRate || (await getExchangeRate().catch(() => DEFAULT_RATE));
-  const candidates = await discoverBooksByMeaning(userQuery);
-  if (!candidates || candidates.length === 0) return [];
+
+  // Extract previously recommended books and their URLs from conversation history
+  const previouslyRecommended = [];
+  const previousUrls = new Set();
+  if (Array.isArray(history)) {
+    for (const msg of history) {
+      if (Array.isArray(msg.books)) {
+        for (const b of msg.books) {
+          if (b && b.title) {
+            if (
+              !previouslyRecommended.some(
+                (p) => p.title.toLowerCase() === b.title.toLowerCase(),
+              )
+            ) {
+              previouslyRecommended.push(b);
+            }
+            if (b.url) previousUrls.add(b.url);
+          }
+        }
+      }
+    }
+  }
+
+  const isOtherEditionRequest =
+    /(друг(их|ие|ого|им)\s*(издани|издательств|сери|переплет|обложк|вариант|оформлени)|в другом оформлении|другое издание|другого издательства|такие же книги|подороже|подарочн|коллекционн|в твердом переплете|кожан|другие варианты)/i.test(
+      userQuery || "",
+    );
 
   const isGiftOrLuxuryRequest =
     /(подарочн|коллекционн|эксклюзивн|кожан|в коробе|люкс|дорог(ое|ую|ой|ие)|collector|luxury|gift)/i.test(
       userQuery || "",
     );
+
+  const candidates = await discoverBooksByMeaning(
+    userQuery,
+    history,
+    previouslyRecommended,
+  );
+  if (!candidates || candidates.length === 0) return [];
+
+  // If other edition requested, guarantee previously recommended titles are included
+  if (isOtherEditionRequest && previouslyRecommended.length > 0) {
+    for (const pb of previouslyRecommended) {
+      if (
+        !candidates.some(
+          (c) => c.title.toLowerCase() === pb.title.toLowerCase(),
+        )
+      ) {
+        candidates.unshift({
+          title: pb.title,
+          author: pb.author || "",
+          alternativeTitle: "",
+          relevance: "Альтернативное издание произведения",
+        });
+      }
+    }
+  }
 
   // Search suppliers for each candidate strictly by title only
   const searchPromises = candidates.map(async (candidate) => {
@@ -336,16 +436,69 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate) {
 
     if (validMatches.length === 0) return [];
 
-    // Prioritize affordable editions: sort by price ascending (cheapest / best value first)
-    if (isGiftOrLuxuryRequest) {
-      validMatches.sort((a, b) => b.price - a.price);
-    } else {
-      validMatches.sort((a, b) => a.price - b.price);
+    if (isOtherEditionRequest) {
+      // Find previous edition price if this candidate was previously recommended
+      const prevBook = previouslyRecommended.find(
+        (b) =>
+          b.title.toLowerCase().includes(candidate.title.toLowerCase()) ||
+          candidate.title.toLowerCase().includes(b.title.toLowerCase()),
+      );
+      const prevPrice = prevBook ? Number(prevBook.price) : 0;
+
+      // Filter out exact URLs that were already shown
+      const unshown = validMatches.filter((p) => !previousUrls.has(p.url));
+      const pool = unshown.length > 0 ? unshown : validMatches;
+
+      // The user requested: "книги с такими же названиями но подороже"
+      // Prefer higher-tier / hardcover / better quality editions (>= 7.5 € or noticeably higher than previous)
+      const isExplicitlyMoreExpensive =
+        /(подороже|дорог(ое|ую|ой|ие)|подарочн|коллекционн|в твердом переплете|кожан|люкс|друг(их|ого|ие)\s*(издани|издательств))/i.test(
+          userQuery || "",
+        );
+
+      let moreExpensive;
+      if (isExplicitlyMoreExpensive) {
+        const threshold = Math.max(7.5, prevPrice > 0 ? prevPrice * 1.6 : 7.5);
+        const premiumEditions = pool.filter((p) => p.price >= threshold);
+        if (premiumEditions.length >= 2) {
+          moreExpensive = premiumEditions;
+        } else {
+          moreExpensive = pool.filter(
+            (p) => p.price > (prevPrice > 0 ? prevPrice + 1.0 : 5.0),
+          );
+        }
+      } else {
+        moreExpensive = pool.filter(
+          (p) => p.price > (prevPrice > 0 ? prevPrice + 0.8 : 5.0),
+        );
+      }
+
+      const editionPool = moreExpensive.length >= 2 ? moreExpensive : pool;
+
+      // Sort by price ascending (from the higher-priced tier upwards, e.g. 9.85 €, 10.40 €, 11.39 €)
+      if (isGiftOrLuxuryRequest) {
+        editionPool.sort((a, b) => b.price - a.price);
+      } else {
+        editionPool.sort((a, b) => a.price - b.price);
+      }
+
+      // Offer up to 3 distinct higher-priced editions of this book
+      const takeCount = Math.min(3, editionPool.length);
+      return editionPool.slice(0, takeCount).map((match) => ({
+        ...match,
+        candidateTitle: candidate.title,
+        candidateAuthor: candidate.author,
+        relevance: candidate.relevance,
+      }));
     }
 
-    // For specific single-book requests (1-2 candidates), return up to 2 distinct affordable editions
+    // Default search (not asking for other edition / more expensive)
+    validMatches.sort((a, b) => a.price - b.price);
+
+    // If only 1-2 candidates were found (specific single book request),
+    // return up to 3 distinct affordable editions so the customer always has at least 3 choices!
     const takeCount =
-      candidates.length <= 2 ? Math.min(2, validMatches.length) : 1;
+      candidates.length <= 2 ? Math.min(3, validMatches.length) : 1;
     return validMatches.slice(0, takeCount).map((match) => ({
       ...match,
       candidateTitle: candidate.title,
@@ -357,29 +510,19 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate) {
   const resolved = await Promise.all(searchPromises);
   const verifiedProducts = resolved.flat().filter(Boolean);
 
-  // Deduplicate by URL and normalized work title, ALWAYS keeping the cheaper edition
+  // Deduplicate by URL and store-price-title combo so distinct editions are preserved
   const productMap = new Map();
   for (const b of verifiedProducts) {
-    const key =
-      b.url ||
-      (b.candidateTitle || b.title)
-        .toLowerCase()
-        .replace(/[^a-zа-я0-9]/gi, "")
-        .slice(0, 30);
-    const existing = productMap.get(key);
-    if (!existing) {
-      productMap.set(key, b);
-    } else if (!isGiftOrLuxuryRequest && b.price < existing.price) {
-      productMap.set(key, b);
-    } else if (isGiftOrLuxuryRequest && b.price > existing.price) {
+    const key = b.url || `${b.title}-${b.price}-${b.store}`;
+    if (!productMap.has(key)) {
       productMap.set(key, b);
     }
   }
 
   const deduped = Array.from(productMap.values());
 
-  // Prioritize budget-friendly, accessible options first
-  if (!isGiftOrLuxuryRequest) {
+  // Prioritize budget-friendly, accessible options first (unless luxury or other edition requested)
+  if (!isGiftOrLuxuryRequest && !isOtherEditionRequest) {
     deduped.sort((a, b) => {
       const aIsHigh = a.price > 45;
       const bIsHigh = b.price > 45;
@@ -441,9 +584,9 @@ async function analyzeSearchIntent(messages) {
     return { needSearch: true };
   }
 
-  // Fast-path 4: Explicit book requests
+  // Fast-path 4: Explicit book requests and follow-ups
   const hasExplicitBookRequest =
-    /(посоветуй|порекомендуй|найди|хочу почитать|подскажи что почитать|что почитать|подобрать книгу|выбери книгу|какие книги|книги про|книгу про|книги о|книги по|книга про|книга о|книга по|хочу книгу)/i.test(
+    /(посоветуй|порекомендуй|найди|хочу.*книг|подскажи что почитать|что почитать|подобрать книгу|выбери книгу|какие книги|книги про|книгу про|книги о|книги по|книга про|книга о|книга по|хочу книгу|друг(их|ие|ого|им)\s*(издани|издательств|сери|переплет|обложк|вариант|оформлени)|в другом оформлении|другое издание|другого издательства|такие же книги|подороже|подешевле|еще книг|другие книги)/i.test(
       lower,
     );
   if (hasExplicitBookRequest) {
@@ -462,7 +605,7 @@ CRITICAL RULES:
   * Store FAQ (shipping, payment, currency, locations, languages)
   * Casual conversation ("привет", "как дела", "спасибо")
   * Navigation ("открой корзину", "перейти к оформлению")
-- set needSearch = true ONLY if the customer is genuinely asking for book recommendations or searching for reading material (e.g. "посоветуй что-то про космос", "найди детективы", "хочу почитать драму", "что почитать про смысл жизни").
+- set needSearch = true if the customer is asking for book recommendations, searching for reading material, or asking for other editions/publishers/prices (e.g. "хочу такие же книги но другого издательства", "посоветуй что-то про космос", "найди детективы", "хочу почитать драму", "что-то подороже").
 
 Customer message: "${latestMessage}"
 Return JSON: { "needSearch": boolean }
@@ -565,7 +708,7 @@ export async function processLiteraChat({ messages, language = "ru", context, on
   let catalogueResults = [];
   if (needSearch) {
     const rate = await getExchangeRate().catch(() => DEFAULT_RATE);
-    catalogueResults = await discoverAndMatchBooks(latestMessage, rate).catch(() => []);
+    catalogueResults = await discoverAndMatchBooks(latestMessage, rate, history).catch(() => []);
   }
 
   // 2. Format live user, cart, and page context
@@ -633,10 +776,11 @@ ${JSON.stringify(
 )}
 
 CRITICAL INSTRUCTIONS:
-- You must recommend ONLY books from the catalogue list above that match the user's interests.
-- In "bookIds", return an array containing their exact IDs (e.g. ["${catalogueResults[0].id}"]).
-- PRICE & VALUE PREFERENCE: Always take book prices into strong consideration! If there is a choice between an affordable edition (e.g. ~10 €) and an expensive one (e.g. 50–100 €), ALWAYS choose and recommend the affordable, accessible option. Never push expensive editions when a cheaper alternative is available.
-- Explain why these specific books are great picks in your friendly, warm voice (you may reference the relevanceReason).
+- MINIMUM 3 BOOKS REQUIREMENT: Whenever books are present in the catalogue list, YOU MUST RECOMMEND AT LEAST 3 BOOKS (return at least 3 IDs in "bookIds", e.g. ["catalog-book-0", "catalog-book-1", "catalog-book-2"]) unless fewer than 3 books total are available in the list. Never return only 1 book if 3 or more are available!
+- In "bookIds", return an array containing their exact IDs.
+- CONVERSATION MEMORY: If the user asked for other editions, different publishers, or more expensive books ("другого издательства", "подороже", "такие же книги"), acknowledge this naturally and warmly in your message text, explaining that you have selected alternative, premium editions for them!
+- PRICE & VALUE PREFERENCE: By default, prefer affordable editions. But if the customer requested other editions or more expensive books ("другого издательства", "подороже", "подарочное"), recommend the alternative / higher-priced editions from the list!
+- Explain why these specific books/editions are great picks in your friendly, warm voice (you may reference the relevanceReason).
 - Speak naturally about the books, their mood, and plot. Do NOT mention "европейский каталог", "на русском языке", or price/currencies in your message text — just focus on the books themselves!
 `;
     } else {

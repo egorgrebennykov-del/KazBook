@@ -193,6 +193,16 @@ export default function LiteraAssistant() {
         messages: nextMessages.map((m) => ({
           role: m.role === "assistant" ? "assistant" : "user",
           content: m.content,
+          books: Array.isArray(m.books)
+            ? m.books.map((b) => ({
+                id: b.id,
+                title: b.title,
+                author: b.author,
+                price: b.price,
+                store: b.store,
+                url: b.url,
+              }))
+            : [],
         })),
         language,
         context: {
