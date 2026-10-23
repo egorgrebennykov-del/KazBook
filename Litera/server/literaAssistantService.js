@@ -97,78 +97,154 @@ const storeSearchCache = new Map();
 const STORE_SEARCH_CACHE_TTL = 10 * 60 * 1000; // 10 minutes cache
 
 /**
- * Searches the 5 bookstore stores, dedupes, and normalizes into trusted book cards
+ * Normalizes book queries: removes stopwords/prepositions and converts inflected case forms to nominative lemmas
+ */
+export function normalizeSearchQuery(rawQuery) {
+  if (!rawQuery) return "";
+  const q = rawQuery.toLowerCase().trim();
+
+  // Strip common conversational filler and search prepositions
+  const stopwords = new Set([
+    "пожалуйста", "подскажи", "посоветуй", "порекомендуй", "найди", "хочу",
+    "почитать", "что-нибудь", "купить", "книги", "книга", "книгу", "книжек",
+    "книгах", "книгам", "книгами", "литература", "литературу", "литературы",
+    "литературе", "сборник", "сборники", "издание", "издания",
+    "по", "про", "о", "об", "обо", "для", "в", "на", "из", "с", "со", "от", "что"
+  ]);
+
+  const words = q.split(/[\s,.;:!?]+/).filter((w) => w && !stopwords.has(w));
+  if (words.length === 0) {
+    // If all words were stopwords, fallback to the stripped raw query
+    return q.replace(/^(посоветуй|порекомендуй|найди|книги|книга|что-нибудь)\s*/gi, "").trim() || rawQuery.trim();
+  }
+
+  const normalizedWords = words.map((w) => {
+    // -офии -> -офия (философии -> философия, теософии -> теософия)
+    if (w.endsWith("офии")) return w.slice(0, -1) + "я";
+    // -огии -> -огия (психологии -> психология, мифологии -> мифология)
+    if (w.endsWith("огии")) return w.slice(0, -1) + "я";
+    // -ии -> -ия (истории -> история, кулинарии -> кулинария, поэзии -> поэзия)
+    if (w.endsWith("ии")) return w.slice(0, -1) + "я";
+    // Accusative -офию / -огию / -ию -> -офия / -огия / -ия
+    if (w.endsWith("офию")) return w.slice(0, -1) + "я";
+    if (w.endsWith("огию")) return w.slice(0, -1) + "я";
+    if (w.endsWith("ию")) return w.slice(0, -1) + "я";
+    // Plural noun endings to singular base
+    if (w.endsWith("детективы") || w.endsWith("детективов")) return "детектив";
+    if (w.endsWith("романы") || w.endsWith("романов")) return "роман";
+    if (w.endsWith("триллеры") || w.endsWith("триллеров")) return "триллер";
+    if (w.endsWith("ужасы") || w.endsWith("ужасов")) return "ужасы";
+    if (w.endsWith("комиксы") || w.endsWith("комиксов")) return "комикс";
+    if (w.endsWith("сказки") || w.endsWith("сказок")) return "сказки";
+    if (w.endsWith("рассказы") || w.endsWith("рассказов")) return "рассказы";
+    if (w.endsWith("стихи") || w.endsWith("стихов")) return "стихи";
+    if (w.endsWith("энциклопедии") || w.endsWith("энциклопедий")) return "энциклопедия";
+    if (w.endsWith("фантастику") || w.endsWith("фантастики") || w.endsWith("фантастике")) return "фантастика";
+    if (w.endsWith("классику") || w.endsWith("классики") || w.endsWith("классике")) return "классика";
+    if (w.endsWith("биографии") || w.endsWith("биографий") || w.endsWith("биографию")) return "биография";
+    if (w.endsWith("мемуары") || w.endsWith("мемуаров")) return "мемуары";
+    if (w.endsWith("саморазвитию") || w.endsWith("саморазвития")) return "саморазвитие";
+    return w;
+  });
+
+  return normalizedWords.join(" ");
+}
+
+/**
+ * Searches the bookstore stores, dedupes, and normalizes into trusted book cards
  */
 export async function searchStoreCatalogue(query, exchangeRate = 19.5) {
-  const cleanQ = (query || "").trim().toLowerCase();
-  if (!cleanQ) return [];
+  const rawQ = (query || "").trim();
+  if (!rawQ) return [];
 
-  const cached = storeSearchCache.get(cleanQ);
+  const normalizedQ = normalizeSearchQuery(rawQ);
+  const searchKey = (normalizedQ || rawQ).toLowerCase();
+
+  const cached = storeSearchCache.get(searchKey);
   if (cached && Date.now() < cached.expiresAt) {
     return cached.data;
   }
 
-  const timeoutPromise = (promise, ms = 2200) =>
-    Promise.race([
-      promise,
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Timeout")), ms),
-      ),
-    ]);
+  async function queryStores(q) {
+    const timeoutPromise = (promise, ms = 3200) =>
+      Promise.race([
+        promise,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Timeout")), ms),
+        ),
+      ]);
 
-  const [librariusRaw, ulyssesRaw, carteameaRaw, biblionRaw] =
-    await Promise.all([
-      timeoutPromise(searchLibrarius(cleanQ, 1), 1800).catch(() => []),
-      timeoutPromise(searchUlysses(cleanQ), 1800).catch(() => []),
-      timeoutPromise(searchCarteamea(cleanQ), 1800).catch(() => []),
-      timeoutPromise(searchBiblion(cleanQ, 1), 1800).catch(() => []),
-    ]);
+    const [librariusRaw, ulyssesRaw, carteameaRaw, biblionRaw] =
+      await Promise.all([
+        timeoutPromise(searchLibrarius(q, 1), 3000).catch(() => []),
+        timeoutPromise(searchUlysses(q), 3000).catch(() => []),
+        timeoutPromise(searchCarteamea(q), 3000).catch(() => []),
+        timeoutPromise(searchBiblion(q, 1), 3000).catch(() => []),
+      ]);
 
-  const normalizeStoreItems = (items, storeName) =>
-    (items ?? []).map((p) => {
-      const mdlPrice = parseMdlPrice(p.price);
-      const eurPrice =
-        exchangeRate && mdlPrice > 0
-          ? Math.round((mdlPrice / exchangeRate) * 100) / 100
-          : mdlPrice;
-      const rawImg = p.mainImage?.url ?? p.images?.[0]?.url ?? "";
-      const img = decodeImageForStore(rawImg, storeName);
-      return {
-        title: (p.name || "").trim(),
-        author: (p.author || "").trim(),
-        price: eurPrice > 0 ? eurPrice : 15.0,
-        currency: "EUR",
-        image: img,
-        url: p.url || "",
-        store: storeName,
-      };
-    });
+    const normalizeStoreItems = (items, storeName) =>
+      (items ?? []).map((p) => {
+        const mdlPrice = parseMdlPrice(p.price);
+        const eurPrice =
+          exchangeRate && mdlPrice > 0
+            ? Math.round((mdlPrice / exchangeRate) * 100) / 100
+            : mdlPrice;
+        const rawImg = p.mainImage?.url ?? p.images?.[0]?.url ?? "";
+        const img = decodeImageForStore(rawImg, storeName);
+        return {
+          title: (p.name || "").trim(),
+          author: (p.author || "").trim(),
+          price: eurPrice > 0 ? eurPrice : 15.0,
+          currency: "EUR",
+          image: img,
+          url: p.url || "",
+          store: storeName,
+        };
+      });
 
-  const rawCombined = [
-    ...normalizeStoreItems(librariusRaw, "librarius.md"),
-    ...normalizeStoreItems(ulyssesRaw, "ulysses.md"),
-    ...normalizeStoreItems(carteameaRaw, "carteamea.md"),
-    ...normalizeStoreItems(biblionRaw, "biblion.md"),
-  ].filter(
-    (b) =>
-      b.title &&
-      b.url &&
-      Number.isFinite(b.price) &&
-      b.price > 0 &&
-      Boolean(b.image) &&
-      !b.image.includes("empty-cover"),
-  );
+    const rawCombined = [
+      ...normalizeStoreItems(librariusRaw, "librarius.md"),
+      ...normalizeStoreItems(ulyssesRaw, "ulysses.md"),
+      ...normalizeStoreItems(carteameaRaw, "carteamea.md"),
+      ...normalizeStoreItems(biblionRaw, "biblion.md"),
+    ].filter(
+      (b) =>
+        b.title &&
+        b.url &&
+        Number.isFinite(b.price) &&
+        b.price > 0 &&
+        Boolean(b.image) &&
+        !b.image.includes("empty-cover"),
+    );
 
-  // Fast deduplication by normalized title and URL
-  const seenTitles = new Set();
-  const deduped = [];
-  for (const b of rawCombined) {
-    const key = b.title.toLowerCase().replace(/[^a-zа-я0-9]/gi, "").slice(0, 35);
-    if (!seenTitles.has(key)) {
-      seenTitles.add(key);
-      deduped.push(b);
-      if (deduped.length >= 8) break;
+    // Fast deduplication by normalized title and URL
+    const seenTitles = new Set();
+    const dedupedItems = [];
+    for (const b of rawCombined) {
+      const key = b.title.toLowerCase().replace(/[^a-zа-я0-9]/gi, "").slice(0, 35);
+      if (!seenTitles.has(key)) {
+        seenTitles.add(key);
+        dedupedItems.push(b);
+        if (dedupedItems.length >= 8) break;
+      }
     }
+
+    return dedupedItems;
+  }
+
+  let deduped = await queryStores(normalizedQ);
+
+  // If 0 results and normalizedQ has multiple words, try fallback with the primary longest word
+  if (deduped.length === 0 && normalizedQ.includes(" ")) {
+    const primaryWord = normalizedQ.split(/\s+/).sort((a, b) => b.length - a.length)[0];
+    if (primaryWord && primaryWord.length >= 4) {
+      deduped = await queryStores(primaryWord);
+    }
+  }
+
+  // If still 0 results and rawQ differs from normalizedQ, try rawQ as fallback
+  if (deduped.length === 0 && rawQ.toLowerCase() !== normalizedQ.toLowerCase()) {
+    deduped = await queryStores(rawQ.toLowerCase());
   }
 
   // Return up to 8 top candidate books with indexed IDs
@@ -178,7 +254,7 @@ export async function searchStoreCatalogue(query, exchangeRate = 19.5) {
   }));
 
   if (result.length > 0) {
-    storeSearchCache.set(cleanQ, {
+    storeSearchCache.set(searchKey, {
       data: result,
       expiresAt: Date.now() + STORE_SEARCH_CACHE_TTL,
     });
@@ -227,7 +303,44 @@ async function analyzeSearchIntent(messages) {
     return { needSearch: true, searchQuery: "детектив" };
   }
 
-  // Fast-path 3: Obvious non-book questions (e.g. asking Litera personal questions or philosophy)
+  // Fast-path 2b: Direct book topics and genres
+  const genreMatches = [
+    { regex: /философ/i, query: "философия" },
+    { regex: /психолог/i, query: "психология" },
+    { regex: /детектив/i, query: "детектив" },
+    { regex: /фантастик/i, query: "фантастика" },
+    { regex: /фэнтези/i, query: "фэнтези" },
+    { regex: /саморазвит/i, query: "саморазвитие" },
+    { regex: /биографи/i, query: "биография" },
+    { regex: /мемуар/i, query: "мемуары" },
+    { regex: /истори[ияею]/i, query: "история" },
+    { regex: /поэзи|стих/i, query: "поэзия" },
+    { regex: /триллер/i, query: "триллер" },
+    { regex: /классик/i, query: "классика" },
+    { regex: /мифолог/i, query: "мифология" },
+    { regex: /сказк/i, query: "сказки" },
+    { regex: /космос/i, query: "космос" },
+    { regex: /бизнес|маркетинг/i, query: "бизнес" },
+    { regex: /кулинар/i, query: "кулинария" },
+    { regex: /искусств/i, query: "искусство" },
+    { regex: /живопис/i, query: "живопись" },
+  ];
+
+  const asksForBook =
+    /(посоветуй|порекомендуй|найди|хочу почитать|подскажи|что почитать|книги|книгу|книг|что-нибудь|почитать)\b/i.test(
+      lower,
+    ) ||
+    /^(книги\s+(по|про|о|об)\s+|что-нибудь\s+(по|про|о|об)\s+)/i.test(lower);
+
+  if (asksForBook) {
+    for (const item of genreMatches) {
+      if (item.regex.test(lower)) {
+        return { needSearch: true, searchQuery: item.query };
+      }
+    }
+  }
+
+  // Fast-path 3: Obvious non-book questions (e.g. asking Litera personal questions)
   if (
     /^(какая твоя любимая|что ты думаешь|кто твой любимый|какие книги ты любишь|ты любишь читать|расскажи о себе|как погода)/i.test(
       lower,
@@ -245,7 +358,7 @@ Determine if the customer's message explicitly requests finding, recommending, b
 
 RULES:
 - set needSearch = true ONLY if the user asks for book recommendations, asks to find a book to buy/read from the store, or searches inventory (e.g. "посоветуй 2 книги про космос", "найди детектив", "есть ли у вас Гарри Поттер", "порекомендуй что-нибудь почитать").
-  When needSearch is true, provide a concise search query in Russian (1-3 keywords, e.g. "космос", "детектив", "Гарри Поттер").
+  When needSearch is true, provide searchQuery as a single normalized nominative keyword or main title/author in Russian (e.g. "философия" instead of "по философии", "психология" instead of "о психологии", "детектив" instead of "детективы"). Never include prepositions like "по", "про", "о", "для" and never include generic words like "книги", "литература", "сборник".
 - set needSearch = false if the user is just chatting, greeting, asking about the assistant's tastes or opinions, asking trivia/facts, asking about store policies/delivery/location, or discussing general topics (e.g. "какая твоя любимая книга", "кто написал Войну и мир", "что думаешь о Достоевском", "привет", "где ваш магазин").
 
 Customer message: "${latestMessage}"
@@ -271,9 +384,12 @@ Return JSON:
       },
     });
 
+    const rawSearchQuery = (res?.searchQuery || "").trim();
+    const cleanSearchQuery = normalizeSearchQuery(rawSearchQuery) || rawSearchQuery;
+
     return {
       needSearch: Boolean(res?.needSearch),
-      searchQuery: (res?.searchQuery || "").trim(),
+      searchQuery: cleanSearchQuery,
     };
   } catch (err) {
     console.warn("Intent analysis fallback:", err.message);
@@ -283,14 +399,7 @@ Return JSON:
       );
     return {
       needSearch: hasExplicitRequest,
-      searchQuery: hasExplicitRequest
-        ? lower
-            .replace(
-              /(литера|пожалуйста|посоветуй|порекомендуй|найди|хочу|что|почитать|подскажи|купить)\b/gi,
-              "",
-            )
-            .trim()
-        : "",
+      searchQuery: hasExplicitRequest ? normalizeSearchQuery(lower) : "",
     };
   }
 }
@@ -413,9 +522,12 @@ CRITICAL INSTRUCTIONS:
       promptText += `
 LITERA STORE CATALOGUE SEARCH RESULT:
 No books were found in Litera's catalogue matching query "${searchQuery}".
-You must honestly tell the user that Litera currently does not have matching books in stock for "${searchQuery}".
-Offer to search for a broader term or different genre. NEVER invent or fabricate books.
-Set "bookIds": [].
+
+CRITICAL INSTRUCTIONS WHEN NO BOOKS ARE FOUND:
+- Honestly and gently tell the user in 1-2 friendly, charming sentences that Litera currently does not have books matching this exact query in stock.
+- Offer to look for another genre, author, or topic of their choice.
+- NEVER invent, fabricate, or suggest unrelated specific book categories or products (such as language textbooks, tutorials, or dictionaries) unless the user specifically asked for them!
+- Set "bookIds": [].
 `;
     }
   } else {
