@@ -342,11 +342,6 @@ export default function LiteraAssistant() {
                       {loadingStatus === "searching"
                         ? t("assistant.searching")
                         : t("assistant.typing")}
-                      <span className="litera-animated-dots" aria-hidden="true">
-                        <span>.</span>
-                        <span>.</span>
-                        <span>.</span>
-                      </span>
                     </span>
                   ) : (
                     t("assistant.statusOnline")
@@ -573,11 +568,6 @@ export default function LiteraAssistant() {
                         {loadingStatus === "searching"
                           ? t("assistant.searching")
                           : t("assistant.typing")}
-                        <span className="litera-animated-dots" aria-hidden="true">
-                          <span>.</span>
-                          <span>.</span>
-                          <span>.</span>
-                        </span>
                       </span>
                     </div>
                   </div>
