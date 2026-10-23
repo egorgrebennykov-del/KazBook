@@ -9,6 +9,7 @@ import {
   decodeCarteameaImage,
   decodeBiblionImage,
 } from "../utils/enhancedImageUrl.js";
+import getExchangeRate, { DEFAULT_RATE } from "../utils/getExchangeRate.js";
 
 const DEFAULT_API_KEY = "";
 const GEMINI_MODELS = [
@@ -46,6 +47,7 @@ CRITICAL RULES ON RECOMMENDATIONS VS STORE/CART/SITE QUESTIONS:
 4. When book recommendations ARE requested (needSearch = true):
    - Recommend books EXCLUSIVELY from the provided search results list.
    - Use their exact "id" in "bookIds".
+   - PRICE AND VALUE PREFERENCE: Always prioritize accessible, affordable editions and books for customers! If there is a choice between an affordable edition (e.g. ~10 €) and an expensive one (e.g. 50–100 €), ALWAYS choose and recommend the affordable one. Customers want smart, budget-friendly choices. Never push expensive luxury editions when affordable options are available.
 
 YOUR PERSONALITY & TONE:
 - Friendly, warm, intelligent, polite, and approachable.
@@ -114,8 +116,9 @@ You are the AI literary discovery engine for the European bookstore "Litera".
 The user submitted this natural-language book request: "${cleanQ}".
 
 TASK:
-1. Understand the underlying meaning, philosophy, emotions, mood, historical/cultural context, or subject.
-2. Identify 4 to 6 real, acclaimed books in RUSSIAN (even if the user query was in English, Romanian, or another language) that best match this theme, mood, or idea, and are commonly available in bookstores.
+1. Understand the user's request:
+   - If the user explicitly names, asks for, or searches for a specific book title (e.g. "Идиот", "найди книгу Идиот", "Мастер и Маргарита", "1984", "книга Скотный двор"), you MUST include that exact book as candidate #1!
+   - Identify 3 to 5 additional real, acclaimed books in RUSSIAN that match the theme, mood, author, or idea, and are commonly available in bookstores.
    Examples of logical matching:
    - "про грусть" -> "Белые ночи" (Достоевский), "Муму" (Тургенев), "Цветы для Элджернона" (Киз), "Три товарища" (Ремарк), "Одиночество в Сети" (Вишневский)
    - "про животных" -> "Скотный двор" (Оруэлл), "Белый Клык" (Лондон), "Собачье сердце" (Булгаков), "Жизнь Пи" (Мартел), "Каштанка" (Чехов)
@@ -173,7 +176,7 @@ Verify book titles and authors. Do NOT invent fake books or authors.
  * Critical requirement: supplier searches must use book titles only!
  * Do NOT search supplier websites by plot, subject, description, or author.
  */
-export async function searchSuppliersByTitleOnly(title, exchangeRate = 19.5) {
+export async function searchSuppliersByTitleOnly(title, exchangeRate = DEFAULT_RATE) {
   const cleanTitle = (title || "").trim();
   if (!cleanTitle) return [];
 
@@ -229,7 +232,7 @@ export async function searchSuppliersByTitleOnly(title, exchangeRate = 19.5) {
       b.title &&
       b.url &&
       Number.isFinite(b.price) &&
-      b.price > 0 &&
+      b.price >= 2.0 &&
       Boolean(b.image) &&
       !b.image.includes("empty-cover"),
   );
@@ -299,13 +302,23 @@ function validateProductMatch(product, candidate) {
  * Discovers real books by meaning, searches suppliers strictly by title only,
  * validates products, and excludes any books not available on suppliers.
  */
-export async function discoverAndMatchBooks(userQuery, exchangeRate = 19.5) {
+export async function discoverAndMatchBooks(userQuery, exchangeRate) {
+  const activeRate =
+    exchangeRate || (await getExchangeRate().catch(() => DEFAULT_RATE));
   const candidates = await discoverBooksByMeaning(userQuery);
   if (!candidates || candidates.length === 0) return [];
 
+  const isGiftOrLuxuryRequest =
+    /(подарочн|коллекционн|эксклюзивн|кожан|в коробе|люкс|дорог(ое|ую|ой|ие)|collector|luxury|gift)/i.test(
+      userQuery || "",
+    );
+
   // Search suppliers for each candidate strictly by title only
   const searchPromises = candidates.map(async (candidate) => {
-    let storeProducts = await searchSuppliersByTitleOnly(candidate.title, exchangeRate);
+    let storeProducts = await searchSuppliersByTitleOnly(
+      candidate.title,
+      activeRate,
+    );
     if (
       storeProducts.length === 0 &&
       candidate.alternativeTitle &&
@@ -313,7 +326,7 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate = 19.5) {
     ) {
       storeProducts = await searchSuppliersByTitleOnly(
         candidate.alternativeTitle,
-        exchangeRate,
+        activeRate,
       );
     }
 
@@ -321,29 +334,58 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate = 19.5) {
       validateProductMatch(p, candidate),
     );
 
-    if (validMatches.length > 0) {
-      return {
-        ...validMatches[0],
-        candidateTitle: candidate.title,
-        candidateAuthor: candidate.author,
-        relevance: candidate.relevance,
-      };
+    if (validMatches.length === 0) return [];
+
+    // Prioritize affordable editions: sort by price ascending (cheapest / best value first)
+    if (isGiftOrLuxuryRequest) {
+      validMatches.sort((a, b) => b.price - a.price);
+    } else {
+      validMatches.sort((a, b) => a.price - b.price);
     }
-    return null;
+
+    // For specific single-book requests (1-2 candidates), return up to 2 distinct affordable editions
+    const takeCount =
+      candidates.length <= 2 ? Math.min(2, validMatches.length) : 1;
+    return validMatches.slice(0, takeCount).map((match) => ({
+      ...match,
+      candidateTitle: candidate.title,
+      candidateAuthor: candidate.author,
+      relevance: candidate.relevance,
+    }));
   });
 
   const resolved = await Promise.all(searchPromises);
-  const verifiedProducts = resolved.filter(Boolean);
+  const verifiedProducts = resolved.flat().filter(Boolean);
 
-  // Deduplicate by title
-  const seenKeys = new Set();
-  const deduped = [];
+  // Deduplicate by URL and normalized work title, ALWAYS keeping the cheaper edition
+  const productMap = new Map();
   for (const b of verifiedProducts) {
-    const key = b.title.toLowerCase().replace(/[^a-zа-я0-9]/gi, "").slice(0, 35);
-    if (!seenKeys.has(key)) {
-      seenKeys.add(key);
-      deduped.push(b);
+    const key =
+      b.url ||
+      (b.candidateTitle || b.title)
+        .toLowerCase()
+        .replace(/[^a-zа-я0-9]/gi, "")
+        .slice(0, 30);
+    const existing = productMap.get(key);
+    if (!existing) {
+      productMap.set(key, b);
+    } else if (!isGiftOrLuxuryRequest && b.price < existing.price) {
+      productMap.set(key, b);
+    } else if (isGiftOrLuxuryRequest && b.price > existing.price) {
+      productMap.set(key, b);
     }
+  }
+
+  const deduped = Array.from(productMap.values());
+
+  // Prioritize budget-friendly, accessible options first
+  if (!isGiftOrLuxuryRequest) {
+    deduped.sort((a, b) => {
+      const aIsHigh = a.price > 45;
+      const bIsHigh = b.price > 45;
+      if (aIsHigh !== bIsHigh) return aIsHigh ? 1 : -1;
+      return a.price - b.price;
+    });
   }
 
   // Return up to 8 top candidate books with indexed IDs
@@ -522,7 +564,8 @@ export async function processLiteraChat({ messages, language = "ru", context, on
 
   let catalogueResults = [];
   if (needSearch) {
-    catalogueResults = await discoverAndMatchBooks(latestMessage).catch(() => []);
+    const rate = await getExchangeRate().catch(() => DEFAULT_RATE);
+    catalogueResults = await discoverAndMatchBooks(latestMessage, rate).catch(() => []);
   }
 
   // 2. Format live user, cart, and page context
@@ -592,6 +635,7 @@ ${JSON.stringify(
 CRITICAL INSTRUCTIONS:
 - You must recommend ONLY books from the catalogue list above that match the user's interests.
 - In "bookIds", return an array containing their exact IDs (e.g. ["${catalogueResults[0].id}"]).
+- PRICE & VALUE PREFERENCE: Always take book prices into strong consideration! If there is a choice between an affordable edition (e.g. ~10 €) and an expensive one (e.g. 50–100 €), ALWAYS choose and recommend the affordable, accessible option. Never push expensive editions when a cheaper alternative is available.
 - Explain why these specific books are great picks in your friendly, warm voice (you may reference the relevanceReason).
 - Speak naturally about the books, their mood, and plot. Do NOT mention "европейский каталог", "на русском языке", or price/currencies in your message text — just focus on the books themselves!
 `;
