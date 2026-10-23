@@ -9,7 +9,7 @@ import "./LiteraAssistant.css";
 const STORAGE_KEY = "litera_assistant_history_v2";
 
 const isSearchQuery = (text) =>
-  /(посоветуй|порекомендуй|найди|книг[иау]|купить|автор|роман|фэнтези|детектив|recommend|suggest|search|find|book|looking for|carte|recomanda)/i.test(
+  /(посоветуй|порекомендуй|найди|купить|что почитать|подобрать книгу|выбери|recommend|suggest|search catalogue|find book)/i.test(
     text,
   );
 

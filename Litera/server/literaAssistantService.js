@@ -192,21 +192,21 @@ export async function searchStoreCatalogue(query, exchangeRate = 19.5) {
 }
 
 /**
- * Instant regex & keyword intent analyzer (0ms, avoids extra LLM round-trip)
+ * Accurate intent analyzer with fast-paths and Gemini LLM semantic verification
  */
-function analyzeSearchIntent(messages) {
+async function analyzeSearchIntent(messages) {
   const latestMessage = messages[messages.length - 1]?.content || "";
   const lower = latestMessage.toLowerCase().trim();
 
-  // Fast-path: Greetings, small-talk, or questions that don't request books
+  // Fast-path 1: Greetings, pleasantries, or general store questions (NO SEARCH)
   const isConversational =
     /^(привет|здравствуй|здравствуйте|хай|ку|добрый день|добрый вечер|доброе утро|hello|hi|hey|good morning|buna|salut|здравей)[\s!.,?]*$/i.test(
       lower,
     ) ||
-    /^(как дела|кто ты|как тебя зовут|что ты умеешь|who are you|how are you|расскажи о себе|чем занимаешься|где находитесь|где вы|откуда вы|куда доставка|как доставка|в какой валюте|какая валюта|цены|язык|на каком языке|спасибо|благодарю|ясно|понятно|ок|хорошо|отлично)[\s!.,?]*$/i.test(
+    /^(как дела|кто ты|как тебя зовут|что ты умеешь|who are you|how are you|расскажи о себе|чем занимаешься|спасибо|благодарю|ясно|понятно|ок|хорошо|отлично)[\s!.,?]*$/i.test(
       lower,
     ) ||
-    /(где находится|куда доставляете|доставка|оплата|валют[ае]|в росси[ие]|из росси[ие]|в евро|на каких языках|язык книг)/i.test(
+    /(где находится|куда доставляете|доставка|оплата|валют[ае]|в росси[ие]|из росси[ие]|в евро|на каких языках|язык книг|сколько стоит доставка)/i.test(
       lower,
     );
 
@@ -214,50 +214,89 @@ function analyzeSearchIntent(messages) {
     return { needSearch: false, searchQuery: "" };
   }
 
-  // Direct book recommendation / search keywords
-  const hasBookKeywords =
-    /(посоветуй|порекомендуй|найди|ищу|хочу почитать|что почитать|подскажи|выбери|книг[а-я]*|роман[а-я]*|фэнтези|детектив|фантастик|триллер|классик|автор|стивен кинг|гарри поттер|толкин|оруэлл|достоевск|дюна|космос|психологи[а-я]|recommend|suggest|search|find|book)/i.test(
-      lower,
-    );
-
-  if (hasBookKeywords) {
-    let query = lower
-      .replace(
-        /(литера|пожалуйста|посоветуй|порекомендуй|подскажи|найди|хочу|что|почитать|купить|книг[а-я]*|какую-нибудь|какие-то|про|о|об|для|мне|нам|хорошую|интересную|топ|лучш[а-я]*|recommend|suggest|find|book|books|please)\b/gi,
-        " ",
-      )
-      .replace(/[?!,.:;«»"'()]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (!query || query.length < 2) {
-      if (/фэнтези/i.test(lower)) query = "фэнтези";
-      else if (/детектив/i.test(lower)) query = "детектив";
-      else if (/фантастик|sci-fi/i.test(lower)) query = "фантастика";
-      else if (/роман/i.test(lower)) query = "роман";
-      else if (/классик/i.test(lower)) query = "классика";
-      else if (/космос/i.test(lower)) query = "космос";
-      else if (/подар[а-я]*/i.test(lower)) query = "бестселлер";
-      else if (/топ|популярн/i.test(lower)) query = "бестселлер";
-      else query = "книга";
-    }
-
-    return { needSearch: true, searchQuery: query };
+  // Fast-path 2: Suggested quick chips
+  if (/литера,?\s*что\s*почитать/i.test(lower)) {
+    return { needSearch: true, searchQuery: "бестселлер" };
+  }
+  if (/литера,?\s*посоветуй\s*книгу/i.test(lower)) {
+    return { needSearch: true, searchQuery: "роман" };
+  }
+  if (/литера,?\s*что\s*(сейчас\s*)?в\s*топе/i.test(lower)) {
+    return { needSearch: true, searchQuery: "бестселлер" };
+  }
+  if (/литера,?\s*помоги\s*с\s*подарком/i.test(lower)) {
+    return { needSearch: true, searchQuery: "подарочное издание" };
+  }
+  if (/литера,?\s*найди\s*детектив/i.test(lower)) {
+    return { needSearch: true, searchQuery: "детектив" };
   }
 
-  // Direct short title / author query (e.g. "Гарри Поттер", "Дюна", "Стивен Кинг")
-  const wordCount = lower.split(/\s+/).length;
+  // Fast-path 3: Obvious non-book questions (e.g. asking Litera personal questions or philosophy)
   if (
-    wordCount <= 4 &&
-    !/^(да|нет|не знаю|возможно|наверное|хм|пока|до свидания)$/i.test(lower)
+    /^(какая твоя любимая|что ты думаешь|кто твой любимый|какие книги ты любишь|ты любишь читать|расскажи о себе|как погода)/i.test(
+      lower,
+    )
   ) {
+    return { needSearch: false, searchQuery: "" };
+  }
+
+  // Use fast Gemini flash-lite to determine intent accurately without guessing
+  const apiKey = process.env.GEMINI_API_KEY || DEFAULT_API_KEY;
+
+  const prompt = `
+You are an intent analyzer for the bookstore AI assistant "Litera".
+Determine if the customer's message explicitly requests finding, recommending, buying, or checking availability of real books from the store catalogue.
+
+RULES:
+- set needSearch = true ONLY if the user asks for book recommendations, asks to find a book to buy/read from the store, or searches inventory (e.g. "посоветуй 2 книги про космос", "найди детектив", "есть ли у вас Гарри Поттер", "порекомендуй что-нибудь почитать").
+  When needSearch is true, provide a concise search query in Russian (1-3 keywords, e.g. "космос", "детектив", "Гарри Поттер").
+- set needSearch = false if the user is just chatting, greeting, asking about the assistant's tastes or opinions, asking trivia/facts, asking about store policies/delivery/location, or discussing general topics (e.g. "какая твоя любимая книга", "кто написал Войну и мир", "что думаешь о Достоевском", "привет", "где ваш магазин").
+
+Customer message: "${latestMessage}"
+
+Return JSON:
+{
+  "needSearch": boolean,
+  "searchQuery": string
+}
+`;
+
+  try {
+    const res = await callGeminiJson({
+      apiKey,
+      prompt,
+      responseSchema: {
+        type: "OBJECT",
+        properties: {
+          needSearch: { type: "BOOLEAN" },
+          searchQuery: { type: "STRING" },
+        },
+        required: ["needSearch", "searchQuery"],
+      },
+    });
+
     return {
-      needSearch: true,
-      searchQuery: lower.replace(/[?!.,]/g, "").trim(),
+      needSearch: Boolean(res?.needSearch),
+      searchQuery: (res?.searchQuery || "").trim(),
+    };
+  } catch (err) {
+    console.warn("Intent analysis fallback:", err.message);
+    const hasExplicitRequest =
+      /(посоветуй|порекомендуй|найди|хочу почитать|подскажи что почитать|есть ли у вас|купить книгу)\b/i.test(
+        lower,
+      );
+    return {
+      needSearch: hasExplicitRequest,
+      searchQuery: hasExplicitRequest
+        ? lower
+            .replace(
+              /(литера|пожалуйста|посоветуй|порекомендуй|найди|хочу|что|почитать|подскажи|купить)\b/gi,
+              "",
+            )
+            .trim()
+        : "",
     };
   }
-
-  return { needSearch: false, searchQuery: "" };
 }
 
 /**
