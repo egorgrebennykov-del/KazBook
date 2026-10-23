@@ -282,6 +282,9 @@ export const translations = {
     "privileged.users.revokeTitle": "Снять статус privileged",
     "privileged.users.makeTitle": "Назначить privileged",
     "privileged.users.empty": "Пользователи не найдены",
+    "privileged.users.clickToView": "Нажмите, чтобы увидеть полностью",
+    "privileged.users.copy": "Копировать",
+    "privileged.users.copied": "скопирован в буфер обмена!",
     "privileged.users.noticeRevoked": "Привилегии сняты с",
     "privileged.users.noticeGranted": "теперь имеет роль privileged!",
 
@@ -693,6 +696,9 @@ export const translations = {
     "privileged.users.revokeTitle": "Revoke privileged status",
     "privileged.users.makeTitle": "Grant privileged status",
     "privileged.users.empty": "No users found",
+    "privileged.users.clickToView": "Click to view full",
+    "privileged.users.copy": "Copy",
+    "privileged.users.copied": "copied to clipboard!",
     "privileged.users.noticeRevoked": "Privileges revoked from",
     "privileged.users.noticeGranted": "now has privileged role!",
 

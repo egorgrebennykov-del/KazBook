@@ -51,6 +51,7 @@ export default function Privileged() {
   const [searchQuery, setSearchQuery] = useState("");
   const [orderStatusFilter, setOrderStatusFilter] = useState("all");
   const [actionNotice, setActionNotice] = useState(null);
+  const [openCellPopover, setOpenCellPopover] = useState(null); // { id, field }
 
   // New coupon form state
   const [showCouponModal, setShowCouponModal] = useState(false);
@@ -229,6 +230,29 @@ export default function Privileged() {
     setActionNotice({ msg, isError });
     setTimeout(() => setActionNotice(null), 3500);
   };
+
+  const handleCopyText = (text, label) => {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text);
+      showNotice(
+        `${label ? `${label} ` : ""}${t("privileged.users.copied")}`,
+      );
+    }
+  };
+
+  useEffect(() => {
+    if (!openCellPopover) return;
+    const handleClickOutside = (e) => {
+      if (
+        !e.target.closest(".privileged__cell-popover") &&
+        !e.target.closest(".privileged__truncate-btn")
+      ) {
+        setOpenCellPopover(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openCellPopover]);
 
   const handleToggleUserRole = async (targetUser) => {
     const isTargetPrivileged = targetUser.role === "privileged";
@@ -782,13 +806,24 @@ export default function Privileged() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredUsers.map((u) => {
+                  {filteredUsers.map((u, rowIndex) => {
                     const isPriv = u.role === "privileged";
                     const phones = Array.isArray(u.phone)
                       ? u.phone
                       : u.phone
                         ? [u.phone]
                         : [];
+                    const isEmailOpen =
+                      openCellPopover?.id === u.id &&
+                      openCellPopover?.field === "email";
+                    const isPhoneOpen =
+                      openCellPopover?.id === u.id &&
+                      openCellPopover?.field === "phone";
+                    const isBottomRow =
+                      rowIndex >= filteredUsers.length - 2 &&
+                      filteredUsers.length > 2;
+                    const phonesJoined = phones.join(", ");
+
                     return (
                       <tr key={u.id}>
                         <td>
@@ -806,22 +841,128 @@ export default function Privileged() {
                             </div>
                           </div>
                         </td>
-                        <td>
-                          <a
-                            href={`mailto:${u.email}`}
-                            className="privileged__link"
-                          >
-                            {u.email}
-                          </a>
-                        </td>
-                        <td>
-                          {phones.length > 0 ? (
-                            <div className="privileged__phone-cell">
-                              {phones.map((p) => (
-                                <span key={p} className="privileged__phone-tag">
-                                  {p}
+                        <td className="privileged__cell-relative">
+                          {u.email ? (
+                            <div className="privileged__truncate-box">
+                              <button
+                                type="button"
+                                className="privileged__truncate-btn privileged__link"
+                                onClick={() =>
+                                  setOpenCellPopover((prev) =>
+                                    prev?.id === u.id && prev?.field === "email"
+                                      ? null
+                                      : { id: u.id, field: "email" }
+                                  )
+                                }
+                                title={t("privileged.users.clickToView")}
+                              >
+                                <span className="privileged__truncate-text">
+                                  {u.email}
                                 </span>
-                              ))}
+                              </button>
+
+                              {isEmailOpen && (
+                                <div
+                                  className={`privileged__cell-popover ${isBottomRow ? "privileged__cell-popover--top" : ""}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="privileged__cell-popover-header">
+                                    <span className="privileged__cell-popover-title">
+                                      <i className="ri-mail-line" /> {t("privileged.users.thEmail")}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      className="privileged__cell-popover-close"
+                                      onClick={() => setOpenCellPopover(null)}
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                  <div className="privileged__cell-popover-content">
+                                    <a
+                                      href={`mailto:${u.email}`}
+                                      className="privileged__popover-full-text"
+                                    >
+                                      {u.email}
+                                    </a>
+                                    <button
+                                      type="button"
+                                      className="privileged__copy-btn"
+                                      onClick={() => handleCopyText(u.email, "Email")}
+                                      title={t("privileged.users.copy")}
+                                    >
+                                      <i className="ri-file-copy-line" />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="privileged__muted">—</span>
+                          )}
+                        </td>
+                        <td className="privileged__cell-relative">
+                          {phones.length > 0 ? (
+                            <div className="privileged__truncate-box">
+                              <button
+                                type="button"
+                                className="privileged__truncate-btn privileged__phone-btn"
+                                onClick={() =>
+                                  setOpenCellPopover((prev) =>
+                                    prev?.id === u.id && prev?.field === "phone"
+                                      ? null
+                                      : { id: u.id, field: "phone" }
+                                  )
+                                }
+                                title={t("privileged.users.clickToView")}
+                              >
+                                <span className="privileged__truncate-text privileged__phone-tag">
+                                  {phonesJoined}
+                                </span>
+                              </button>
+
+                              {isPhoneOpen && (
+                                <div
+                                  className={`privileged__cell-popover ${isBottomRow ? "privileged__cell-popover--top" : ""}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="privileged__cell-popover-header">
+                                    <span className="privileged__cell-popover-title">
+                                      <i className="ri-phone-line" /> {t("privileged.users.thPhone")}
+                                      {phones.length > 1 ? ` (${phones.length})` : ""}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      className="privileged__cell-popover-close"
+                                      onClick={() => setOpenCellPopover(null)}
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                  <div className="privileged__cell-popover-list">
+                                    {phones.map((phone, idx) => (
+                                      <div key={idx} className="privileged__cell-popover-item">
+                                        <a
+                                          href={`tel:${phone.replace(/[^\d+]/g, "")}`}
+                                          className="privileged__popover-full-text privileged__phone-tag"
+                                        >
+                                          {phone}
+                                        </a>
+                                        <button
+                                          type="button"
+                                          className="privileged__copy-btn"
+                                          onClick={() =>
+                                            handleCopyText(phone, t("privileged.users.thPhone"))
+                                          }
+                                          title={t("privileged.users.copy")}
+                                        >
+                                          <i className="ri-file-copy-line" />
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           ) : (
                             <span className="privileged__muted">—</span>
