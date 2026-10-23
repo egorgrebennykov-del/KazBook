@@ -133,8 +133,8 @@ export function parseBiblionHtml(html) {
   return products;
 }
 
-export async function searchBiblion(query) {
-  const cacheKey = query.trim().toLowerCase();
+export async function searchBiblion(query, maxFetchPages = 10) {
+  const cacheKey = `${query.trim().toLowerCase()}::${maxFetchPages}`;
   const cached = searchCache.get(cacheKey);
   if (cached && Date.now() < cached.expiresAt) {
     return cached.data;
@@ -151,7 +151,7 @@ export async function searchBiblion(query) {
       const res = await axios.get(getPageUrl(page), {
         headers: BASE_HEADERS,
         httpsAgent,
-        timeout: 9000,
+        timeout: 5000,
       });
       return res.data;
     } catch {
@@ -173,7 +173,7 @@ export async function searchBiblion(query) {
     ].map((m) => Number(m[1]));
 
     const maxPage = pageNumbers.length
-      ? Math.min(Math.max(...pageNumbers), 10)
+      ? Math.min(Math.max(...pageNumbers), maxFetchPages)
       : 1;
 
     let allProducts = [...page1Products];

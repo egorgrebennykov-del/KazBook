@@ -1,12 +1,10 @@
 import process from "node:process";
 import { searchLibrarius } from "./librariusService.js";
-import { searchCarturesti } from "./carturestiService.js";
 import { searchUlysses } from "./ulyssesService.js";
 import { searchCarteamea } from "./carteameaService.js";
 import { searchBiblion } from "./biblionService.js";
 import {
   decodeLibrariusImage,
-  decodeCarturestiImage,
   decodeUlyssesImage,
   decodeCarteameaImage,
   decodeBiblionImage,
@@ -14,8 +12,9 @@ import {
 
 const DEFAULT_API_KEY = "";
 const GEMINI_MODELS = [
+  "gemini-flash-lite-latest",
   "gemini-3.5-flash-lite",
-  "gemini-3.5-flash",
+  "gemini-3.1-flash-lite",
   "gemini-3.8-flash",
 ];
 
@@ -48,6 +47,7 @@ YOUR PERSONALITY & TONE:
 - Helpful without being pushy or overly sales-oriented. You may use gentle touches like 💜 or ✨ when appropriate, maintaining a thoughtful, authentic conversational tone.
 - Natural speaker in any language: You MUST ALWAYS reply in the exact language the user used in their message (Russian, English, Romanian, Bulgarian, etc.).
 - Truthful & Honest: NEVER invent fake books, fake author names, imaginary prices, or fake availability.
+- Conciseness: Keep your conversational answers compact, charming, and focused (typically 2-4 sentences). Never generate long walls of text.
 
 CATALOGUE RECOMMENDATION RULES:
 1. When real catalogue search results are provided in your prompt:
@@ -85,7 +85,6 @@ Do NOT include Markdown code fences.
 function decodeImageForStore(rawUrl, store) {
   if (!rawUrl) return "";
   if (store.includes("librarius")) return decodeLibrariusImage(rawUrl) || rawUrl;
-  if (store.includes("carturesti")) return decodeCarturestiImage(rawUrl) || rawUrl;
   if (store.includes("ulysses")) return decodeUlyssesImage(rawUrl) || rawUrl;
   if (store.includes("carteamea")) return decodeCarteameaImage(rawUrl) || rawUrl;
   if (store.includes("biblion")) return decodeBiblionImage(rawUrl) || rawUrl;
@@ -98,14 +97,22 @@ function parseMdlPrice(priceRaw) {
   return match ? Number.parseFloat(match[0]) : 0;
 }
 
+const storeSearchCache = new Map();
+const STORE_SEARCH_CACHE_TTL = 10 * 60 * 1000; // 10 minutes cache
+
 /**
  * Searches the 5 bookstore stores, dedupes, and normalizes into trusted book cards
  */
 export async function searchStoreCatalogue(query, exchangeRate = 19.5) {
-  const cleanQ = (query || "").trim();
+  const cleanQ = (query || "").trim().toLowerCase();
   if (!cleanQ) return [];
 
-  const timeoutPromise = (promise, ms = 4500) =>
+  const cached = storeSearchCache.get(cleanQ);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.data;
+  }
+
+  const timeoutPromise = (promise, ms = 2200) =>
     Promise.race([
       promise,
       new Promise((_, reject) =>
@@ -113,13 +120,12 @@ export async function searchStoreCatalogue(query, exchangeRate = 19.5) {
       ),
     ]);
 
-  const [librariusRaw, carturestiRaw, ulyssesRaw, carteameaRaw, biblionRaw] =
+  const [librariusRaw, ulyssesRaw, carteameaRaw, biblionRaw] =
     await Promise.all([
-      timeoutPromise(searchLibrarius(cleanQ)).catch(() => []),
-      timeoutPromise(searchCarturesti(cleanQ)).catch(() => []),
-      timeoutPromise(searchUlysses(cleanQ)).catch(() => []),
-      timeoutPromise(searchCarteamea(cleanQ)).catch(() => []),
-      timeoutPromise(searchBiblion(cleanQ)).catch(() => []),
+      timeoutPromise(searchLibrarius(cleanQ, 1), 1800).catch(() => []),
+      timeoutPromise(searchUlysses(cleanQ), 1800).catch(() => []),
+      timeoutPromise(searchCarteamea(cleanQ), 1800).catch(() => []),
+      timeoutPromise(searchBiblion(cleanQ, 1), 1800).catch(() => []),
     ]);
 
   const normalizeStoreItems = (items, storeName) =>
@@ -144,7 +150,6 @@ export async function searchStoreCatalogue(query, exchangeRate = 19.5) {
 
   const rawCombined = [
     ...normalizeStoreItems(librariusRaw, "librarius.md"),
-    ...normalizeStoreItems(carturestiRaw, "carturesti.md"),
     ...normalizeStoreItems(ulyssesRaw, "ulysses.md"),
     ...normalizeStoreItems(carteameaRaw, "carteamea.md"),
     ...normalizeStoreItems(biblionRaw, "biblion.md"),
@@ -166,85 +171,93 @@ export async function searchStoreCatalogue(query, exchangeRate = 19.5) {
     if (!seenTitles.has(key)) {
       seenTitles.add(key);
       deduped.push(b);
-      if (deduped.length >= 10) break;
+      if (deduped.length >= 8) break;
     }
   }
 
-  // Return up to 10 top candidate books with indexed IDs
-  return deduped.map((b, idx) => ({
+  // Return up to 8 top candidate books with indexed IDs
+  const result = deduped.map((b, idx) => ({
     id: `catalog-book-${idx}`,
     ...b,
   }));
+
+  if (result.length > 0) {
+    storeSearchCache.set(cleanQ, {
+      data: result,
+      expiresAt: Date.now() + STORE_SEARCH_CACHE_TTL,
+    });
+  }
+
+  return result;
 }
 
 /**
- * Determine if message requires catalog search and extract search query
+ * Instant regex & keyword intent analyzer (0ms, avoids extra LLM round-trip)
  */
-async function analyzeSearchIntent(messages) {
+function analyzeSearchIntent(messages) {
   const latestMessage = messages[messages.length - 1]?.content || "";
   const lower = latestMessage.toLowerCase().trim();
 
-  // Fast-path: Greetings, brief pleasantries, or questions that clearly don't request books
-  const isChitchat =
+  // Fast-path: Greetings, small-talk, or questions that don't request books
+  const isConversational =
     /^(привет|здравствуй|здравствуйте|хай|ку|добрый день|добрый вечер|доброе утро|hello|hi|hey|good morning|buna|salut|здравей)[\s!.,?]*$/i.test(
       lower,
     ) ||
-    /^(как дела|кто ты|как тебя зовут|что ты умеешь|who are you|how are you|ce faci)[\s!.,?]*$/i.test(
+    /^(как дела|кто ты|как тебя зовут|что ты умеешь|who are you|how are you|расскажи о себе|чем занимаешься|где находитесь|где вы|откуда вы|куда доставка|как доставка|в какой валюте|какая валюта|цены|язык|на каком языке|спасибо|благодарю|ясно|понятно|ок|хорошо|отлично)[\s!.,?]*$/i.test(
+      lower,
+    ) ||
+    /(где находится|куда доставляете|доставка|оплата|валют[ае]|в росси[ие]|из росси[ие]|в евро|на каких языках|язык книг)/i.test(
       lower,
     );
 
-  if (isChitchat) {
+  if (isConversational) {
     return { needSearch: false, searchQuery: "" };
   }
 
-  // Use Gemini to detect if book search is needed
-  const apiKey = process.env.GEMINI_API_KEY || DEFAULT_API_KEY;
+  // Direct book recommendation / search keywords
+  const hasBookKeywords =
+    /(посоветуй|порекомендуй|найди|ищу|хочу почитать|что почитать|подскажи|выбери|книг[а-я]*|роман[а-я]*|фэнтези|детектив|фантастик|триллер|классик|автор|стивен кинг|гарри поттер|толкин|оруэлл|достоевск|дюна|космос|психологи[а-я]|recommend|suggest|search|find|book)/i.test(
+      lower,
+    );
 
-  const prompt = `
-Determine if the user's latest message in this bookstore conversation is asking for book recommendations, searching for specific titles or authors, or looking for books to buy/read.
-If YES: set needSearch: true and provide a concise search query in Russian Cyrillic to match the store's Russian-language book inventory (e.g. "фэнтези", "Стивен Кинг", "детектив", "Дюна", "романтика").
-If NO: set needSearch: false and searchQuery: "".
+  if (hasBookKeywords) {
+    let query = lower
+      .replace(
+        /(литера|пожалуйста|посоветуй|порекомендуй|подскажи|найди|хочу|что|почитать|купить|книг[а-я]*|какую-нибудь|какие-то|про|о|об|для|мне|нам|хорошую|интересную|топ|лучш[а-я]*|recommend|suggest|find|book|books|please)\b/gi,
+        " ",
+      )
+      .replace(/[?!,.:;«»"'()]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
 
-Conversation history:
-${JSON.stringify(messages.slice(-6))}
+    if (!query || query.length < 2) {
+      if (/фэнтези/i.test(lower)) query = "фэнтези";
+      else if (/детектив/i.test(lower)) query = "детектив";
+      else if (/фантастик|sci-fi/i.test(lower)) query = "фантастика";
+      else if (/роман/i.test(lower)) query = "роман";
+      else if (/классик/i.test(lower)) query = "классика";
+      else if (/космос/i.test(lower)) query = "космос";
+      else if (/подар[а-я]*/i.test(lower)) query = "бестселлер";
+      else if (/топ|популярн/i.test(lower)) query = "бестселлер";
+      else query = "книга";
+    }
 
-Return JSON:
-{
-  "needSearch": boolean,
-  "searchQuery": string
-}
-`;
+    return { needSearch: true, searchQuery: query };
+  }
 
-  try {
-    const res = await callGeminiJson({
-      apiKey,
-      prompt,
-      responseSchema: {
-        type: "OBJECT",
-        properties: {
-          needSearch: { type: "BOOLEAN" },
-          searchQuery: { type: "STRING" },
-        },
-        required: ["needSearch", "searchQuery"],
-      },
-    });
-
+  // Direct short title / author query (e.g. "Гарри Поттер", "Дюна", "Стивен Кинг")
+  const wordCount = lower.split(/\s+/).length;
+  if (
+    wordCount <= 4 &&
+    !/^(да|нет|не знаю|возможно|наверное|хм|пока|до свидания)$/i.test(lower)
+  ) {
     return {
-      needSearch: Boolean(res?.needSearch),
-      searchQuery: (res?.searchQuery || "").trim(),
-    };
-  } catch (err) {
-    console.warn("Intent analysis fallback:", err.message);
-    // Simple heuristic fallback
-    const hasSearchKeywords =
-      /(посоветуй|порекомендуй|найди|книг[иау]|купить|автор|роман|фэнтези|детектив|recommend|suggest|search|find|book|looking for|carte|recomanda)/i.test(
-        lower,
-      );
-    return {
-      needSearch: hasSearchKeywords,
-      searchQuery: hasSearchKeywords ? lower.replace(/(посоветуй|порекомендуй|найди|пожалуйста|хочу|recommend|suggest|find|please)\s*/gi, "").trim() : "",
+      needSearch: true,
+      searchQuery: lower.replace(/[?!.,]/g, "").trim(),
     };
   }
+
+  return { needSearch: false, searchQuery: "" };
 }
 
 /**
@@ -255,6 +268,8 @@ async function callGeminiJson({ apiKey, systemInstruction, prompt, responseSchem
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: {
       responseMimeType: "application/json",
+      maxOutputTokens: 500,
+      temperature: 0.65,
       ...(responseSchema ? { responseSchema } : {}),
     },
   };
@@ -342,7 +357,7 @@ ${JSON.stringify(history.slice(0, -1))}
       promptText += `
 LITERA STORE REAL CATALOGUE SEARCH RESULTS for query "${searchQuery}":
 ${JSON.stringify(
-  catalogueResults.map((b) => ({
+  catalogueResults.slice(0, 5).map((b) => ({
     id: b.id,
     title: b.title,
     author: b.author || "Unknown",

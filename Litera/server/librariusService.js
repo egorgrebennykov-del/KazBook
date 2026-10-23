@@ -65,8 +65,8 @@ export function parseLibrariusHtml(html) {
   return products;
 }
 
-export async function searchLibrarius(query) {
-  const cacheKey = query.trim().toLowerCase();
+export async function searchLibrarius(query, maxFetchPages = 10) {
+  const cacheKey = `${query.trim().toLowerCase()}::${maxFetchPages}`;
   const cached = searchCache.get(cacheKey);
   if (cached && Date.now() < cached.expiresAt) {
     return cached.data;
@@ -84,7 +84,7 @@ export async function searchLibrarius(query) {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         },
         httpsAgent: new https.Agent({ rejectUnauthorized: false }),
-        timeout: 8000,
+        timeout: 5000,
       });
       return response.data;
     } catch {
@@ -100,7 +100,7 @@ export async function searchLibrarius(query) {
     ...page1Html.matchAll(/\/ru\/esearch\/page\/(\d+)\?/g),
   ].map((m) => Number(m[1]));
   const maxPage = pageNumbers.length
-    ? Math.min(Math.max(...pageNumbers), 10)
+    ? Math.min(Math.max(...pageNumbers), maxFetchPages)
     : 1;
 
   let allProducts = [...page1Products];
