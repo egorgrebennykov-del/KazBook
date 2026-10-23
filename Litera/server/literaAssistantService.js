@@ -27,14 +27,25 @@ ABOUT LITERA BOOKSTORE (BACKGROUND KNOWLEDGE ONLY):
 - All prices are in Euros (€ / EUR).
 - Books in the store are in Russian.
 - Sourcing confidentiality: NEVER mention Moldova or Moldovan bookstores under any circumstances. If asked where books come from, explain that Litera partners with certified publishers and verified European distributor networks.
-- Store sections: "Главная", "Подборка книг", "Скидки", "Новинки", "Отзывы", "Корзина".
 
-CRITICAL RULE ON STORE INFORMATION:
-- The facts above (Europe, Russian language, delivery, Euros) are STRICTLY BACKGROUND KNOWLEDGE.
-- Do NOT mention or emphasize them during regular conversation or book recommendations!
-- NEVER say robotic phrases like "в нашем европейском каталоге на русском языке", "в нашем каталоге в евро", "для европейских читателей", etc.
-- When recommending books or chatting, speak completely naturally like a true passionate bookseller: "У нас есть...", "В каталоге Litera вы найдете...", "Обратите внимание на...", "Могу порекомендовать...".
-- ONLY talk about Europe, delivery geography, Euros, or book language if the user EXPLICITLY ASKS a question about those specific topics (e.g. "Куда вы доставляете?", "На каком языке книги?", "В какой валюте цены?").
+CRITICAL RULES ON RECOMMENDATIONS VS STORE/CART/SITE QUESTIONS:
+1. STRICTLY NEVER OFFER OR SEARCH FOR BOOKS WHEN NOT ASKED!
+   - If the user asks about their cart ("что в корзине", "проверь корзину", "сколько товаров", "общая сумма", "очисти корзину"), their orders, account, profile, site navigation, or general questions:
+     DO NOT recommend or suggest any books!
+     DO NOT invent book suggestions matching words in the user's prompt (e.g. NEVER suggest «Корзина с еловыми шишками» when asked about the shopping cart!).
+     Set "bookIds": [].
+     Answer the user's question directly, accurately, and politely using the provided CURRENT USER & SITE CONTEXT.
+2. When the user asks about the cart:
+   - If the user is logged in and has items: accurately name the books in their cart, their quantities, and the total sum in euros from the context.
+   - If the user is logged in but cart is empty: state clearly that the cart is currently empty.
+   - If the user is not logged in (guest): explain that they need to sign in or register to see their cart.
+3. Site Navigation & Actions:
+   - If the user asks to go to a page or open a section (e.g. "открой корзину", "перейди в профиль", "покажи скидки", "оформить заказ"):
+     Include the optional "action" field in your JSON response:
+     { "type": "navigate", "url": "/cart" } (or "/profile", "/discount", "/checkout", etc.).
+4. When book recommendations ARE requested (needSearch = true):
+   - Recommend books EXCLUSIVELY from the provided search results list.
+   - Use their exact "id" in "bookIds".
 
 YOUR PERSONALITY & TONE:
 - Friendly, warm, intelligent, polite, and approachable.
@@ -44,16 +55,6 @@ YOUR PERSONALITY & TONE:
 - Natural speaker in any language: You MUST ALWAYS reply in the exact language the user used in their message (Russian, English, Romanian, Bulgarian, etc.).
 - Truthful & Honest: NEVER invent fake books, fake author names, imaginary prices, or fake availability.
 - Conciseness: Keep your conversational answers compact, charming, and focused (typically 2-4 sentences). Never generate long walls of text.
-
-CATALOGUE RECOMMENDATION RULES:
-1. When real catalogue search results are provided in your prompt:
-   - Recommend books EXCLUSIVELY from the provided search results list.
-   - Use their exact "id" (e.g. "catalog-book-0") in your "bookIds" array.
-   - If the user asks for 3 books and 3 or more matching books exist in the list, recommend up to 3.
-   - If only 1 or 2 matching books exist in the list, recommend ONLY those 1 or 2! Explain that only these are currently available. NEVER invent additional books to reach 3.
-   - If 0 matching books are found in the list, honestly and gently explain that Litera's catalogue does not have matching books right now, and offer to try another genre, author, or broader search.
-2. For questions about the store, delivery, currencies, or literary topics:
-   - Answer directly and accurately using the store knowledge above (set "bookIds": []).
 
 EMOTION SELECTION:
 Choose the most fitting emotion for the character:
@@ -73,7 +74,8 @@ Return a single JSON object strictly matching this schema:
 {
   "message": "Your conversational answer in the customer's language",
   "emotion": "greeting | happy | laughing | curious | surprised | confused | concerned | sad | speaking | neutral",
-  "bookIds": ["id1", "id2"]
+  "bookIds": ["id1", "id2"],
+  "action": { "type": "navigate", "url": "/cart" }
 }
 Do NOT include Markdown code fences.
 `;
@@ -361,15 +363,23 @@ async function analyzeSearchIntent(messages) {
   const latestMessage = messages[messages.length - 1]?.content || "";
   const lower = latestMessage.toLowerCase().trim();
 
-  // Fast-path 1: Greetings, pleasantries, or general store questions (NO SEARCH)
+  // Fast-path 1: Cart, Account, Profile, Orders, Site Navigation (STRICTLY NO BOOK DISCOVERY)
+  const isSiteOrCartQuery =
+    /(корзин|в корзине|из корзины|очист(и|ить) корзину|содержимое корзины|товары в корзине|заказ|оформить заказ|оформление|мои заказы|профиль|аккаунт|войти|логин|регистрац|где найти раздел|куда нажать|как оплатить|доставка|валют|в евро|где вы находитесь)/i.test(
+      lower,
+    ) &&
+    !/(книга про корзину|книги про корзину|книга корзина)/i.test(lower);
+
+  if (isSiteOrCartQuery) {
+    return { needSearch: false };
+  }
+
+  // Fast-path 2: Greetings, pleasantries, or questions about Litera (NO SEARCH)
   const isConversational =
     /^(привет|здравствуй|здравствуйте|хай|ку|добрый день|добрый вечер|доброе утро|hello|hi|hey|good morning|buna|salut|здравей)[\s!.,?]*$/i.test(
       lower,
     ) ||
     /^(как дела|кто ты|как тебя зовут|что ты умеешь|who are you|how are you|расскажи о себе|чем занимаешься|спасибо|благодарю|ясно|понятно|ок|хорошо|отлично)[\s!.,?]*$/i.test(
-      lower,
-    ) ||
-    /(где находится|куда доставляете|доставка|оплата|валют[ае]|в росси[ие]|из росси[ие]|в евро|на каких языках|язык книг|сколько стоит доставка)/i.test(
       lower,
     ) ||
     /^(какая твоя любимая|что ты думаешь|кто твой любимый|ты любишь читать|расскажи о себе|как погода)/i.test(
@@ -380,7 +390,7 @@ async function analyzeSearchIntent(messages) {
     return { needSearch: false };
   }
 
-  // Fast-path 2: Suggested quick chips (Direct search needed)
+  // Fast-path 3: Suggested quick chips (Direct search needed)
   if (
     /литера,?\s*(что\s*почитать|посоветуй\s*книгу|что\s*(сейчас\s*)?в\s*топе|помоги\s*с\s*подарком|найди\s*детектив)/i.test(
       lower,
@@ -389,19 +399,29 @@ async function analyzeSearchIntent(messages) {
     return { needSearch: true };
   }
 
-  // Fast-path 3: Book keywords, themes, emotions, questions
-  const hasBookKeywords =
-    /(книг|посоветуй|порекомендуй|найди|хочу почитать|подскажи|что почитать|про |о |об |роман|детектив|фантастик|автор|купить|подарок|грусть|животн|восток|смысл|любовь|истори)/i.test(
+  // Fast-path 4: Explicit book requests
+  const hasExplicitBookRequest =
+    /(посоветуй|порекомендуй|найди|хочу почитать|подскажи что почитать|что почитать|подобрать книгу|выбери книгу|какие книги|книги про|книгу про|книги о|книги по|книга про|книга о|книга по|хочу книгу)/i.test(
       lower,
     );
-  if (hasBookKeywords) {
+  if (hasExplicitBookRequest) {
     return { needSearch: true };
   }
 
   // Fallback: use Gemini to classify intent
   const apiKey = process.env.GEMINI_API_KEY || DEFAULT_API_KEY;
   const prompt = `
-Determine if the customer's message requests book recommendations, searches for books to read or buy, or asks about literature topics:
+Determine if the customer's message explicitly requests finding, recommending, or suggesting books to read or buy from the bookstore.
+
+CRITICAL RULES:
+- set needSearch = false if the customer is asking about:
+  * Their shopping cart ("что в корзине", "проверь корзину", "сколько книг в заказе")
+  * Their account, login, or orders ("мои заказы", "где профиль")
+  * Store FAQ (shipping, payment, currency, locations, languages)
+  * Casual conversation ("привет", "как дела", "спасибо")
+  * Navigation ("открой корзину", "перейти к оформлению")
+- set needSearch = true ONLY if the customer is genuinely asking for book recommendations or searching for reading material (e.g. "посоветуй что-то про космос", "найди детективы", "хочу почитать драму", "что почитать про смысл жизни").
+
 Customer message: "${latestMessage}"
 Return JSON: { "needSearch": boolean }
 `;
@@ -418,7 +438,7 @@ Return JSON: { "needSearch": boolean }
     });
     return { needSearch: Boolean(res?.needSearch) };
   } catch {
-    return { needSearch: true };
+    return { needSearch: false };
   }
 }
 
@@ -484,7 +504,7 @@ async function callGeminiJson({ apiKey, systemInstruction, prompt, responseSchem
 /**
  * Main handler for Litera Assistant chat requests
  */
-export async function processLiteraChat({ messages, language = "ru", onStatus } = {}) {
+export async function processLiteraChat({ messages, language = "ru", context, onStatus } = {}) {
   const apiKey = process.env.GEMINI_API_KEY || DEFAULT_API_KEY;
   const history = Array.isArray(messages) ? messages.slice(-10) : [];
   const latestMessage = history[history.length - 1]?.content || "";
@@ -505,10 +525,49 @@ export async function processLiteraChat({ messages, language = "ru", onStatus } 
     catalogueResults = await discoverAndMatchBooks(latestMessage).catch(() => []);
   }
 
-  // 2. Build prompt for Litera
+  // 2. Format live user, cart, and page context
+  const cartInfo = context?.cart;
+  const userInfo = context?.user;
+  const pageInfo = context?.page;
+
+  let siteContextText = `
+CURRENT USER & SITE CONTEXT:
+- User is logged in: ${userInfo?.isLoggedIn ? `Yes (Name: ${userInfo.name || "Customer"}, Email: ${userInfo.email || "Unknown"})` : "No (Guest visitor)"}
+- Current page / route: ${pageInfo?.pathname || "/"}
+- User's Shopping Cart:
+`;
+
+  if (!cartInfo?.isLoggedIn) {
+    siteContextText += `  Status: User is NOT signed in (Guest). In Litera bookstore, the cart is linked to user accounts. If the user asks what is in their cart or asks to check their cart, explain politely that they need to sign in (/login) or register (/sign-up) to access and save their personal shopping cart.\n`;
+  } else if (!cartInfo.items || cartInfo.items.length === 0) {
+    siteContextText += `  Status: The user's cart is currently EMPTY (0 items, 0.00 €). If they ask what is in their cart, tell them accurately that their cart is empty, and ask if they would like recommendations for books.\n`;
+  } else {
+    siteContextText += `  Status: Cart has ${cartInfo.itemCount} books, Total: ${cartInfo.totalPrice} EUR.
+  Items in cart:
+${cartInfo.items.map((it, idx) => `  ${idx + 1}. «${it.title}» — ${it.quantity} шт. по ${it.price} € (${it.store})`).join("\n")}
+`;
+  }
+
+  siteContextText += `
+AVAILABLE SITE SECTIONS & ROUTES:
+- Главная (/) — Bestsellers, catalog overview
+- Корзина (/cart) — Shopping cart to view items, change quantities, and checkout
+- Оформление заказа (/checkout) — Complete the order and enter delivery details
+- Мои заказы (/orders) — View past and current orders
+- Профиль (/profile) — Customer account profile
+- Скидки (/discount) — Discounted books and offers
+- Новинки (/new) — Newly released books
+- Подборка книг (/featured) — Curated book selections
+- Отзывы (/testimonial) — Customer reviews
+- Вход (/login) / Регистрация (/sign-up) — Account authentication
+`;
+
+  // 3. Build prompt for Litera
   let promptText = `
 User latest message: "${latestMessage}"
 User interface language: "${language}"
+
+${siteContextText}
 
 Conversation history:
 ${JSON.stringify(history.slice(0, -1))}
@@ -551,12 +610,13 @@ CRITICAL INSTRUCTIONS WHEN NO BOOKS ARE FOUND:
   } else {
     promptText += `
 INSTRUCTION:
-Answer the user's question, greeting, or literary inquiry directly and helpfully in your charming, friendly voice.
+Answer the user's question, greeting, cart inquiry, or store navigation inquiry directly and helpfully in your charming, friendly voice using the CURRENT USER & SITE CONTEXT.
 Set "bookIds": [].
+If the user explicitly asks to open or navigate to a page (e.g. "открой корзину", "перейди в профиль", "оформи заказ"), include the "action" field: { "type": "navigate", "url": "/cart" } (or corresponding route).
 `;
   }
 
-  // 3. Generate response with Gemini
+  // 4. Generate response with Gemini
   try {
     const aiResponse = await callGeminiJson({
       apiKey,
@@ -585,12 +645,19 @@ Set "bookIds": [].
             type: "ARRAY",
             items: { type: "STRING" },
           },
+          action: {
+            type: "OBJECT",
+            properties: {
+              type: { type: "STRING" },
+              url: { type: "STRING" },
+            },
+          },
         },
         required: ["message", "emotion", "bookIds"],
       },
     });
 
-    // 4. Verify bookIds against actual catalogue results (Strict Data Integrity)
+    // 5. Verify bookIds against actual catalogue results (Strict Data Integrity)
     const validBookIds = new Set(catalogueResults.map((b) => b.id));
     const verifiedBooks = (aiResponse.bookIds || [])
       .filter((id) => validBookIds.has(id))
@@ -601,6 +668,7 @@ Set "bookIds": [].
       message: aiResponse.message || "Здравствуйте! Чем я могу помочь вам в выборе книги? 💜",
       emotion: aiResponse.emotion || "happy",
       books: verifiedBooks,
+      action: aiResponse.action || null,
       wasSearching: needSearch,
     };
   } catch (err) {

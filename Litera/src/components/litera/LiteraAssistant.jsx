@@ -2,14 +2,17 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import LiteraCharacter from "./LiteraCharacter";
 import { useLanguage } from "../../context/languageContext";
-import { addToCart } from "../../../utils/cart";
-import { isLoggedIn } from "../../../utils/auth";
+import { addToCart, getCart } from "../../../utils/cart";
+import { isLoggedIn, getCookieUser } from "../../../utils/auth";
 import "./LiteraAssistant.css";
 
 const STORAGE_KEY = "litera_assistant_history_v2";
 
 const isSearchQuery = (text) =>
-  /(посоветуй|порекомендуй|найди|купить|что почитать|подобрать книгу|выбери|recommend|suggest|search catalogue|find book)/i.test(
+  /(посоветуй|порекомендуй|найди|что почитать|подобрать книгу|выбери книгу|какие книги|книги про|книгу про|recommend|suggest|search catalogue|find book)/i.test(
+    text,
+  ) &&
+  !/(корзин|в корзине|заказ|мои заказы|профиль|аккаунт|где найти|куда нажать)/i.test(
     text,
   );
 
@@ -141,12 +144,62 @@ export default function LiteraAssistant() {
     setEmotion(initialStatus === "searching" ? "thinking" : "speaking");
 
     try {
+      let cartContext = {
+        isLoggedIn: isLoggedIn(),
+        itemCount: 0,
+        totalPrice: 0,
+        items: [],
+      };
+
+      if (isLoggedIn()) {
+        try {
+          const cartRows = await getCart();
+          const items = (cartRows || []).map((row) => ({
+            title: row.title,
+            price: Number(row.price) || 0,
+            quantity: Math.max(1, Number(row.quantity) || 1),
+            store: row.shop || "",
+            url: row.link || "",
+          }));
+          const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+          const totalPrice =
+            Math.round(
+              items.reduce((sum, item) => sum + item.price * item.quantity, 0) * 100,
+            ) / 100;
+          cartContext = {
+            isLoggedIn: true,
+            itemCount,
+            totalPrice,
+            items,
+          };
+        } catch {
+          // Ignore cart fetch error
+        }
+      }
+
+      const userObj = getCookieUser();
+      const userContext = {
+        isLoggedIn: isLoggedIn(),
+        name: userObj?.name || userObj?.email?.split("@")[0] || "",
+        email: userObj?.email || "",
+      };
+
+      const pageContext = {
+        pathname: window.location.pathname,
+        title: document.title,
+      };
+
       const payload = {
         messages: nextMessages.map((m) => ({
           role: m.role === "assistant" ? "assistant" : "user",
           content: m.content,
         })),
         language,
+        context: {
+          cart: cartContext,
+          user: userContext,
+          page: pageContext,
+        },
       };
 
       const response = await fetch("/api/litera-chat", {
@@ -196,6 +249,11 @@ export default function LiteraAssistant() {
         }
       } else {
         data = await response.json();
+      }
+
+      // Handle navigation action if requested
+      if (data?.action?.type === "navigate" && data.action.url) {
+        navigate(data.action.url);
       }
 
       const assistantEmotion = data?.emotion || "happy";
