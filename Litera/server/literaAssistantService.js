@@ -50,6 +50,7 @@ CRITICAL RULES ON RECOMMENDATIONS VS STORE/CART/SITE QUESTIONS:
    - MINIMUM 3 BOOKS REQUIREMENT: Whenever books are present in the search results list, YOU MUST ALWAYS RECOMMEND AT LEAST 3 BOOKS (return at least 3 IDs in "bookIds", e.g. ["catalog-book-0", "catalog-book-1", "catalog-book-2"]) unless fewer than 3 books total are available in the catalogue results. Always give the reader a great selection of at least 3 books!
    - CONVERSATION MEMORY & CONTINUITY: Pay close attention to recent messages and previously recommended books. If the user asks for "другие издания", "такие же книги но другого издательства", "подороже", "покажи еще", acknowledge the connection to their previous request warmly and present the alternative editions!
    - PRICE AND VALUE PREFERENCE: By default, prioritize accessible, affordable editions (~7-15 €). But if the user explicitly asks for other editions, hardcover, premium, or more expensive editions ("другие издания", "другого издательства", "подороже", "подарочное"), recommend the higher-priced, high-quality editions from the provided catalogue list!
+   - ABSENCE OF OTHER EDITIONS: If the customer asks for another edition of a book, but no other edition exists in our catalogue: You MUST apologize politely and warmly to the customer (e.g. "Простите, пожалуйста! 💜", "Мне очень жаль...") and honestly explain that this title is available in our catalogue in only this one edition. DO NOT search for or suggest any other books or titles that the user did not ask for! Keep the existing list intact.
 
 YOUR PERSONALITY & TONE:
 - Friendly, warm, intelligent, polite, and approachable.
@@ -406,54 +407,6 @@ export function findTargetBookIndex(query, bookList) {
 }
 
 /**
- * Discover alternative works for an author when a specific book title has only 1 edition in stock
- */
-export async function discoverAlternativeWorksForAuthor(
-  author,
-  currentTitle,
-  excludeTitles = [],
-) {
-  const cleanAuthor = (author || "").trim();
-  const apiKey = process.env.GEMINI_API_KEY || DEFAULT_API_KEY;
-
-  const prompt = `
-A customer in an online bookstore requested another edition or alternative book for «${currentTitle}» by author "${cleanAuthor}".
-However, our bookstore catalogue has only ONE edition of «${currentTitle}».
-TASK:
-Suggest 4 other real, famous, widely published Russian book titles by this author (or in the exact same genre/style if author is not specified).
-Do NOT suggest any of these titles already shown to the user:
-${excludeTitles.map((t) => `- ${t}`).join("\n")}
-
-Return JSON:
-{
-  "titles": ["Title 1", "Title 2", "Title 3", "Title 4"]
-}
-Strictly return book titles only in Russian, with no author names inside the title strings.
-`;
-
-  try {
-    const res = await callGeminiJson({
-      apiKey,
-      prompt,
-      responseSchema: {
-        type: "OBJECT",
-        properties: {
-          titles: {
-            type: "ARRAY",
-            items: { type: "STRING" },
-          },
-        },
-        required: ["titles"],
-      },
-    });
-    return Array.isArray(res?.titles) ? res.titles : [];
-  } catch (err) {
-    console.warn("discoverAlternativeWorksForAuthor error:", err.message);
-    return [];
-  }
-}
-
-/**
  * 4. Main AI Discovery & Supplier Verification pipeline.
  * Discovers real books by meaning, searches suppliers strictly by title only,
  * validates products, and excludes any books not available on suppliers.
@@ -525,39 +478,42 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
 
     // Exclude the edition that is currently shown (by exact URL)
     const unshown = validMatches.filter((p) => p.url !== targetBook.url);
-    let pool = unshown;
-    let isDifferentWork = false;
 
-    // If no other edition exists for this exact title across all suppliers,
-    // search for alternative acclaimed works by the same author in bookstore catalogue!
-    if (pool.length === 0) {
-      const author = (targetBook.author || targetBook.candidateAuthor || "").trim();
-      const excludeTitles = lastRecommendedList.map((b) => (b.title || "").toLowerCase());
-      const altCandidates = await discoverAlternativeWorksForAuthor(
-        author,
-        targetBook.title,
-        excludeTitles,
+    // If no other edition exists in the bookstore catalog:
+    // User's strict rule: "если нет другого издания, ассистентка должна так и ответить и попросить прощения, не надо искать то чего не просят"
+    if (unshown.length === 0) {
+      const updatedList = await Promise.all(
+        lastRecommendedList.map(async (book, idx) => {
+          let img = book.image;
+          if (!img && book.title) {
+            try {
+              const cachedProducts = await searchSuppliersByTitleOnly(
+                book.title,
+                activeRate,
+              );
+              const found =
+                cachedProducts.find((p) => p.url === book.url) ||
+                cachedProducts[0];
+              if (found?.image) img = found.image;
+            } catch {
+              // ignore
+            }
+          }
+          return {
+            ...book,
+            image: img || "",
+            currency: book.currency || "EUR",
+            id: `catalog-book-${idx}`,
+            noOtherEdition: idx === targetIndex,
+            targetTitle: targetBook.title,
+          };
+        }),
       );
 
-      for (const candTitle of altCandidates) {
-        const altProducts = await searchSuppliersByTitleOnly(candTitle, activeRate);
-        const validAlt = altProducts.filter((p) =>
-          validateProductMatch(p, { title: candTitle, author }),
-        );
-        const availableAlt = validAlt.filter(
-          (p) => !lastRecommendedList.some((b) => b.url === p.url),
-        );
-        if (availableAlt.length > 0) {
-          pool = availableAlt;
-          isDifferentWork = true;
-          break;
-        }
-      }
+      return updatedList;
     }
 
-    if (pool.length === 0) {
-      pool = validMatches.length > 0 ? validMatches : [targetBook];
-    }
+    const pool = unshown;
 
     const isExplicitlyLuxury =
       /(подарочн|коллекционн|в твердом переплете|кожан|люкс|самое дорогое)/i.test(
@@ -599,15 +555,10 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
         if (idx === targetIndex) {
           return {
             ...replacementBook,
-            candidateTitle: isDifferentWork
-              ? replacementBook.title
-              : (targetBook.candidateTitle || targetBook.title),
+            candidateTitle: targetBook.candidateTitle || targetBook.title,
             candidateAuthor: targetBook.candidateAuthor || targetBook.author,
-            relevance: isDifferentWork
-              ? `Альтернативное произведение автора (для книги «${targetBook.title}» в каталоге представлено только одно издание)`
-              : "Альтернативное издание произведения",
+            relevance: "Альтернативное издание произведения",
             isReplacement: true,
-            replacedTitleOnlyEdition: isDifferentWork,
             previousTitle: targetBook.title,
           };
         }
@@ -1031,32 +982,33 @@ ${JSON.stringify(
 )}
 `;
 
+      const noOtherEditionItem = catalogueResults.find((b) => b.noOtherEdition);
       const targetedReplacementItem = catalogueResults.find(
         (b) => b.isReplacement,
       );
-      if (targetedReplacementItem) {
-        if (targetedReplacementItem.replacedTitleOnlyEdition) {
-          promptText += `
-CRITICAL TARGETED BOOK REPLACEMENT INSTRUCTION:
-- The customer asked to replace book «${targetedReplacementItem.previousTitle}» with another edition.
-- In our bookstore catalogue, «${targetedReplacementItem.previousTitle}» is only available in ONE edition.
-- Therefore, you kept all other books in their exact positions and replaced this book with another celebrated work by the same author: «${targetedReplacementItem.title}» (${targetedReplacementItem.price} €)!
-- YOU MUST RETURN ALL ${catalogueResults.length} BOOKS in "bookIds":
+
+      if (noOtherEditionItem) {
+        promptText += `
+CRITICAL INSTRUCTION - NO OTHER EDITION AVAILABLE IN STORE CATALOGUE:
+- The customer asked for another edition of book «${noOtherEditionItem.targetTitle || noOtherEditionItem.title}».
+- In Litera's catalogue, there are NO OTHER EDITIONS of «${noOtherEditionItem.targetTitle || noOtherEditionItem.title}»! It is available ONLY in this single edition.
+- YOU MUST APOLOGIZE POLITELY AND WARMLY TO THE CUSTOMER (e.g. "Простите, пожалуйста! 💜", "Мне очень жаль...").
+- Honestly and clearly state that unfortunately in our catalogue there are currently no other editions of «${noOtherEditionItem.targetTitle || noOtherEditionItem.title}» — this book is presented only in this single edition.
+- STRICT REQUIREMENT: DO NOT search for, suggest, or offer any other books or titles that the user did not ask for ("не надо искать то чего не просят")!
+- Keep the user's current book list intact without modifications: return all their IDs in "bookIds":
   "bookIds": ${JSON.stringify(catalogueResults.map((b) => b.id))}
-- In your conversational response:
-  Explain politely and warmly that for «${targetedReplacementItem.previousTitle}» our catalogue currently has only one edition in stock, so you kept their other books and selected another wonderful, acclaimed work by the author — «${targetedReplacementItem.title}»!
+- Set emotion: "concerned" or "sad".
 `;
-        } else {
-          promptText += `
+      } else if (targetedReplacementItem) {
+        promptText += `
 CRITICAL TARGETED BOOK REPLACEMENT INSTRUCTION:
-- The customer asked to replace a specific book in their list (book «${targetedReplacementItem.title}») with another (higher-priced/different) edition.
+- The customer asked to replace a specific book in their list (book «${targetedReplacementItem.title}») with another edition.
 - The catalogue list above contains ALL ${catalogueResults.length} books in their EXACT original order, with the targeted book successfully replaced by its alternative edition («${targetedReplacementItem.title}» at ${targetedReplacementItem.price} €)!
 - YOU MUST RETURN ALL ${catalogueResults.length} BOOKS in "bookIds":
   "bookIds": ${JSON.stringify(catalogueResults.map((b) => b.id))}
 - In your conversational response:
-  Explain warmly that you kept the earlier books and replaced the requested book with another, more premium and quality-bound edition as requested!
+  Explain warmly that you kept the earlier books and replaced the requested book with another edition as requested!
 `;
-        }
       } else {
         promptText += `
 CRITICAL INSTRUCTIONS:
