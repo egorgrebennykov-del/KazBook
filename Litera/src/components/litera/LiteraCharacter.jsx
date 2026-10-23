@@ -16,6 +16,7 @@ const VALID_EMOTIONS = new Set([
   "success",
   "error",
   "messageRead",
+  "blushing",
 ]);
 
 export default function LiteraCharacter({
@@ -29,8 +30,8 @@ export default function LiteraCharacter({
 
   const cleanEmotion = VALID_EMOTIONS.has(emotion) ? emotion : "neutral";
   const imageSrc = imgError
-    ? "/images/litera/neutral.png"
-    : `/images/litera/${cleanEmotion}.png`;
+    ? "/assets/img/litera_assistant/neutral.png"
+    : `/assets/img/litera_assistant/${cleanEmotion}.png`;
 
   return (
     <div
@@ -48,7 +49,13 @@ export default function LiteraCharacter({
         src={imageSrc}
         alt={alt}
         className="litera-character__image"
-        onError={() => setImgError(true)}
+        onError={(e) => {
+          if (!e.target.src.includes("/images/litera/")) {
+            e.target.src = `/images/litera/${cleanEmotion}.png`;
+          } else {
+            setImgError(true);
+          }
+        }}
         draggable={false}
       />
     </div>
