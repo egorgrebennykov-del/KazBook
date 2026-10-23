@@ -142,10 +142,14 @@
 }
 
 .privileged__nav-btn {
+  flex: 1 1 180px;
+  min-width: 180px;
+  height: 50px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.6rem;
-  padding: 0.85rem 1.35rem;
+  padding: 0.75rem 1.25rem;
   border-radius: 0.75rem;
   background-color: var(--container-color);
   border: 1px solid var(--border-color);
@@ -155,6 +159,8 @@
   cursor: pointer;
   transition: all 0.2s ease;
   font-family: inherit;
+  box-sizing: border-box;
+  text-align: center;
 }
 
 .privileged__nav-btn:hover {
@@ -531,13 +537,42 @@
 }
 
 .privileged__role-pill--privileged {
-  background-color: hsla(38, 92%, 50%, 0.15);
-  color: hsl(38, 92%, 40%);
-  border: 1px solid hsla(38, 92%, 50%, 0.3);
+  position: relative;
+  background-color: hsla(38, 92%, 50%, 0.12);
+  color: hsl(38, 92%, 36%);
+  border: 1.5px solid transparent;
+  background-image:
+    linear-gradient(var(--container-color, #ffffff), var(--container-color, #ffffff)),
+    linear-gradient(115deg, #d97706, #fbbf24, #fef08a, #f59e0b, #d97706);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  background-size: 100% 100%, 250% 100%;
+  animation: dynamicRolePillGlow 3s linear infinite;
+  box-shadow: 0 0 8px hsla(38, 92%, 50%, 0.25);
+  font-weight: 700;
+}
+
+@keyframes dynamicRolePillGlow {
+  0% {
+    background-position: 0% 0%, 0% 50%;
+    box-shadow: 0 0 6px hsla(38, 92%, 50%, 0.2);
+  }
+  50% {
+    background-position: 0% 0%, 125% 50%;
+    box-shadow: 0 0 14px hsla(45, 100%, 55%, 0.5);
+  }
+  100% {
+    background-position: 0% 0%, 250% 50%;
+    box-shadow: 0 0 6px hsla(38, 92%, 50%, 0.2);
+  }
 }
 
 .dark-theme .privileged__role-pill--privileged {
-  color: hsl(38, 92%, 60%);
+  color: hsl(42, 100%, 65%);
+  background-image:
+    linear-gradient(var(--container-color, #1f2937), var(--container-color, #1f2937)),
+    linear-gradient(115deg, #b45309, #fde047, #f59e0b, #fef08a, #b45309);
+  box-shadow: 0 0 12px hsla(42, 100%, 55%, 0.35);
 }
 
 .privileged__role-pill--user {
@@ -551,7 +586,37 @@
   font-size: var(--smaller-font-size);
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
+  height: 36px;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+/* Ensure table action buttons on users page have equal uniform size */
+.privileged__table th:last-child,
+.privileged__table td:last-child {
+  width: 215px;
+  min-width: 215px;
+  text-align: center;
+}
+
+.privileged__table td .privileged__btn-sm {
+  width: 195px;
+  min-width: 195px;
+  max-width: 195px;
+  height: 36px;
+  justify-content: center;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.privileged__user-card-actions .privileged__btn-sm {
+  width: 100%;
+  height: 38px;
+  justify-content: center;
+  text-align: center;
+  box-sizing: border-box;
 }
 
 .privileged__no-data {
@@ -1161,6 +1226,136 @@
   max-width: 95vw;
   max-height: 88vh;
   overflow-y: auto;
+}
+
+/* Coupon Modal Audience Switcher (Public vs Personalized) */
+.privileged__coupon-modal-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  background-color: var(--body-color);
+  padding: 0.35rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-color);
+}
+
+.privileged__coupon-modal-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.6rem;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text-color);
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.privileged__coupon-modal-tab i {
+  font-size: 1.35rem;
+  color: var(--text-color);
+  transition: color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.privileged__coupon-modal-tab-content {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.privileged__coupon-modal-tab-title {
+  font-size: var(--small-font-size);
+  font-weight: var(--font-semi-bold);
+  color: var(--title-color);
+}
+
+.privileged__coupon-modal-tab-sub {
+  font-size: 0.72rem;
+  color: var(--text-color);
+  opacity: 0.8;
+  margin-top: 0.15rem;
+}
+
+.privileged__coupon-modal-tab--active {
+  background-color: var(--container-color);
+  border-color: var(--first-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.privileged__coupon-modal-tab--active i {
+  color: var(--first-color);
+}
+
+.privileged__coupon-modal-tab--active .privileged__coupon-modal-tab-title {
+  color: var(--first-color);
+}
+
+.privileged__coupon-audience-info {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.65rem 0.9rem;
+  background-color: hsla(230, 62%, 56%, 0.08);
+  border: 1px solid hsla(230, 62%, 56%, 0.2);
+  border-radius: 0.5rem;
+  margin-bottom: 1.25rem;
+  font-size: var(--smaller-font-size);
+  color: var(--title-color);
+}
+
+.privileged__coupon-audience-info i {
+  color: var(--first-color);
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.privileged__coupon-audience-info--user {
+  background-color: hsla(38, 92%, 50%, 0.1);
+  border-color: hsla(38, 92%, 50%, 0.25);
+}
+
+.privileged__coupon-audience-info--user i {
+  color: hsl(38, 92%, 45%);
+}
+
+/* Coupon filter tabs in panel view */
+.privileged__coupon-filter-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.privileged__coupon-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 2rem;
+  background-color: var(--container-color);
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+  font-size: var(--smaller-font-size);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.privileged__coupon-filter-btn:hover {
+  border-color: var(--first-color);
+  color: var(--title-color);
+}
+
+.privileged__coupon-filter-btn--active {
+  background-color: var(--first-color) !important;
+  border-color: var(--first-color) !important;
+  color: #fff !important;
 }
 
 .privileged__user-selector {

@@ -1,8 +1,18 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router";
-import { getAllUsers, getCookieUser, getProfile, isLoggedIn, updateUserRole } from "../../../utils/auth";
+import {
+  getAllUsers,
+  getCookieUser,
+  getProfile,
+  isLoggedIn,
+  updateUserRole,
+} from "../../../utils/auth";
 import { getAllOrdersAdmin, updateOrderStatus } from "../../../utils/orders";
-import { createCoupon, deleteCoupon, getAllCoupons } from "../../../utils/coupons";
+import {
+  createCoupon,
+  deleteCoupon,
+  getAllCoupons,
+} from "../../../utils/coupons";
 import BookImage from "../common/BookImage";
 import decodeHtmlEntities from "../../../utils/decodeHtmlEntities";
 import { useLanguage } from "../../context/languageContext";
@@ -38,7 +48,9 @@ export default function Privileged() {
   const loggedIn = isLoggedIn();
   const cookieUser = getCookieUser();
 
-  const [checkingAuth, setCheckingAuth] = useState(!loggedIn ? false : cookieUser?.role !== "privileged");
+  const [checkingAuth, setCheckingAuth] = useState(
+    !loggedIn ? false : cookieUser?.role !== "privileged",
+  );
   const [isPrivilegedUser, setIsPrivilegedUser] = useState(
     cookieUser?.role === "privileged",
   );
@@ -55,6 +67,8 @@ export default function Privileged() {
 
   // New coupon form state
   const [showCouponModal, setShowCouponModal] = useState(false);
+  const [couponAudienceTab, setCouponAudienceTab] = useState("public"); // "public" | "personalized"
+  const [couponFilter, setCouponFilter] = useState("all"); // "all" | "public" | "personalized"
   const [couponCode, setCouponCode] = useState("");
   const [couponName, setCouponName] = useState("");
   const [couponType, setCouponType] = useState("percent"); // "percent" | "fixed" | "gift"
@@ -114,11 +128,7 @@ export default function Privileged() {
     if (!isPrivilegedUser) return;
     let cancelled = false;
 
-    Promise.all([
-      getAllUsers(),
-      getAllOrdersAdmin(),
-      getAllCoupons(),
-    ])
+    Promise.all([getAllUsers(), getAllOrdersAdmin(), getAllCoupons()])
       .then(([usersList, ordersList, couponsList]) => {
         if (!cancelled) {
           setUsers(usersList);
@@ -234,9 +244,7 @@ export default function Privileged() {
   const handleCopyText = (text, label) => {
     if (navigator?.clipboard?.writeText) {
       navigator.clipboard.writeText(text);
-      showNotice(
-        `${label ? `${label} ` : ""}${t("privileged.users.copied")}`,
-      );
+      showNotice(`${label ? `${label} ` : ""}${t("privileged.users.copied")}`);
     }
   };
 
@@ -260,7 +268,9 @@ export default function Privileged() {
     try {
       await updateUserRole(targetUser.id, nextRole);
       setUsers((prev) =>
-        prev.map((u) => (u.id === targetUser.id ? { ...u, role: nextRole } : u)),
+        prev.map((u) =>
+          u.id === targetUser.id ? { ...u, role: nextRole } : u,
+        ),
       );
       showNotice(
         isTargetPrivileged
@@ -291,6 +301,7 @@ export default function Privileged() {
   };
 
   const resetCouponForm = () => {
+    setCouponAudienceTab("public");
     setCouponCode("");
     setCouponName("");
     setCouponType("percent");
@@ -352,11 +363,25 @@ export default function Privileged() {
   const handleCreateCoupon = async (e) => {
     e.preventDefault();
     if (!couponCode.trim()) return;
+
+    if (
+      couponAudienceTab === "personalized" &&
+      !applyToAllUsers &&
+      selectedUserIds.length === 0
+    ) {
+      alert(t("privileged.coupons.noUserSelectedAlert"));
+      return;
+    }
+
     setCouponSubmitting(true);
     try {
       const now = new Date();
       const endsAt = new Date();
       endsAt.setDate(now.getDate() + (Number(couponDays) || 30));
+
+      const isAudiencePublic = couponAudienceTab === "public";
+      const isForAll = isAudiencePublic ? true : applyToAllUsers;
+      const targetUserIds = isForAll ? [] : selectedUserIds;
 
       const actionPayload = {
         type: couponType,
@@ -385,13 +410,11 @@ export default function Privileged() {
               clientMode:
                 giftConditionType === "client" ? giftClientMode : undefined,
               sinceDate:
-                giftConditionType === "client" &&
-                giftClientMode === "since"
+                giftConditionType === "client" && giftClientMode === "since"
                   ? giftClientSinceDate
                   : undefined,
               duration:
-                giftConditionType === "client" &&
-                giftClientMode === "already"
+                giftConditionType === "client" && giftClientMode === "already"
                   ? {
                       years: Number(giftDurationYears) || 0,
                       months: Number(giftDurationMonths) || 0,
@@ -415,7 +438,9 @@ export default function Privileged() {
                           ? Number(giftPurchasedAmount) || 0
                           : undefined,
                       clientMode:
-                        giftConditionType === "client" ? giftClientMode : undefined,
+                        giftConditionType === "client"
+                          ? giftClientMode
+                          : undefined,
                       sinceDate:
                         giftConditionType === "client" &&
                         giftClientMode === "since"
@@ -437,16 +462,15 @@ export default function Privileged() {
               }
             : undefined,
         target: {
-          applyToAll: applyToAllUsers || selectedUserIds.length === 0,
-          userIds: applyToAllUsers ? [] : selectedUserIds,
+          applyToAll: isForAll,
+          userIds: targetUserIds,
         },
       };
 
       const newCoupon = await createCoupon({
         code: couponCode.trim(),
         name:
-          couponName.trim() ||
-          (couponType === "gift" ? giftName.trim() : ""),
+          couponName.trim() || (couponType === "gift" ? giftName.trim() : ""),
         starts_at: now.toISOString(),
         ends_at: endsAt.toISOString(),
         action: actionPayload,
@@ -505,7 +529,9 @@ export default function Privileged() {
     const q = searchQuery.toLowerCase();
     const name = `${u.firstName || ""} ${u.lastName || ""}`.toLowerCase();
     const email = (u.email || "").toLowerCase();
-    const phone = (Array.isArray(u.phone) ? u.phone.join(" ") : u.phone || "").toLowerCase();
+    const phone = (
+      Array.isArray(u.phone) ? u.phone.join(" ") : u.phone || ""
+    ).toLowerCase();
     return name.includes(q) || email.includes(q) || phone.includes(q);
   });
 
@@ -680,9 +706,7 @@ export default function Privileged() {
             </span>
           </div>
           <h1 className="privileged__title">{t("privileged.title")}</h1>
-          <p className="privileged__subtitle">
-            {t("privileged.subtitle")}
-          </p>
+          <p className="privileged__subtitle">{t("privileged.subtitle")}</p>
         </div>
 
         <button
@@ -789,7 +813,8 @@ export default function Privileged() {
                 )}
               </div>
               <span className="privileged__stats-text">
-                {t("privileged.users.found")} <strong>{filteredUsers.length}</strong>
+                {t("privileged.users.found")}{" "}
+                <strong>{filteredUsers.length}</strong>
               </span>
             </div>
 
@@ -837,7 +862,9 @@ export default function Privileged() {
                               <strong className="privileged__user-name">
                                 {u.firstName} {u.lastName}
                               </strong>
-                              <span className="privileged__user-id">{u.id}</span>
+                              <span className="privileged__user-id">
+                                {u.id}
+                              </span>
                             </div>
                           </div>
                         </td>
@@ -851,7 +878,7 @@ export default function Privileged() {
                                   setOpenCellPopover((prev) =>
                                     prev?.id === u.id && prev?.field === "email"
                                       ? null
-                                      : { id: u.id, field: "email" }
+                                      : { id: u.id, field: "email" },
                                   )
                                 }
                                 title={t("privileged.users.clickToView")}
@@ -868,7 +895,8 @@ export default function Privileged() {
                                 >
                                   <div className="privileged__cell-popover-header">
                                     <span className="privileged__cell-popover-title">
-                                      <i className="ri-mail-line" /> {t("privileged.users.thEmail")}
+                                      <i className="ri-mail-line" />{" "}
+                                      {t("privileged.users.thEmail")}
                                     </span>
                                     <button
                                       type="button"
@@ -888,7 +916,9 @@ export default function Privileged() {
                                     <button
                                       type="button"
                                       className="privileged__copy-btn"
-                                      onClick={() => handleCopyText(u.email, "Email")}
+                                      onClick={() =>
+                                        handleCopyText(u.email, "Email")
+                                      }
                                       title={t("privileged.users.copy")}
                                     >
                                       <i className="ri-file-copy-line" />
@@ -911,7 +941,7 @@ export default function Privileged() {
                                   setOpenCellPopover((prev) =>
                                     prev?.id === u.id && prev?.field === "phone"
                                       ? null
-                                      : { id: u.id, field: "phone" }
+                                      : { id: u.id, field: "phone" },
                                   )
                                 }
                                 title={t("privileged.users.clickToView")}
@@ -928,8 +958,11 @@ export default function Privileged() {
                                 >
                                   <div className="privileged__cell-popover-header">
                                     <span className="privileged__cell-popover-title">
-                                      <i className="ri-phone-line" /> {t("privileged.users.thPhone")}
-                                      {phones.length > 1 ? ` (${phones.length})` : ""}
+                                      <i className="ri-phone-line" />{" "}
+                                      {t("privileged.users.thPhone")}
+                                      {phones.length > 1
+                                        ? ` (${phones.length})`
+                                        : ""}
                                     </span>
                                     <button
                                       type="button"
@@ -941,7 +974,10 @@ export default function Privileged() {
                                   </div>
                                   <div className="privileged__cell-popover-list">
                                     {phones.map((phone, idx) => (
-                                      <div key={idx} className="privileged__cell-popover-item">
+                                      <div
+                                        key={idx}
+                                        className="privileged__cell-popover-item"
+                                      >
                                         <a
                                           href={`tel:${phone.replace(/[^\d+]/g, "")}`}
                                           className="privileged__popover-full-text privileged__phone-tag"
@@ -952,7 +988,10 @@ export default function Privileged() {
                                           type="button"
                                           className="privileged__copy-btn"
                                           onClick={() =>
-                                            handleCopyText(phone, t("privileged.users.thPhone"))
+                                            handleCopyText(
+                                              phone,
+                                              t("privileged.users.thPhone"),
+                                            )
                                           }
                                           title={t("privileged.users.copy")}
                                         >
@@ -1022,7 +1061,8 @@ export default function Privileged() {
             <div className="privileged__panel-header">
               <h2 className="privileged__panel-title">
                 <i className="ri-vip-crown-fill" />
-                {t("privileged.privilegedUsers.title")} ({privilegedUsers.length})
+                {t("privileged.privilegedUsers.title")} (
+                {privilegedUsers.length})
               </h2>
               <span className="privileged__stats-text">
                 {t("privileged.privilegedUsers.subtitle")}
@@ -1055,7 +1095,10 @@ export default function Privileged() {
                     <div className="privileged__user-card-details">
                       <div className="privileged__card-row">
                         <span>{t("privileged.privilegedUsers.email")}</span>
-                        <a href={`mailto:${u.email}`} className="privileged__link">
+                        <a
+                          href={`mailto:${u.email}`}
+                          className="privileged__link"
+                        >
                           {u.email}
                         </a>
                       </div>
@@ -1064,7 +1107,9 @@ export default function Privileged() {
                         <span>{phones.join(", ") || "—"}</span>
                       </div>
                       <div className="privileged__card-row">
-                        <span>{t("privileged.privilegedUsers.registered")}</span>
+                        <span>
+                          {t("privileged.privilegedUsers.registered")}
+                        </span>
                         <span>{formatDate(u.created_at, language)}</span>
                       </div>
                       <div className="privileged__card-row">
@@ -1118,9 +1163,69 @@ export default function Privileged() {
               </button>
             </div>
 
-            {/* Coupons list */}
-            <div className="privileged__coupons-grid">
-              {coupons.map((coupon) => {
+            {/* Filter Tabs: All, Public, Personalized */}
+            {(() => {
+              const publicCouponsCount = coupons.filter((c) => {
+                const target = c.action?.target || {};
+                return (
+                  target.applyToAll !== false ||
+                  !target.userIds ||
+                  target.userIds.length === 0
+                );
+              }).length;
+
+              const personalizedCouponsCount = coupons.filter((c) => {
+                const target = c.action?.target || {};
+                return (
+                  target.applyToAll === false &&
+                  target.userIds &&
+                  target.userIds.length > 0
+                );
+              }).length;
+
+              const displayedCoupons = coupons.filter((c) => {
+                if (couponFilter === "all") return true;
+                const target = c.action?.target || {};
+                const isPublic =
+                  target.applyToAll !== false ||
+                  !target.userIds ||
+                  target.userIds.length === 0;
+                if (couponFilter === "public") return isPublic;
+                if (couponFilter === "personalized") return !isPublic;
+                return true;
+              });
+
+              return (
+                <>
+                  <div className="privileged__coupon-filter-tabs">
+                    <button
+                      type="button"
+                      className={`privileged__coupon-filter-btn ${couponFilter === "all" ? "privileged__coupon-filter-btn--active" : ""}`}
+                      onClick={() => setCouponFilter("all")}
+                    >
+                      {t("privileged.coupons.filterAll")} ({coupons.length})
+                    </button>
+                    <button
+                      type="button"
+                      className={`privileged__coupon-filter-btn ${couponFilter === "public" ? "privileged__coupon-filter-btn--active" : ""}`}
+                      onClick={() => setCouponFilter("public")}
+                    >
+                      <i className="ri-global-line" />
+                      {t("privileged.coupons.filterPublic")} ({publicCouponsCount})
+                    </button>
+                    <button
+                      type="button"
+                      className={`privileged__coupon-filter-btn ${couponFilter === "personalized" ? "privileged__coupon-filter-btn--active" : ""}`}
+                      onClick={() => setCouponFilter("personalized")}
+                    >
+                      <i className="ri-user-star-line" />
+                      {t("privileged.coupons.filterPersonalized")} ({personalizedCouponsCount})
+                    </button>
+                  </div>
+
+                  {/* Coupons list */}
+                  <div className="privileged__coupons-grid">
+                    {displayedCoupons.map((coupon) => {
                 const action = coupon.action || {};
                 const isPercent =
                   action.type === "percent" ||
@@ -1185,7 +1290,9 @@ export default function Privileged() {
                               ? target.userIds
                                   .map((uid) => {
                                     const u = users.find((x) => x.id === uid);
-                                    return u ? `${u.first_name || ""} ${u.last_name || ""} (${u.email})`.trim() : uid;
+                                    return u
+                                      ? `${u.first_name || ""} ${u.last_name || ""} (${u.email})`.trim()
+                                      : uid;
                                   })
                                   .join(", ")
                               : ""
@@ -1201,11 +1308,16 @@ export default function Privileged() {
                             : `${t("privileged.coupons.forUsersCount")} ${target.userIds.length}`}
                         </span>
 
-                        {(action.minAmount != null || action.maxAmount != null) && (
+                        {(action.minAmount != null ||
+                          action.maxAmount != null) && (
                           <span className="privileged__coupon-tag">
-                            {action.minAmount != null && `min: ${action.minAmount} €`}
-                            {action.minAmount != null && action.maxAmount != null && " / "}
-                            {action.maxAmount != null && `max: ${action.maxAmount} €`}
+                            {action.minAmount != null &&
+                              `min: ${action.minAmount} €`}
+                            {action.minAmount != null &&
+                              action.maxAmount != null &&
+                              " / "}
+                            {action.maxAmount != null &&
+                              `max: ${action.maxAmount} €`}
                           </span>
                         )}
 
@@ -1214,7 +1326,8 @@ export default function Privileged() {
                             <i className="ri-information-line" />
                             {couponCondition.type === "purchased" && (
                               <>
-                                {t("privileged.coupons.condPurchased")}: {couponCondition.amount} €
+                                {t("privileged.coupons.condPurchased")}:{" "}
+                                {couponCondition.amount} €
                               </>
                             )}
                             {couponCondition.type === "client" &&
@@ -1222,7 +1335,10 @@ export default function Privileged() {
                                 <>
                                   {t("privileged.coupons.condOurClient")}{" "}
                                   {t("privileged.coupons.clientSinceOption")}{" "}
-                                  {formatDate(couponCondition.sinceDate, language)}
+                                  {formatDate(
+                                    couponCondition.sinceDate,
+                                    language,
+                                  )}
                                 </>
                               )}
                             {couponCondition.type === "client" &&
@@ -1302,7 +1418,16 @@ export default function Privileged() {
                   </button>
                 </div>
               )}
+              {coupons.length > 0 && displayedCoupons.length === 0 && (
+                <div className="privileged__empty-box">
+                  <i className="ri-ticket-2-line privileged__empty-icon" />
+                  <p>{t("privileged.coupons.empty")}</p>
+                </div>
+              )}
             </div>
+          </>
+        );
+      })()}
 
             {/* Create Coupon Modal */}
             {showCouponModal && (
@@ -1334,110 +1459,183 @@ export default function Privileged() {
                     </button>
                   </div>
                   <form onSubmit={handleCreateCoupon}>
-                    {/* Target Users */}
-                    <div className="privileged__form-field">
-                      <label>{t("privileged.coupons.targetUsersLabel")}</label>
-                      <div className="privileged__user-selector">
-                        {selectedUserIds.length > 0 && (
-                          <div className="privileged__selected-users">
-                            {selectedUserIds.map((userId) => {
-                              const u = users.find((x) => x.id === userId);
-                              const name = u
-                                ? `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.email
-                                : userId;
-                              return (
-                                <span key={userId} className="privileged__user-chip">
-                                  <i className="ri-user-line" />
-                                  <span
-                                    className="privileged__user-chip-text"
-                                    title={u?.email || ""}
-                                  >
-                                    {name}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    className="privileged__user-chip-remove"
-                                    onClick={() => handleRemoveUser(userId)}
-                                  >
-                                    ×
-                                  </button>
-                                </span>
-                              );
-                            })}
-                          </div>
-                        )}
+                    {/* Audience Switcher: Public Coupons vs Personalized Coupons */}
+                    <div
+                      className="privileged__coupon-modal-tabs"
+                      role="tablist"
+                    >
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={couponAudienceTab === "public"}
+                        className={`privileged__coupon-modal-tab ${couponAudienceTab === "public" ? "privileged__coupon-modal-tab--active" : ""}`}
+                        onClick={() => {
+                          setCouponAudienceTab("public");
+                          setApplyToAllUsers(true);
+                          setSelectedUserIds([]);
+                        }}
+                      >
+                        <i className="ri-global-line" />
+                        <div className="privileged__coupon-modal-tab-content">
+                          <span className="privileged__coupon-modal-tab-title">
+                            {t("privileged.coupons.tabPublic")}
+                          </span>
+                          <span className="privileged__coupon-modal-tab-sub">
+                            {t("privileged.coupons.tabPublicDesc")}
+                          </span>
+                        </div>
+                      </button>
 
-                        <div className="privileged__user-input-wrap">
-                          <input
-                            type="text"
-                            placeholder={t("privileged.coupons.targetUsersPlaceholder")}
-                            value={userSearchText}
-                            onChange={(e) => {
-                              setUserSearchText(e.target.value);
-                              setUserSearchOpen(true);
-                            }}
-                            onFocus={() => setUserSearchOpen(true)}
-                          />
-                          {userSearchOpen && (
-                            <div className="privileged__user-dropdown">
-                              {users
-                                .filter((u) => {
-                                  if (selectedUserIds.includes(u.id)) return false;
-                                  if (!userSearchText.trim()) return true;
-                                  const q = userSearchText.toLowerCase();
-                                  const fullName = `${u.first_name || ""} ${u.last_name || ""}`.toLowerCase();
-                                  const email = (u.email || "").toLowerCase();
-                                  const phone = (u.phone || "").toLowerCase();
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={couponAudienceTab === "personalized"}
+                        className={`privileged__coupon-modal-tab ${couponAudienceTab === "personalized" ? "privileged__coupon-modal-tab--active" : ""}`}
+                        onClick={() => {
+                          setCouponAudienceTab("personalized");
+                          setApplyToAllUsers(false);
+                        }}
+                      >
+                        <i className="ri-user-star-line" />
+                        <div className="privileged__coupon-modal-tab-content">
+                          <span className="privileged__coupon-modal-tab-title">
+                            {t("privileged.coupons.tabPersonalized")}
+                          </span>
+                          <span className="privileged__coupon-modal-tab-sub">
+                            {t("privileged.coupons.tabPersonalizedDesc")}
+                          </span>
+                        </div>
+                      </button>
+                    </div>
+
+                    {couponAudienceTab === "public" ? (
+                      <div className="privileged__coupon-audience-info">
+                        <i className="ri-information-line" />
+                        <span>{t("privileged.coupons.publicHint")}</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="privileged__coupon-audience-info privileged__coupon-audience-info--user">
+                          <i className="ri-shield-user-line" />
+                          <span>{t("privileged.coupons.personalizedHint")}</span>
+                        </div>
+
+                        {/* Target Users */}
+                        <div className="privileged__form-field">
+                          <label>{t("privileged.coupons.targetUsersLabel")}</label>
+                          <div className="privileged__user-selector">
+                            {selectedUserIds.length > 0 && (
+                              <div className="privileged__selected-users">
+                                {selectedUserIds.map((userId) => {
+                                  const u = users.find((x) => x.id === userId);
+                                  const name = u
+                                    ? `${u.first_name || ""} ${u.last_name || ""}`.trim() ||
+                                      u.email
+                                    : userId;
                                   return (
-                                    fullName.includes(q) ||
-                                    email.includes(q) ||
-                                    phone.includes(q)
+                                    <span
+                                      key={userId}
+                                      className="privileged__user-chip"
+                                    >
+                                      <i className="ri-user-line" />
+                                      <span
+                                        className="privileged__user-chip-text"
+                                        title={u?.email || ""}
+                                      >
+                                        {name}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        className="privileged__user-chip-remove"
+                                        onClick={() => handleRemoveUser(userId)}
+                                      >
+                                        ×
+                                      </button>
+                                    </span>
                                   );
-                                })
-                                .slice(0, 10)
-                                .map((u) => (
-                                  <div
-                                    key={u.id}
-                                    className="privileged__user-dropdown-item"
-                                    onClick={() => handleSelectUser(u.id)}
-                                  >
-                                    <div className="privileged__user-dropdown-avatar">
-                                      {u.first_name?.[0]?.toUpperCase() ||
-                                        u.email?.[0]?.toUpperCase() ||
-                                        "U"}
-                                    </div>
-                                    <div className="privileged__user-dropdown-info">
-                                      <div className="privileged__user-dropdown-name">
-                                        {`${u.first_name || ""} ${u.last_name || ""}`.trim() ||
-                                          t("privileged.users.thUser")}
+                                })}
+                              </div>
+                            )}
+
+                            <div className="privileged__user-input-wrap">
+                              <input
+                                type="text"
+                                placeholder={t(
+                                  "privileged.coupons.targetUsersPlaceholder",
+                                )}
+                                value={userSearchText}
+                                onChange={(e) => {
+                                  setUserSearchText(e.target.value);
+                                  setUserSearchOpen(true);
+                                }}
+                                onFocus={() => setUserSearchOpen(true)}
+                              />
+                              {userSearchOpen && (
+                                <div className="privileged__user-dropdown">
+                                  {users
+                                    .filter((u) => {
+                                      if (selectedUserIds.includes(u.id))
+                                        return false;
+                                      if (!userSearchText.trim()) return true;
+                                      const q = userSearchText.toLowerCase();
+                                      const fullName =
+                                        `${u.first_name || ""} ${u.last_name || ""}`.toLowerCase();
+                                      const email = (u.email || "").toLowerCase();
+                                      const phone = (u.phone || "").toLowerCase();
+                                      return (
+                                        fullName.includes(q) ||
+                                        email.includes(q) ||
+                                        phone.includes(q)
+                                      );
+                                    })
+                                    .slice(0, 10)
+                                    .map((u) => (
+                                      <div
+                                        key={u.id}
+                                        className="privileged__user-dropdown-item"
+                                        onClick={() => handleSelectUser(u.id)}
+                                      >
+                                        <div className="privileged__user-dropdown-avatar">
+                                          {u.first_name?.[0]?.toUpperCase() ||
+                                            u.email?.[0]?.toUpperCase() ||
+                                            "U"}
+                                        </div>
+                                        <div className="privileged__user-dropdown-info">
+                                          <div className="privileged__user-dropdown-name">
+                                            {`${u.first_name || ""} ${u.last_name || ""}`.trim() ||
+                                              t("privileged.users.thUser")}
+                                          </div>
+                                          <div className="privileged__user-dropdown-email">
+                                            {u.email}
+                                          </div>
+                                        </div>
                                       </div>
-                                      <div className="privileged__user-dropdown-email">
-                                        {u.email}
-                                      </div>
+                                    ))}
+                                  {users.filter(
+                                    (u) => !selectedUserIds.includes(u.id),
+                                  ).length === 0 && (
+                                    <div className="privileged__user-dropdown-empty">
+                                      {t("privileged.users.empty")}
                                     </div>
-                                  </div>
-                                ))}
-                              {users.filter(
-                                (u) => !selectedUserIds.includes(u.id),
-                              ).length === 0 && (
-                                <div className="privileged__user-dropdown-empty">
-                                  {t("privileged.users.empty")}
+                                  )}
                                 </div>
                               )}
                             </div>
-                          )}
-                        </div>
-                      </div>
+                          </div>
 
-                      <label className="privileged__checkbox-label">
-                        <input
-                          type="checkbox"
-                          checked={applyToAllUsers}
-                          onChange={(e) => handleToggleApplyToAll(e.target.checked)}
-                        />
-                        <span>{t("privileged.coupons.applyToAll")}</span>
-                      </label>
-                    </div>
+                          <label className="privileged__checkbox-label">
+                            <input
+                              type="checkbox"
+                              checked={applyToAllUsers}
+                              onChange={(e) =>
+                                handleToggleApplyToAll(e.target.checked)
+                              }
+                            />
+                            <span>{t("privileged.coupons.applyToAll")}</span>
+                          </label>
+                        </div>
+                      </>
+                    )}
 
                     {/* Coupon Code + Generator */}
                     <div className="privileged__form-field">
@@ -1544,7 +1742,9 @@ export default function Privileged() {
                               min="1"
                               max="100"
                               value={couponDiscount}
-                              onChange={(e) => setCouponDiscount(e.target.value)}
+                              onChange={(e) =>
+                                setCouponDiscount(e.target.value)
+                              }
                               required
                             />
                           </div>
@@ -1580,9 +1780,7 @@ export default function Privileged() {
                               "privileged.coupons.maxAmountPlaceholder",
                             )}
                             value={couponMaxAmount}
-                            onChange={(e) =>
-                              setCouponMaxAmount(e.target.value)
-                            }
+                            onChange={(e) => setCouponMaxAmount(e.target.value)}
                           />
                         </div>
                         {renderConditionFields()}
@@ -1640,9 +1838,7 @@ export default function Privileged() {
                               "privileged.coupons.maxAmountPlaceholder",
                             )}
                             value={couponMaxAmount}
-                            onChange={(e) =>
-                              setCouponMaxAmount(e.target.value)
-                            }
+                            onChange={(e) => setCouponMaxAmount(e.target.value)}
                           />
                         </div>
                         {renderConditionFields()}
@@ -1743,7 +1939,9 @@ export default function Privileged() {
                   {t("privileged.orders.filterInProgress")} (
                   {
                     orders.filter(
-                      (o) => (o.status || "in_progress").toLowerCase() === "in_progress",
+                      (o) =>
+                        (o.status || "in_progress").toLowerCase() ===
+                        "in_progress",
                     ).length
                   }
                   )
@@ -1770,17 +1968,22 @@ export default function Privileged() {
                 const items = Array.isArray(content.items) ? content.items : [];
                 const address = content.address || {};
                 const orderNum = content.orderNumber || order.id?.slice(0, 8);
-                const isCompleted = (order.status || "").toLowerCase() === "completed";
+                const isCompleted =
+                  (order.status || "").toLowerCase() === "completed";
 
                 return (
                   <div className="privileged__order-card" key={order.id}>
                     <div className="privileged__order-card-header">
                       <div className="privileged__order-meta">
                         <span className="privileged__order-num">
-                          {t("privileged.orders.order")} <strong>#{orderNum}</strong>
+                          {t("privileged.orders.order")}{" "}
+                          <strong>#{orderNum}</strong>
                         </span>
                         <span className="privileged__order-date">
-                          {formatDate(order.created_at || content.createdAt, language)}
+                          {formatDate(
+                            order.created_at || content.createdAt,
+                            language,
+                          )}
                         </span>
                         <span className="privileged__order-user-id">
                           {t("privileged.orders.userId")} {order.user_id}
@@ -1826,7 +2029,8 @@ export default function Privileged() {
                     <div className="privileged__order-details-grid">
                       <div className="privileged__order-section">
                         <span className="privileged__detail-label">
-                          <i className="ri-map-pin-line" /> {t("privileged.orders.deliveryAddress")}
+                          <i className="ri-map-pin-line" />{" "}
+                          {t("privileged.orders.deliveryAddress")}
                         </span>
                         <p className="privileged__detail-text">
                           {address.recipientName && (
@@ -1845,7 +2049,8 @@ export default function Privileged() {
 
                       <div className="privileged__order-section privileged__order-section--price">
                         <span className="privileged__detail-label">
-                          <i className="ri-money-euro-circle-line" /> {t("privileged.orders.totalPrice")}
+                          <i className="ri-money-euro-circle-line" />{" "}
+                          {t("privileged.orders.totalPrice")}
                         </span>
                         <strong className="privileged__order-final-price">
                           {formatPrice(
@@ -1855,7 +2060,19 @@ export default function Privileged() {
                           )}
                         </strong>
                         <small className="privileged__detail-shipping">
-                          ({t("privileged.orders.booksSubtotal")} {formatPrice(content.itemsSubtotal || 0, "EUR", language)}, {t("privileged.orders.shippingCost")} {formatPrice(content.shippingCost || 0, "EUR", language)})
+                          ({t("privileged.orders.booksSubtotal")}{" "}
+                          {formatPrice(
+                            content.itemsSubtotal || 0,
+                            "EUR",
+                            language,
+                          )}
+                          , {t("privileged.orders.shippingCost")}{" "}
+                          {formatPrice(
+                            content.shippingCost || 0,
+                            "EUR",
+                            language,
+                          )}
+                          )
                         </small>
                       </div>
                     </div>
@@ -1864,7 +2081,10 @@ export default function Privileged() {
                     {items.length > 0 && (
                       <div className="privileged__order-items">
                         {items.map((item, idx) => (
-                          <div className="privileged__order-item" key={item.id || idx}>
+                          <div
+                            className="privileged__order-item"
+                            key={item.id || idx}
+                          >
                             <BookImage
                               className="privileged__item-thumb"
                               src={item.image}
@@ -1875,12 +2095,14 @@ export default function Privileged() {
                                 {decodeHtmlEntities(item.title)}
                               </span>
                               <span className="privileged__item-qty">
-                                {item.quantity} {t("privileged.orders.pcs")} × {formatPrice(item.price, "EUR", language)}
+                                {item.quantity} {t("privileged.orders.pcs")} ×{" "}
+                                {formatPrice(item.price, "EUR", language)}
                               </span>
                             </div>
                             <span className="privileged__item-total">
                               {formatPrice(
-                                (Number(item.price) || 0) * (Number(item.quantity) || 1),
+                                (Number(item.price) || 0) *
+                                  (Number(item.quantity) || 1),
                                 "EUR",
                                 language,
                               )}
@@ -2063,12 +2285,12 @@ export default function Privileged() {
               <div>
                 <strong>{t("privileged.gitActions.repoLabel")}</strong>
                 <a
-                  href="https://github.com/egorgrebennykov-del/KazBook"
+                  href="https://github.com/egorgrebennykov-del/Litera"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="privileged__link"
                 >
-                  https://github.com/egorgrebennykov-del/KazBook ↗
+                  https://github.com/egorgrebennykov-del/Litera ↗
                 </a>
               </div>
             </div>

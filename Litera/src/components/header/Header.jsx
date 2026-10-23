@@ -154,17 +154,152 @@ export default function Header({ theme, isLight, onSearch }) {
                       <span className="nav__profile-welcome">
                         {language === "ru" ? "Здравствуйте," : "Hello,"}
                       </span>
-                      <span
-                        className={`nav__profile-name ${isPrivilegedUser ? "nav__profile-name--gold" : ""}`}
-                      >
-                        {user.firstName}
+                      <div className="nav__profile-name-row">
+                        <span
+                          className={`nav__profile-name ${isPrivilegedUser ? "nav__profile-name--gold" : ""}`}
+                        >
+                          {user.firstName}
+                        </span>
                         {isPrivilegedUser && (
-                          <i
-                            className="ri-vip-crown-fill nav__profile-crown"
-                            title={language === "ru" ? "Привилегированный" : "Privileged"}
-                          />
+                          <span
+                            className="nav__profile-crown-badge"
+                            title={
+                              language === "ru"
+                                ? "Привилегированный пользователь"
+                                : "Privileged user"
+                            }
+                            aria-label={
+                              language === "ru"
+                                ? "Привилегированный пользователь"
+                                : "Privileged user"
+                            }
+                          >
+                            <svg
+                              className="nav__crown-svg"
+                              viewBox="0 0 24 20"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <defs>
+                                <linearGradient
+                                  id="navCrownGold"
+                                  x1="0%"
+                                  y1="0%"
+                                  x2="100%"
+                                  y2="100%"
+                                >
+                                  <stop offset="0%" stopColor="#FFF7CC" />
+                                  <stop offset="25%" stopColor="#FFD700" />
+                                  <stop offset="60%" stopColor="#F59E0B" />
+                                  <stop offset="100%" stopColor="#B45309" />
+                                </linearGradient>
+                                <linearGradient
+                                  id="navCrownShine"
+                                  x1="0%"
+                                  y1="0%"
+                                  x2="0%"
+                                  y2="100%"
+                                >
+                                  <stop
+                                    offset="0%"
+                                    stopColor="#FFFFFF"
+                                    stopOpacity="0.85"
+                                  />
+                                  <stop
+                                    offset="100%"
+                                    stopColor="#FFFFFF"
+                                    stopOpacity="0.05"
+                                  />
+                                </linearGradient>
+                                <filter
+                                  id="navCrownGlow"
+                                  x="-30%"
+                                  y="-30%"
+                                  width="160%"
+                                  height="160%"
+                                >
+                                  <feDropShadow
+                                    dx="0"
+                                    dy="1.2"
+                                    stdDeviation="1.5"
+                                    floodColor="#F59E0B"
+                                    floodOpacity="0.6"
+                                  />
+                                </filter>
+                              </defs>
+                              <rect
+                                x="2"
+                                y="15"
+                                width="20"
+                                height="3.5"
+                                rx="1.75"
+                                fill="url(#navCrownGold)"
+                              />
+                              <circle
+                                cx="6"
+                                cy="16.75"
+                                r="1.1"
+                                fill="#3B82F6"
+                                stroke="#1E40AF"
+                                strokeWidth="0.3"
+                              />
+                              <circle
+                                cx="12"
+                                cy="16.75"
+                                r="1.3"
+                                fill="#EF4444"
+                                stroke="#991B1B"
+                                strokeWidth="0.3"
+                              />
+                              <circle
+                                cx="18"
+                                cy="16.75"
+                                r="1.1"
+                                fill="#10B981"
+                                stroke="#065F46"
+                                strokeWidth="0.3"
+                              />
+                              <path
+                                d="M2.5 14L4 5.2L8.5 10.2L12 2.8L15.5 10.2L20 5.2L21.5 14H2.5Z"
+                                fill="url(#navCrownGold)"
+                                filter="url(#navCrownGlow)"
+                              />
+                              <path
+                                d="M12 2.8L13.8 9.5L12 8.2L10.2 9.5L12 2.8Z"
+                                fill="url(#navCrownShine)"
+                              />
+                              <circle
+                                cx="4"
+                                cy="5.2"
+                                r="1.6"
+                                fill="#FFFBEB"
+                                stroke="#B45309"
+                                strokeWidth="0.5"
+                              />
+                              <circle
+                                cx="12"
+                                cy="2.8"
+                                r="2"
+                                fill="#FFFFFF"
+                                stroke="#D97706"
+                                strokeWidth="0.6"
+                              />
+                              <circle
+                                cx="20"
+                                cy="5.2"
+                                r="1.6"
+                                fill="#FFFBEB"
+                                stroke="#B45309"
+                                strokeWidth="0.5"
+                              />
+                              <polygon
+                                points="12,10 13.3,12 12,13.5 10.7,12"
+                                fill="#DC2626"
+                              />
+                            </svg>
+                          </span>
                         )}
-                      </span>
+                      </div>
                     </div>
                   )}
                   <ul className="nav__profile-menu">

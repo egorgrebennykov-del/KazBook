@@ -301,6 +301,19 @@ export const translations = {
 
     // Privileged Coupons Tab
     "privileged.coupons.title": "Управление скидочными купонами",
+    "privileged.coupons.tabPublic": "Публичный купон",
+    "privileged.coupons.tabPublicDesc": "Для всех пользователей",
+    "privileged.coupons.tabPersonalized": "Персонализированный купон",
+    "privileged.coupons.tabPersonalizedDesc": "Для конкретных клиентов",
+    "privileged.coupons.publicHint":
+      "Этот купон будет открыт и доступен для всех зарегистрированных клиентов.",
+    "privileged.coupons.personalizedHint":
+      "Этот купон смогут активировать только выбранные клиенты.",
+    "privileged.coupons.filterAll": "Все",
+    "privileged.coupons.filterPublic": "Публичные",
+    "privileged.coupons.filterPersonalized": "Персонализированные",
+    "privileged.coupons.noUserSelectedAlert":
+      "Пожалуйста, выберите хотя бы одного пользователя для персонализированного купона.",
     "privileged.coupons.total": "Всего купонов:",
     "privileged.coupons.createBtn": "Создать купон",
     "privileged.coupons.discountFallback": "Скидка",
@@ -316,11 +329,13 @@ export const translations = {
     "privileged.coupons.codeLabel": "Код купона (промокод) *",
     "privileged.coupons.codePlaceholder": "Например: AUTUMN15, BOOK2026",
     "privileged.coupons.generateCode": "Сгенерировать",
-    "privileged.coupons.generateCodeTitle": "Сгенерировать код из 6 латинских букв и цифр",
+    "privileged.coupons.generateCodeTitle":
+      "Сгенерировать код из 6 латинских букв и цифр",
     "privileged.coupons.descLabel": "Описание / Название",
     "privileged.coupons.descPlaceholder":
       "Осенняя скидка для постоянных читателей",
-    "privileged.coupons.targetUsersLabel": "Пользователи, на которых распространяется купон",
+    "privileged.coupons.targetUsersLabel":
+      "Пользователи, на которых распространяется купон",
     "privileged.coupons.targetUsersPlaceholder": "Поиск по имени или email...",
     "privileged.coupons.applyToAll": "Распространяется на всех",
     "privileged.coupons.forAllUsers": "Для всех пользователей",
@@ -336,7 +351,8 @@ export const translations = {
     "privileged.coupons.minAmountPlaceholder": "Без минимума",
     "privileged.coupons.maxAmountPlaceholder": "Без максимума",
     "privileged.coupons.giftNameLabel": "Название подарка",
-    "privileged.coupons.giftNamePlaceholder": "Например: Фирменная закладка, Книга в подарок",
+    "privileged.coupons.giftNamePlaceholder":
+      "Например: Фирменная закладка, Книга в подарок",
     "privileged.coupons.giftConditionCheckbox": "Условие",
     "privileged.coupons.ifText": "Если",
     "privileged.coupons.condPurchased": "Купил",
@@ -402,7 +418,7 @@ export const translations = {
     "privileged.gitActions.logModalTitle": "Логи выполнения действия",
     "privileged.gitActions.closeLogs": "Закрыть",
     "privileged.gitActions.noLogs": "Логи отсутствуют",
-    "privileged.gitActions.repoLabel": "Репозиторий проекта на GitHub:",
+    "privileged.gitActions.repoLabel": "Репозиторий проекта на GitHub: ",
     "privileged.gitActions.wfBookPicksDesc":
       "Сбор и обновление кураторской подборки книг из магазинов Молдовы с обогащением обложек и цен.",
     "privileged.gitActions.wfHomeBooksDesc":
@@ -671,8 +687,7 @@ export const translations = {
     "privileged.checkingAuth": "Checking access permissions...",
     "privileged.badge": "Privileged Access",
     "privileged.title": "Control Panel",
-    "privileged.subtitle":
-      "Manage users, coupons, orders, and automations",
+    "privileged.subtitle": "Manage users, coupons, orders, and automations",
     "privileged.refresh": "Refresh",
     "privileged.refreshTitle": "Refresh data",
 
@@ -684,8 +699,7 @@ export const translations = {
     "privileged.tabs.gitActions": "Git Actions",
 
     // Privileged Users Tab
-    "privileged.users.searchPlaceholder":
-      "Search by name, email, or phone...",
+    "privileged.users.searchPlaceholder": "Search by name, email, or phone...",
     "privileged.users.found": "Users found:",
     "privileged.users.thUser": "User",
     "privileged.users.thEmail": "Email",
@@ -717,6 +731,19 @@ export const translations = {
 
     // Privileged Coupons Tab
     "privileged.coupons.title": "Discount Coupons Management",
+    "privileged.coupons.tabPublic": "Public coupon",
+    "privileged.coupons.tabPublicDesc": "For all users",
+    "privileged.coupons.tabPersonalized": "Personalized coupon",
+    "privileged.coupons.tabPersonalizedDesc": "For specific customers",
+    "privileged.coupons.publicHint":
+      "This coupon will be open and available to all registered customers.",
+    "privileged.coupons.personalizedHint":
+      "This coupon can only be redeemed by the selected customers.",
+    "privileged.coupons.filterAll": "All",
+    "privileged.coupons.filterPublic": "Public",
+    "privileged.coupons.filterPersonalized": "Personalized",
+    "privileged.coupons.noUserSelectedAlert":
+      "Please select at least one user for the personalized coupon.",
     "privileged.coupons.total": "Total coupons:",
     "privileged.coupons.createBtn": "Create coupon",
     "privileged.coupons.discountFallback": "Discount",
@@ -734,8 +761,7 @@ export const translations = {
     "privileged.coupons.generateCode": "Generate",
     "privileged.coupons.generateCodeTitle": "Generate random 6-character code",
     "privileged.coupons.descLabel": "Description / Name",
-    "privileged.coupons.descPlaceholder":
-      "Autumn discount for regular readers",
+    "privileged.coupons.descPlaceholder": "Autumn discount for regular readers",
     "privileged.coupons.targetUsersLabel": "Target users for coupon",
     "privileged.coupons.targetUsersPlaceholder": "Search by name or email...",
     "privileged.coupons.applyToAll": "Applies to everyone",
@@ -818,7 +844,7 @@ export const translations = {
     "privileged.gitActions.logModalTitle": "Action Execution Logs",
     "privileged.gitActions.closeLogs": "Close",
     "privileged.gitActions.noLogs": "No logs available",
-    "privileged.gitActions.repoLabel": "Project repository on GitHub:",
+    "privileged.gitActions.repoLabel": "Project repository on GitHub: ",
     "privileged.gitActions.wfBookPicksDesc":
       "Collecting and updating curated book picks from Moldovan bookstores with enriched covers and pricing.",
     "privileged.gitActions.wfHomeBooksDesc":
