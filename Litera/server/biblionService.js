@@ -327,16 +327,6 @@ export async function getBiblionDetails(bookUrl) {
       }
     }
 
-    // SKU
-    const sku =
-      jsonLd?.sku || html.match(/class="sku">([^<]+)<\/span>/i)?.[1]?.trim();
-    if (sku) {
-      additionalProperties.push({
-        name: "код",
-        value: sku,
-      });
-    }
-
     // Categories
     const categories = [
       ...html.matchAll(
@@ -394,15 +384,6 @@ export async function getBiblionDetails(bookUrl) {
       additionalProperties.push({
         name: "количество страниц",
         value: extracted.pages,
-      });
-    }
-    if (
-      extracted?.code &&
-      !additionalProperties.some((p) => /код|артикул|sku/i.test(p.name))
-    ) {
-      additionalProperties.push({
-        name: "код",
-        value: extracted.code,
       });
     }
     if (

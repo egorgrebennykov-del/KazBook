@@ -224,12 +224,12 @@ export function parseLibrariusDetails(html, pageUrl) {
 
     // Group keys so "год" and "год издания", "страницы" and "количество страниц" never duplicate
     let groupKey = normName;
+    if (/штрих|код/i.test(normName)) continue;
     if (/^год/i.test(normName)) groupKey = "год";
     else if (/страниц/i.test(normName)) groupKey = "страницы";
     else if (/^isbn/i.test(normName)) groupKey = "isbn";
     else if (/автор/i.test(normName)) groupKey = "автор";
     else if (/издательств/i.test(normName)) groupKey = "издательство";
-    else if (/код/i.test(normName)) groupKey = "код";
     else if (/коллекци|сери/i.test(normName)) groupKey = "серия";
 
     if (seenProps.has(groupKey)) continue;

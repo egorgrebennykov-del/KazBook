@@ -93,15 +93,6 @@ function normalizeProduct(product) {
     });
   }
   if (
-    extracted?.code &&
-    !additionalProps.some((p) => /код|артикул|sku/i.test(p.name))
-  ) {
-    additionalProps.push({
-      name: "код товара",
-      value: extracted.code,
-    });
-  }
-  if (
     extracted?.genre &&
     !additionalProps.some((p) => /жанр/i.test(p.name))
   ) {

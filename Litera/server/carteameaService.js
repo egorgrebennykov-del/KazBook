@@ -299,16 +299,6 @@ export async function getCarteameaDetails(bookUrl) {
       });
     }
 
-    // SKU
-    const sku =
-      jsonLd?.sku || html.match(/class="sku">([^<]+)<\/span>/i)?.[1]?.trim();
-    if (sku) {
-      additionalProperties.push({
-        name: "код",
-        value: sku,
-      });
-    }
-
     // Categories
     const categories = [
       ...html.matchAll(

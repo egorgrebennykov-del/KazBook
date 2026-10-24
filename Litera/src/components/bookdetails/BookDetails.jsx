@@ -10,7 +10,8 @@ import extractBookMetadata from "../../../utils/extractBookMetadata";
 import { useLanguage } from "../../context/languageContext";
 import "./BookDetails.css";
 
-const HIDDEN_PROPERTIES = /^цена|вы экономите|иллюстрированное издание|тираж/i;
+const HIDDEN_PROPERTIES =
+  /^(?:цена|вы экономите|иллюстрированное издание|тираж|штрих[\s-]?код.*|barcode.*|код(?:\s+товара|\s+продукта)?$|артикул.*|sku$|code$)/i;
 
 const CANONICAL_PROPERTY_MAP = {
   // Author
@@ -250,21 +251,6 @@ export default function BookDetails() {
     });
   }
 
-  // If code wasn't in additionalProperties, check product.sku or extracted.code
-  if (!rawProps.some((p) => /код|sku|артикул/i.test(p.name))) {
-    if (product?.sku) {
-      rawProps.push({
-        name: "код товара",
-        value: product.sku,
-      });
-    } else if (extracted?.code) {
-      rawProps.push({
-        name: "код товара",
-        value: extracted.code,
-      });
-    }
-  }
-
   // If publisher was extracted from description and not yet in rawProps
   if (
     extracted?.publisher &&
@@ -320,7 +306,13 @@ export default function BookDetails() {
   }
 
   const properties = rawProps
-    .filter((p) => p.name && p.value && !HIDDEN_PROPERTIES.test(p.name))
+    .filter(
+      (p) =>
+        p.name &&
+        p.value &&
+        !HIDDEN_PROPERTIES.test(String(p.name).trim()) &&
+        !/^(?:code|barcode)$/i.test(String(p.name).trim()),
+    )
     .map((p) => {
       const decodedVal = decodeHtmlEntities(p.value).trim();
       const rawName = String(p.name)
@@ -354,7 +346,14 @@ export default function BookDetails() {
         value: displayValue,
       };
     })
-    .filter((p) => !seenKeys.has(p.groupKey) && seenKeys.add(p.groupKey));
+    .filter(
+      (p) =>
+        !HIDDEN_PROPERTIES.test(p.name) &&
+        p.groupKey !== "code" &&
+        p.groupKey !== "barcode" &&
+        !seenKeys.has(p.groupKey) &&
+        seenKeys.add(p.groupKey),
+    );
 
   const author = decodeHtmlEntities(
     product?.author ||
