@@ -244,6 +244,9 @@ ${contextSection}
 TASK:
 1. Understand the user's request, considering the full conversation context and previous messages:
    - CONVERSATION CONTINUITY & GOALS: Look at RECENT CONVERSATION HISTORY. If the user was looking for a GIFT ("для подарка", "подарок", "в подарок") or books "подороже", that goal remains active in follow-up queries (such as "не хочу дай другие", "покажи еще", "что-то другое"). Keep proposing books suited for that active goal!
+   - CONTINUATION & MORE/OTHER OPTIONS ("А ЕЩЕ", "ЕЩЕ", "ЧТО ЕЩЕ ЕСТЬ", "ДРУГИЕ ВАРИАНТЫ", "ПОКАЖИ ЕЩЕ"):
+     If the user asks for more options ("а еще", "еще", "что еще", "другие варианты", "покажи еще"):
+     Dynamically understand the ongoing book genre, theme, or author from RECENT CONVERSATION HISTORY and propose 6-8 completely NEW, fresh books of that exact topic/genre, strictly excluding any titles listed in "PREVIOUSLY RECOMMENDED BOOKS"!
    - REJECTING PREVIOUS BOOKS ("НЕ ХОЧУ", "ДАЙ ДРУГИЕ", "НЕ ТО", "ПОКАЖИ ДРУГИЕ"):
      If the user rejects the previously recommended books, says "не хочу", "не то", "дай другие", "покажи другие", "что-то другое", "не эти":
      YOU ARE STRICTLY FORBIDDEN FROM RETURNING ANY OF THE TITLES LISTED IN "PREVIOUSLY RECOMMENDED BOOKS"!
@@ -697,8 +700,15 @@ export function extractConversationContext(history = [], latestMessage = "") {
 
   const isDescendingPriceOrder = isGift || pricePreference === "expensive";
 
-  // Check if user is explicitly rejecting previous picks or asking for different books
+  // Check if user is asking for more/other options ("а еще", "еще", "что еще", "другие варианты")
+  // or explicitly rejecting previous picks
+  const isMoreOrOtherRequest =
+    /(^|\s)(а\s*)?ещ[её](\s|$|\?)|(что|какие|есть|давай|покажи)\s*ещ[её]|(ещ[её]|друг(ие|их))\s*(вариант|книг|штук|издани)|другие\s*вариант/i.test(
+      latestMessage,
+    );
+
   const isRejectingPrevious =
+    isMoreOrOtherRequest ||
     /(не\s*хочу|не\s*то|не\s*нравит|дай\s*друг(ие|их)|покажи\s*друг(ие|их)|друг(ие|их)\s*книг|друг(ие|их)\s*автор|что-?то\s*друг(ое|их)|не\s*эти|замени\s*вс[её]|новые\s*вариант|другие\s*вариант)/i.test(
       latestMessage,
     );
@@ -808,6 +818,9 @@ export async function searchGenericCategoryIfNeeded(
   activeRate,
   isForeignLanguageRequested = false,
   isDescendingPriceOrder = false,
+  history = [],
+  previouslyRecommended = [],
+  previousUrls = new Set(),
 ) {
   const cleanQ = (userQuery || "").trim();
   if (!cleanQ) return null;
@@ -816,6 +829,37 @@ export async function searchGenericCategoryIfNeeded(
     /\b(пропис[а-я]*|учебник[а-я]*|тетрад[а-я]*|пособи[а-я]*|буквар[а-я]*|азбук[а-я]*|каллиграфи[а-я]*|чистописан[а-я]*|раскраск[а-я]*|словарь|словар[а-я]*|атлас[а-я]*|хрестомати[а-я]*|контурн[а-я]*\s*карт[а-я]*)\b/i;
 
   const mightBeCategory = categoryRegex.test(cleanQ);
+
+  // Check if this is a continuation request (e.g. "а еще", "еще", "другие варианты", "что еще", "давай еще")
+  const isContinuation =
+    /(^|\s)(а\s*)?ещ[её](\s|$|\?)|(что|какие|есть|давай|покажи)\s*ещ[её]|(ещ[её]|друг(ие|их))\s*(вариант|книг|штук|издани)|другие\s*вариант/i.test(
+      cleanQ,
+    );
+
+  const prevUserTexts = (history || [])
+    .filter((m) => m.role === "user")
+    .map((m) => m.content || "")
+    .join(" ");
+  const prevWasCategory = categoryRegex.test(prevUserTexts);
+
+  // Build context section for Gemini
+  let contextSection = "";
+  if (Array.isArray(history) && history.length > 0) {
+    const formattedHistory = history
+      .slice(-6)
+      .map((m) => {
+        let text = `${m.role === "assistant" ? "Litera" : "User"}: ${m.content || ""}`;
+        if (m.books && m.books.length > 0) {
+          text += ` [Recommended ${m.books.length} items: ${m.books.map((b) => b.title).slice(0, 5).join(", ")}]`;
+        }
+        return text;
+      })
+      .join("\n");
+    contextSection += `RECENT CONVERSATION HISTORY:\n${formattedHistory}\n`;
+  }
+  if (previouslyRecommended && previouslyRecommended.length > 0) {
+    contextSection += `PREVIOUSLY SHOWN BOOKS:\n${previouslyRecommended.map((b) => `- ${b.title}`).join("\n")}\n`;
+  }
 
   const apiKey = process.env.GEMINI_API_KEY || DEFAULT_API_KEY;
   let isGenericCategory = false;
@@ -826,12 +870,17 @@ export async function searchGenericCategoryIfNeeded(
 You are the search engine query optimizer for the online bookstore "Litera".
 User message: "${cleanQ}".
 
-Determine if this is a request for a generic product category, educational/learning material, workbook, copybook, textbook, or item type that does NOT have a single specific literary title (e.g. "прописи", "учебники", "рабочие тетради", "азбука", "букварь", "раскраски", "пособия", "словари", "атласы", "тетради по каллиграфии", etc.), as opposed to a specific literary work (like "Мастер и Маргарита", "Идиот") or a fiction genre theme (like "детективы", "книги про любовь", "фантастика про космос").
+${contextSection}
+
+TASK:
+1. Understand what the user is asking for dynamically in the context of the dialogue:
+   - If the user asks for more or other options (e.g. "а еще", "еще", "другие варианты", "что еще есть", "покажи другие"), identify the ACTIVE category/topic from RECENT CONVERSATION HISTORY (e.g. "прописи", "учебники", etc.).
+2. Determine if this active request is for a generic product category, educational/learning material, workbook, copybook, textbook, or item type that does NOT have a single specific literary title (e.g. "прописи", "учебники", "рабочие тетради", "азбука", "букварь", "раскраски", "пособия", "словари", "атласы", "тетради по каллиграфии", etc.), as opposed to a specific literary work (like "Мастер и Маргарита", "Идиот") or a fiction genre theme (like "детективы", "книги про любовь", "фантастика про космос").
 
 Rules:
 1. If isGenericCategory is true:
    Generate up to 5 prioritized, targeted search queries in Russian to enter sequentially into the bookstore website search to find relevant products.
-   - The queries must be concise keywords suitable for store catalog search (e.g. for "прописи" or "учебники или прописи": ["прописи", "учебники", "рабочие тетради", "чистописание", "учебные пособия"]).
+   - If the user is asking for more/other options ("а еще", "другие варианты"), generate alternative search keywords for that active category (e.g. for "прописи": ["чистописание", "учимся писать", "прописи тренажер", "прописи для детей", "многоразовые прописи", "прописи"]) so that fresh, unshown items are found!
    - Put the single most direct and effective search query as #1!
 2. If isGenericCategory is false:
    searchQueries: []
@@ -839,6 +888,7 @@ Rules:
 Return JSON:
 {
   "isGenericCategory": boolean,
+  "resolvedTopic": string,
   "searchQueries": string[]
 }
 `;
@@ -850,6 +900,7 @@ Return JSON:
         type: "OBJECT",
         properties: {
           isGenericCategory: { type: "BOOLEAN" },
+          resolvedTopic: { type: "STRING" },
           searchQueries: {
             type: "ARRAY",
             items: { type: "STRING" },
@@ -872,18 +923,23 @@ Return JSON:
   }
 
   // Fallback heuristic if Gemini call failed or returned false but regex clearly matches generic categories
-  if (!isGenericCategory && mightBeCategory) {
+  if (!isGenericCategory && (mightBeCategory || (isContinuation && prevWasCategory))) {
     isGenericCategory = true;
-    if (/\bпропис/i.test(cleanQ) && /\bучебник/i.test(cleanQ)) {
-      searchQueries = ["прописи", "учебники", "рабочие тетради", "чистописание", "учебные пособия"];
-    } else if (/\bпропис/i.test(cleanQ)) {
-      searchQueries = ["прописи", "прописи для детей", "чистописание", "учимся писать", "прописи тренажер"];
-    } else if (/\bучебник/i.test(cleanQ)) {
+    const targetSource = mightBeCategory ? cleanQ : prevUserTexts;
+    if (/\bпропис/i.test(targetSource) && /\bучебник/i.test(targetSource)) {
+      searchQueries = isContinuation
+        ? ["чистописание", "рабочие тетради", "учебные пособия", "прописи тренажер", "прописи"]
+        : ["прописи", "учебники", "рабочие тетради", "чистописание", "учебные пособия"];
+    } else if (/\bпропис/i.test(targetSource)) {
+      searchQueries = isContinuation
+        ? ["чистописание", "учимся писать", "прописи тренажер", "прописи для детей", "многоразовые прописи"]
+        : ["прописи", "прописи для детей", "чистописание", "учимся писать", "прописи тренажер"];
+    } else if (/\bучебник/i.test(targetSource)) {
       searchQueries = ["учебники", "учебные пособия", "учебник для", "пособия", "справочник"];
-    } else if (/\b(тетрад|рабоч[а-я]*\s*тетрад)/i.test(cleanQ)) {
+    } else if (/\b(тетрад|рабоч[а-я]*\s*тетрад)/i.test(targetSource)) {
       searchQueries = ["рабочая тетрадь", "тетради", "тетрадь тренажер", "прописи", "развивающие задания"];
     } else {
-      const match = cleanQ.match(categoryRegex);
+      const match = targetSource.match(categoryRegex);
       if (match) {
         searchQueries = [match[0], cleanQ];
       }
@@ -899,6 +955,10 @@ Return JSON:
   let foundProducts = [];
   let matchedQuery = "";
 
+  const prevTitlesLower = new Set(
+    (previouslyRecommended || []).map((b) => (b.title || "").toLowerCase().trim()),
+  );
+
   for (let i = 0; i < searchQueries.length; i++) {
     const q = (searchQueries[i] || "").trim();
     if (!q) continue;
@@ -906,6 +966,9 @@ Return JSON:
     const rawResults = await searchSuppliersByTitleOnly(q, activeRate);
     const valid = rawResults.filter((p) => {
       if (!p.title || !p.price || p.price <= 0) return false;
+      if (previousUrls && previousUrls.has(p.url)) return false;
+      const pTitleLower = p.title.toLowerCase().trim();
+      if (prevTitlesLower.has(pTitleLower)) return false;
       if (!isForeignLanguageRequested) {
         if (FOREIGN_LANGUAGE_PATTERN.test(p.title)) return false;
         if (/[a-z]/i.test(p.title) && !/[а-яё]/i.test(p.title)) return false;
@@ -1159,6 +1222,9 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
     activeRate,
     isForeignLanguageRequested,
     isDescendingPriceOrder,
+    history,
+    previouslyRecommended,
+    previousUrls,
   );
   if (categoryResults !== null) {
     return categoryResults;
@@ -1511,27 +1577,57 @@ async function analyzeSearchIntent(messages) {
     /(посоветуй|порекомендуй|найди|хочу.*книг|подскажи что почитать|что почитать|подобрать книгу|выбери книгу|какие книги|книги про|книгу про|книги о|книги по|книга про|книга о|книга по|хочу книгу|подар(ок|ка|ком|ку|ки|ить)|для\s*подарка|в\s*подарок|что\s*подарить|что-нибудь\s*для\s*подарка|дай\s*мне|друг(их|ие|ого|им|ое|ую|ая)?\s*(изд[аея]ни|изд[аея]тельств|переплет|обложк|вариант|оформлен)|в другом оформлении|другое издание|другого издания|другого издательства|такие же книги|подороже|подешевле|еще книг|другие книги|сделай друго|замени|поменяй|дай\s*друг(ие|их)|покажи\s*друг(ие|их)|не\s*хочу|не\s*то|другие\s*вариант|что-?то\s*друг(ое|их)|покажи\s*ещ[её]|других\s*автор)/i.test(
       lower,
     );
-  if (hasExplicitBookRequest) {
+  const hasPreviousBooks = (messages || []).some(
+    (m) =>
+      (m.role === "assistant" && Array.isArray(m.books) && m.books.length > 0) ||
+      (m.books && m.books.length > 0),
+  );
+
+  const isContinuationQuery =
+    hasPreviousBooks &&
+    /(^|\s)(а\s*)?ещ[её](\s|$|\?)|(что|какие|есть|давай|покажи)\s*ещ[её]|(ещ[её]|друг(ие|их))\s*(вариант|книг|штук|издани)|покажи\s*друг(ие|их)|дай\s*друг(ие|их)|други[ея]\s*(книг|автор|вариант)/i.test(
+      lower,
+    );
+
+  if (hasExplicitBookRequest || isContinuationQuery) {
     return { needSearch: true };
   }
 
   // Fallback: use Gemini to classify intent
   const apiKey = process.env.GEMINI_API_KEY || DEFAULT_API_KEY;
+  const historySnippet = (messages || [])
+    .slice(-6)
+    .map(
+      (m) =>
+        `${m.role === "assistant" ? "Litera" : "User"}: ${m.content || ""} ${
+          m.books?.length
+            ? `[Recommended ${m.books.length} items: ${m.books.map((b) => b.title).slice(0, 3).join(", ")}...]`
+            : ""
+        }`,
+    )
+    .join("\n");
+
   const prompt = `
-Determine if the customer's message explicitly requests finding, recommending, or suggesting books to read or buy from the bookstore.
+Determine if the customer's message explicitly requests finding, recommending, or suggesting books or items to read or buy from the bookstore.
+
+Conversation history:
+${historySnippet}
+
+Customer message: "${latestMessage}"
 
 CRITICAL RULES:
+- CONTINUATION / MORE OPTIONS RULE: If previous messages in the conversation were discussing, searching, or recommending books/items, and the customer's latest message is a follow-up asking for more, other, or additional options (e.g. "а еще", "еще", "что еще есть", "покажи еще", "другие варианты", "а подешевле", "а другие"):
+  set needSearch = true!
 - set needSearch = false if the customer is asking about:
   * Their shopping cart ("что в корзине", "проверь корзину", "сколько книг в заказе")
   * Their account, login, or orders ("мои заказы", "где профиль")
   * Store FAQ (shipping, payment, currency, locations, languages)
-  * Casual conversation ("привет", "как дела", "спасибо")
+  * Casual conversation ("привет", "как дела", "спасибо") without prior book search
   * Personal opinion or literary thoughts without asking to buy or find books ("скажи свое мнение", "что ты думаешь о Достоевском", "твое мнение о книге")
   * Book plots, endings, or spoilers ("выжил ли герой", "кто убийца")
   * Navigation ("открой корзину", "перейти к оформлению")
 - set needSearch = true if the customer is asking for book recommendations, searching for reading material, asking if the store has or sells specific categories/materials (e.g. "есть ли прописи", "а есть какие-то учебники или прописи", "у вас есть словари?", "продаются ли прописи"), or asking for other editions/publishers/prices (e.g. "хочу такие же книги но другого издательства", "посоветуй что-то про космос", "найди детективы", "хочу почитать драму", "что-то подороже").
 
-Customer message: "${latestMessage}"
 Return JSON: { "needSearch": boolean }
 `;
 
@@ -1739,7 +1835,7 @@ CRITICAL INSTRUCTIONS:
 - CONVERSATION MEMORY & ACTIVE CONTEXT:
   * Your message MUST strictly orient on the ongoing dialogue history and previous queries!
   * If the ongoing dialogue is about GIFTS or books "подороже", remember that this context remains active!
-  * If the user rejected previous books ("не хочу", "дай другие", "не то"), acknowledge this warmly (e.g. "Понимаю вас! 💜 Давайте посмотрим совсем другие произведения...") and explain that you picked completely DIFFERENT titles for them!
+  * If the user asked for more options ("а еще", "еще", "что еще", "другие варианты") or rejected previous books ("не хочу", "дай другие", "не то"), acknowledge this warmly (e.g. "Конечно! Вот ещё отличные варианты...", "С удовольствием предложу вам другие издания...") and present the newly found books!
   * If the user asked for other editions of the same book, acknowledge the alternative edition selection!
 - PRICE & VALUE PREFERENCE: By default, prefer affordable editions. But if the customer requested other editions or more expensive books ("другого издательства", "подороже", "подарочное"), recommend the alternative / higher-priced editions from the list!
 - GIFTS & EXPENSIVE EDITIONS INSTRUCTION: If the customer asked for a GIFT ("для подарка", "подарок", "в подарок", "помоги с подарком") or asked for books "подороже": the books in the catalogue list above are premium, gift-worthy editions sorted strictly from highest price to lowest price. Recommend them proudly, emphasizing their aesthetic appeal, high edition quality, and suitability as a memorable, meaningful gift!
