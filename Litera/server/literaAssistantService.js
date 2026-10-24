@@ -31,7 +31,12 @@ ABOUT LITERA BOOKSTORE (BACKGROUND KNOWLEDGE ONLY):
 
 CRITICAL RULES ON RECOMMENDATIONS VS STORE/CART/SITE QUESTIONS:
 1. STRICTLY NEVER OFFER OR SEARCH FOR BOOKS WHEN NOT ASKED!
-   - If the user asks about their cart ("что в корзине", "проверь корзину", "сколько товаров", "общая сумма", "очисти корзину"), their orders, account, profile, site navigation, or general questions:
+   - NO INTRUSIVE / UNSOLICITED OFFERS: When chatting casually, answering questions about yourself (e.g. "ты мусульманка?", "кто ты?", "как дела?", "что любишь?"), discussing ideas, opinions, site navigation, or user cart/account:
+     DO NOT offer or pitch books!
+     STRICTLY FORBIDDEN to append intrusive sales offers or unsolicited book pitches at the end of your replies (such as: "Если вас интересуют книги о...", "Хотите, я подберу вам книги...", "Если захотите почитать что-то, я с удовольствием помогу", "Могу порекомендовать книги...").
+     Communicate naturally like a real, polite person having a genuine conversation.
+     Answer ONLY what was asked, without trying to steer the conversation into selling or finding books!
+   - If the user asks about their cart ("что в корзине", "проверь корзину", "сколько товаров", "общая сумма", "очисти корзину"), their orders, account, profile, site navigation, or general personal questions:
      DO NOT recommend or suggest any books!
      DO NOT invent book suggestions matching words in the user's prompt (e.g. NEVER suggest «Корзина с еловыми шишками» when asked about the shopping cart!).
      Set "bookIds": [].
@@ -72,7 +77,7 @@ CRITICAL RULES ON RECOMMENDATIONS VS STORE/CART/SITE QUESTIONS:
 YOUR PERSONALITY & TONE:
 - Friendly, warm, intelligent, polite, and approachable.
 - Deeply knowledgeable about books, literature, world authors, genres, and reading culture.
-- Helpful without being pushy, formal, or promotional. Avoid repetitive marketing slogans or boilerplate disclaimers.
+- Helpful without being pushy, formal, promotional, or intrusive. NEVER force book recommendations or book searches into conversations where the user did not ask for them. Avoid repetitive sales offers ("если вас интересуют книги, я помогу").
 - You may use gentle touches like 💜 or ✨ when appropriate, maintaining a thoughtful, authentic conversational tone.
 - Natural speaker in any language: You MUST ALWAYS reply in the exact language the user used in their message (Russian, English, Romanian, Bulgarian, etc.).
 - Truthful & Honest: NEVER invent fake books, fake author names, imaginary prices, or fake availability.
@@ -155,6 +160,26 @@ export function capitalizeReligionNames(text) {
     });
   }
   return res;
+}
+
+/**
+ * Strips unsolicited, intrusive book offers/pitches from casual conversational responses
+ * when the user did not ask for book recommendations.
+ */
+export function cleanUnsolicitedPitches(text) {
+  if (!text || typeof text !== "string") return text;
+  const pitchPatterns = [
+    /\s*(?:если\s+(?:вас|тебя|вам)?\s*(?:интересуют|захочется|будет\s+интересно|хотите|захотите|понадобятся)\s+.*?(?:книг|подобрать|почитать|выбрать|порекомендовать|посоветовать|обращайтесь).*?)(?:[.!?]+(?:\s*[\p{Emoji}\u200d\uFE0F])*|$)/giu,
+    /\s*(?:хотите[,\s]+(?:я\s+)?(?:посоветую|порекомендую|подберу|найду|предложу)\s+.*?(?:книг|что-нибудь|почитать).*?)(?:[.!?]+(?:\s*[\p{Emoji}\u200d\uFE0F])*|$)/giu,
+    /\s*(?:я\s+(?:с\s+(?:большим\s+)?удовольствием|с\s+радостью)?\s*(?:помогу|могу)\s+(?:вам\s+)?(?:подобрать|выбрать|найти|порекомендовать)\s+.*?(?:книг|что-нибудь|особенное).*?)(?:[.!?]+(?:\s*[\p{Emoji}\u200d\uFE0F])*|$)/giu,
+    /\s*(?:с\s+удовольствием\s+помогу\s+(?:вам\s+)?(?:подобрать|выбрать|найти)\s+.*?(?:книг|что-нибудь|особенное).*?)(?:[.!?]+(?:\s*[\p{Emoji}\u200d\uFE0F])*|$)/giu,
+    /\s*(?:могу\s+порекомендовать\s+.*?книг.*?(?:если\s+хотите)?)(?:[.!?]+(?:\s*[\p{Emoji}\u200d\uFE0F])*|$)/giu,
+  ];
+  let res = text;
+  for (const pat of pitchPatterns) {
+    res = res.replace(pat, "");
+  }
+  return res.trim();
 }
 
 function parseMdlPrice(priceRaw) {
@@ -1251,6 +1276,11 @@ Answer the user's question, greeting, cart inquiry, store navigation inquiry, or
 Set "bookIds": [].
 If the user explicitly asks to open or navigate to a page (e.g. "открой корзину", "перейди в профиль", "оформи заказ"), include the "action" field: { "type": "navigate", "url": "/cart" } (or corresponding route).
 
+CRITICAL INSTRUCTIONS - NO UNSOLICITED BOOK OFFERS OR PUSHINESS:
+- The customer did NOT ask for book recommendations or to search/buy books!
+- STRICTLY DO NOT add intrusive, pushy offers to find books at the end of your response (NEVER write phrases like "Если вас интересуют книги о..., я с удовольствием помогу...", "Хотите, я подберу вам книги...", "Если захотите что-то почитать, обращайтесь").
+- Answer ONLY the user's question and chat naturally, warmly, and politely without attempting to steer the topic to finding books!
+
 CRITICAL INSTRUCTIONS FOR PERSONAL OPINIONS:
 - If the user asks for your opinion or thoughts ("скажи свое мнение", "каково твое мнение о...", "что ты думаешь о...", "поделись мнением", "как тебе эта книга/автор?"):
   YOU MUST STATE YOUR PERSONAL LITERARY OPINION directly, engagingly, and warmly!
@@ -1323,8 +1353,11 @@ CRITICAL SPOILER POLICY & INSTRUCTIONS:
       .map((id) => catalogueResults.find((b) => b.id === id))
       .filter(Boolean);
 
-    const rawMessage = aiResponse.message || "Здравствуйте! Чем я могу помочь вам в выборе книги? 💜";
-    const formattedMessage = capitalizeReligionNames(rawMessage);
+    const rawMessage = aiResponse.message || "Здравствуйте! Рада вас видеть! 💜";
+    let formattedMessage = capitalizeReligionNames(rawMessage);
+    if (!needSearch) {
+      formattedMessage = cleanUnsolicitedPitches(formattedMessage);
+    }
 
     return {
       message: formattedMessage,
