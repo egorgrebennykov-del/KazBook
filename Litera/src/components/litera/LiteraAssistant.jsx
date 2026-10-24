@@ -540,7 +540,9 @@ export default function LiteraAssistant() {
                                       src={book.image}
                                       alt={book.title}
                                       className="litera-book-card__cover"
-                                      loading="lazy"
+                                      loading="eager"
+                                      decoding="auto"
+                                      fetchPriority="high"
                                     />
                                     <span className="litera-book-card__store-badge">
                                       {storeLabel}

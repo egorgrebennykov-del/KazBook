@@ -261,8 +261,9 @@ export default function NewBooks() {
                     className="results__img"
                     src={book.image}
                     alt={book.title}
-                    loading={index < 8 ? "eager" : "lazy"}
-                    fetchPriority={index < 4 ? "high" : "auto"}
+                    loading="eager"
+                    decoding="auto"
+                    fetchPriority={index < 8 ? "high" : "auto"}
                   />
                   <h2 className="results__title">{decodeHtmlEntities(book.title)}</h2>
                   <span className="results__store">{book.store || "librarius.md"}</span>

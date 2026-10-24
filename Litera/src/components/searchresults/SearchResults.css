@@ -116,10 +116,12 @@
   background-color: var(--body-color);
   image-rendering: auto;
   transition: transform 0.25s ease;
+  backface-visibility: hidden;
+  transform: translateZ(0);
 }
 
 .results__card:hover .results__img {
-  transform: scale(1.02);
+  transform: scale(1.02) translateZ(0);
 }
 
 .results__img--placeholder {

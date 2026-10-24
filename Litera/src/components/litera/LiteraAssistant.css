@@ -524,10 +524,12 @@
   height: 100%;
   object-fit: cover;
   transition: transform 0.3s;
+  backface-visibility: hidden;
+  transform: translateZ(0);
 }
 
 .litera-book-card__cover-wrap:hover .litera-book-card__cover {
-  transform: scale(1.05);
+  transform: scale(1.05) translateZ(0);
 }
 
 .litera-book-card__store-badge {

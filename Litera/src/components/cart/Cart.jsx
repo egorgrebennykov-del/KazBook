@@ -203,7 +203,8 @@ export default function Cart({ onSearch }) {
                     className="cart__image"
                     src={book.image}
                     alt={book.title || ""}
-                    loading="lazy"
+                    loading="eager"
+                    decoding="auto"
                   />
                   <span className="cart__book-info">
                     <strong>{decodeHtmlEntities(book.title)}</strong>

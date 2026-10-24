@@ -305,7 +305,8 @@ export default function Discount() {
                       className="results__img deals__image"
                       src={book.image}
                       alt={book.title}
-                      loading="lazy"
+                      loading="eager"
+                      decoding="auto"
                     />
                     <span className="deals__badge">
                       -{book.discountPercent}%

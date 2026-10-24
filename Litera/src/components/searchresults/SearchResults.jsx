@@ -259,8 +259,9 @@ export default function SearchResults() {
                     className="results__img"
                     src={book.image}
                     alt={book.title}
-                    loading={i < 8 ? "eager" : "lazy"}
-                    fetchPriority={i < 4 ? "high" : "auto"}
+                    loading="eager"
+                    decoding="auto"
+                    fetchPriority={i < 8 ? "high" : "auto"}
                     onLoad={() =>
                       setImageStatuses((current) =>
                         new Map(current).set(book.url, "loaded"),

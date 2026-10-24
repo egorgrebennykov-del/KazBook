@@ -44,13 +44,15 @@
   border-radius: 0;
   background-color: var(--body-color);
   image-rendering: auto;
+  backface-visibility: hidden;
+  transform: translateZ(0);
   transition:
     transform 0.25s ease,
     filter 0.25s ease;
 }
 
 .home__swiper .home__article:hover .home__img {
-  transform: scale(1.02);
+  transform: scale(1.02) translateZ(0);
 }
 
 .home__book-link > :not(.home__img) {
