@@ -38,6 +38,7 @@ export default function MessengerModal({ isOpen, onClose, onUnreadChange }) {
   const [emailError, setEmailError] = useState("");
 
   const [inquiry, setInquiry] = useState(null);
+  const inquiryRef = useRef(null);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(false);
@@ -53,21 +54,29 @@ export default function MessengerModal({ isOpen, onClose, onUnreadChange }) {
     messagesEndRef.current?.scrollIntoView({ behavior });
   };
 
-  // Load inquiry when modal opens or user/guest changes
-  const loadInquiry = async (showSpinner = true) => {
-    if (!isOpen) return;
-    if (!loggedIn && !guestEmail) return;
+  // Ensure inquiry exists and load it (synchronously stores in inquiryRef)
+  const ensureInquiry = async (emailOverride = null, nameOverride = null) => {
+    if (inquiryRef.current?.id) return inquiryRef.current;
 
-    if (showSpinner) setLoading(true);
+    const targetEmail = loggedIn
+      ? user?.email
+      : (emailOverride || guestEmail || localStorage.getItem(GUEST_EMAIL_KEY) || "").trim().toLowerCase();
+    const targetName = loggedIn
+      ? `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || user?.email || "Пользователь"
+      : (nameOverride || guestName || localStorage.getItem(GUEST_NAME_KEY) || "Гость").trim();
+
+    if (!loggedIn && !targetEmail) return null;
+
     try {
       const inq = await getOrCreateInquiry({
         user: loggedIn ? user : null,
-        guestEmail: loggedIn ? null : guestEmail,
-        guestName: loggedIn ? null : (guestName || "Гость"),
+        guestEmail: loggedIn ? null : targetEmail,
+        guestName: loggedIn ? null : targetName,
       });
 
       if (inq) {
         setInquiry(inq);
+        inquiryRef.current = inq;
         const chatList = Array.isArray(inq.chat) ? inq.chat : [];
         setMessages(chatList);
 
@@ -75,9 +84,20 @@ export default function MessengerModal({ isOpen, onClose, onUnreadChange }) {
           await markInquiryReadByUser(inq.id);
           if (onUnreadChange) onUnreadChange(0);
         }
+        return inq;
       }
     } catch (err) {
-      console.warn("Error loading inquiry:", err);
+      console.warn("Failed to ensure inquiry:", err);
+    }
+    return null;
+  };
+
+  // Load inquiry when modal opens or user/guest changes
+  const loadInquiry = async (showSpinner = true) => {
+    if (!isOpen) return;
+    if (showSpinner) setLoading(true);
+    try {
+      await ensureInquiry();
     } finally {
       if (showSpinner) setLoading(false);
     }
@@ -94,11 +114,14 @@ export default function MessengerModal({ isOpen, onClose, onUnreadChange }) {
 
   // Polling for incoming messages while modal is open
   useEffect(() => {
-    if (!isOpen || !inquiry?.id) return;
+    if (!isOpen) return;
 
     const interval = setInterval(async () => {
+      const currentId = inquiryRef.current?.id || inquiry?.id;
+      if (!currentId) return;
+
       try {
-        const fresh = await fetchInquiryById(inquiry.id);
+        const fresh = await fetchInquiryById(currentId);
         if (fresh && fresh.chat) {
           const freshList = Array.isArray(fresh.chat) ? fresh.chat : [];
           setMessages((prev) => {
@@ -108,6 +131,7 @@ export default function MessengerModal({ isOpen, onClose, onUnreadChange }) {
             return prev;
           });
           setInquiry(fresh);
+          inquiryRef.current = fresh;
           if (fresh.notifications_user > 0) {
             await markInquiryReadByUser(fresh.id);
             if (onUnreadChange) onUnreadChange(0);
@@ -129,7 +153,7 @@ export default function MessengerModal({ isOpen, onClose, onUnreadChange }) {
     }
   }, [messages.length]);
 
-  const handleGuestSubmit = (e) => {
+  const handleGuestSubmit = async (e) => {
     e.preventDefault();
     const cleanEmail = emailInput.trim().toLowerCase();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -137,7 +161,7 @@ export default function MessengerModal({ isOpen, onClose, onUnreadChange }) {
       setEmailError(
         language === "ru"
           ? "Пожалуйста, введите корректный адрес электронной почты"
-          : "Please enter a valid email address"
+          : "Please enter a valid email address",
       );
       return;
     }
@@ -148,51 +172,65 @@ export default function MessengerModal({ isOpen, onClose, onUnreadChange }) {
     setGuestEmail(cleanEmail);
     setGuestName(cleanName);
     setIsEditingGuest(false);
+
+    setLoading(true);
+    await ensureInquiry(cleanEmail, cleanName);
+    setLoading(false);
   };
 
   const handleSend = async (e) => {
-    e?.preventDefault();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     const text = inputText.trim();
     if (!text || sending) return;
 
-    if (!inquiry?.id) {
-      // Try to load / create first
-      await loadInquiry(false);
-    }
-
-    const currentInquiryId = inquiry?.id;
-    if (!currentInquiryId) return;
-
     setSending(true);
-    const optimisticMsg = {
-      id: `opt_${Date.now()}`,
-      sender: "user",
-      senderName: loggedIn
-        ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email
-        : guestName || "Гость",
-      text,
-      timestamp: new Date().toISOString(),
-      deliveredViaEmail: false,
-    };
-
-    setMessages((prev) => [...prev, optimisticMsg]);
-    setInputText("");
 
     try {
+      let activeInquiry = inquiryRef.current || inquiry;
+      if (!activeInquiry?.id) {
+        activeInquiry = await ensureInquiry();
+      }
+
+      if (!activeInquiry?.id) {
+        console.error("Could not obtain inquiry ID");
+        setSending(false);
+        return;
+      }
+
+      const optimisticMsg = {
+        id: `opt_${Date.now()}`,
+        sender: "user",
+        senderName: loggedIn
+          ? `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || user?.email || "Пользователь"
+          : guestName || localStorage.getItem(GUEST_NAME_KEY) || "Гость",
+        text,
+        timestamp: new Date().toISOString(),
+        deliveredViaEmail: false,
+      };
+
+      setMessages((prev) => [...prev, optimisticMsg]);
+      setInputText("");
+
       const updatedInq = await sendInquiryMessage({
-        inquiryId: currentInquiryId,
+        inquiryId: activeInquiry.id,
         text,
         sender: "user",
         senderUser: loggedIn ? user : null,
       });
 
-      if (updatedInq?.chat) {
-        setMessages(updatedInq.chat);
+      if (updatedInq) {
+        setInquiry(updatedInq);
+        inquiryRef.current = updatedInq;
+        if (Array.isArray(updatedInq.chat)) {
+          setMessages(updatedInq.chat);
+        }
       }
     } catch (err) {
       console.error("Failed to send message:", err);
-      // fallback: reload
-      loadInquiry(false);
+      ensureInquiry();
     } finally {
       setSending(false);
     }
@@ -201,7 +239,7 @@ export default function MessengerModal({ isOpen, onClose, onUnreadChange }) {
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      handleSend(e);
     }
   };
 
@@ -414,7 +452,8 @@ export default function MessengerModal({ isOpen, onClose, onUnreadChange }) {
                 disabled={sending}
               />
               <button
-                type="submit"
+                type="button"
+                onClick={handleSend}
                 className="litera-messenger-send-btn"
                 disabled={!inputText.trim() || sending}
                 title={language === "ru" ? "Отправить (Enter)" : "Send (Enter)"}
