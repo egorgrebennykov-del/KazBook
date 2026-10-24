@@ -30,6 +30,8 @@ ABOUT LITERA BOOKSTORE (BACKGROUND KNOWLEDGE ONLY):
 - All prices are in Euros (€ / EUR).
 - Books in the store are in Russian.
 - Sourcing confidentiality: NEVER mention Moldova or Moldovan bookstores under any circumstances. If asked where books come from, explain that Litera partners with certified publishers and verified European distributor networks.
+- LITERA CATALOG ASSORTMENT: Litera offers a wide variety of books and publications in Russian, including fiction, non-fiction, educational literature, textbooks, copybooks ("прописи"), workbooks, children's developmental books, encyclopedias, and gift editions.
+- NEVER claim that Litera specializes only in fiction or does not carry educational books, workbooks, copybooks, or textbooks!
 
 CRITICAL RULES ON RECOMMENDATIONS VS STORE/CART/SITE QUESTIONS:
 1. STRICTLY NEVER OFFER OR SEARCH FOR BOOKS WHEN NOT ASKED!
@@ -792,6 +794,170 @@ Return only the IDs of editions that are truly suitable as impressive gifts!`;
 }
 
 /**
+ * Searches bookstore suppliers for generic category / educational / non-specific book queries
+ * (e.g. "прописи", "учебники", "рабочие тетради", "азбука", "букварь", etc.).
+ *
+ * Requirements:
+ * 1. Gemini generates up to 5 prioritized, targeted search queries.
+ * 2. Queries are executed sequentially against store search.
+ * 3. EARLY EXIT: If the first query (or any subsequent query) returns suitable matching results,
+ *    immediately STOP and DO NOT execute the remaining queries.
+ */
+export async function searchGenericCategoryIfNeeded(
+  userQuery,
+  activeRate,
+  isForeignLanguageRequested = false,
+  isDescendingPriceOrder = false,
+) {
+  const cleanQ = (userQuery || "").trim();
+  if (!cleanQ) return null;
+
+  const categoryRegex =
+    /\b(пропис[а-я]*|учебник[а-я]*|тетрад[а-я]*|пособи[а-я]*|буквар[а-я]*|азбук[а-я]*|каллиграфи[а-я]*|чистописан[а-я]*|раскраск[а-я]*|словарь|словар[а-я]*|атлас[а-я]*|хрестомати[а-я]*|контурн[а-я]*\s*карт[а-я]*)\b/i;
+
+  const mightBeCategory = categoryRegex.test(cleanQ);
+
+  const apiKey = process.env.GEMINI_API_KEY || DEFAULT_API_KEY;
+  let isGenericCategory = false;
+  let searchQueries = [];
+
+  try {
+    const prompt = `
+You are the search engine query optimizer for the online bookstore "Litera".
+User message: "${cleanQ}".
+
+Determine if this is a request for a generic product category, educational/learning material, workbook, copybook, textbook, or item type that does NOT have a single specific literary title (e.g. "прописи", "учебники", "рабочие тетради", "азбука", "букварь", "раскраски", "пособия", "словари", "атласы", "тетради по каллиграфии", etc.), as opposed to a specific literary work (like "Мастер и Маргарита", "Идиот") or a fiction genre theme (like "детективы", "книги про любовь", "фантастика про космос").
+
+Rules:
+1. If isGenericCategory is true:
+   Generate up to 5 prioritized, targeted search queries in Russian to enter sequentially into the bookstore website search to find relevant products.
+   - The queries must be concise keywords suitable for store catalog search (e.g. for "прописи" or "учебники или прописи": ["прописи", "учебники", "рабочие тетради", "чистописание", "учебные пособия"]).
+   - Put the single most direct and effective search query as #1!
+2. If isGenericCategory is false:
+   searchQueries: []
+
+Return JSON:
+{
+  "isGenericCategory": boolean,
+  "searchQueries": string[]
+}
+`;
+
+    const geminiRes = await callGeminiJson({
+      apiKey,
+      prompt,
+      responseSchema: {
+        type: "OBJECT",
+        properties: {
+          isGenericCategory: { type: "BOOLEAN" },
+          searchQueries: {
+            type: "ARRAY",
+            items: { type: "STRING" },
+          },
+        },
+        required: ["isGenericCategory", "searchQueries"],
+      },
+    });
+
+    if (
+      geminiRes?.isGenericCategory &&
+      Array.isArray(geminiRes?.searchQueries) &&
+      geminiRes.searchQueries.length > 0
+    ) {
+      isGenericCategory = true;
+      searchQueries = geminiRes.searchQueries.map((q) => q.trim()).filter(Boolean);
+    }
+  } catch (err) {
+    console.warn("searchGenericCategory classification error:", err.message);
+  }
+
+  // Fallback heuristic if Gemini call failed or returned false but regex clearly matches generic categories
+  if (!isGenericCategory && mightBeCategory) {
+    isGenericCategory = true;
+    if (/\bпропис/i.test(cleanQ) && /\bучебник/i.test(cleanQ)) {
+      searchQueries = ["прописи", "учебники", "рабочие тетради", "чистописание", "учебные пособия"];
+    } else if (/\bпропис/i.test(cleanQ)) {
+      searchQueries = ["прописи", "прописи для детей", "чистописание", "учимся писать", "прописи тренажер"];
+    } else if (/\bучебник/i.test(cleanQ)) {
+      searchQueries = ["учебники", "учебные пособия", "учебник для", "пособия", "справочник"];
+    } else if (/\b(тетрад|рабоч[а-я]*\s*тетрад)/i.test(cleanQ)) {
+      searchQueries = ["рабочая тетрадь", "тетради", "тетрадь тренажер", "прописи", "развивающие задания"];
+    } else {
+      const match = cleanQ.match(categoryRegex);
+      if (match) {
+        searchQueries = [match[0], cleanQ];
+      }
+    }
+  }
+
+  if (!isGenericCategory || searchQueries.length === 0) {
+    return null;
+  }
+
+  // EARLY EXIT SEARCH LOOP:
+  // "если запросов он выдал 5 и на первом были найдены подходящие результаты, не нужно делать остальные 4"
+  let foundProducts = [];
+  let matchedQuery = "";
+
+  for (let i = 0; i < searchQueries.length; i++) {
+    const q = (searchQueries[i] || "").trim();
+    if (!q) continue;
+
+    const rawResults = await searchSuppliersByTitleOnly(q, activeRate);
+    const valid = rawResults.filter((p) => {
+      if (!p.title || !p.price || p.price <= 0) return false;
+      if (!isForeignLanguageRequested) {
+        if (FOREIGN_LANGUAGE_PATTERN.test(p.title)) return false;
+        if (/[a-z]/i.test(p.title) && !/[а-яё]/i.test(p.title)) return false;
+      }
+      return true;
+    });
+
+    if (valid.length > 0) {
+      // Suitable matching results found on this query!
+      // Do NOT execute the remaining queries.
+      foundProducts = valid;
+      matchedQuery = q;
+      break;
+    }
+  }
+
+  if (foundProducts.length === 0) {
+    return [];
+  }
+
+  // Deduplicate and format
+  const deduped = [];
+  const seenUrls = new Set();
+  for (const p of foundProducts) {
+    if (p.url && seenUrls.has(p.url)) continue;
+    const isDupTitle = deduped.some(
+      (d) => d.title.toLowerCase().trim() === p.title.toLowerCase().trim(),
+    );
+    if (!isDupTitle) {
+      if (p.url) seenUrls.add(p.url);
+      deduped.push({
+        ...p,
+        candidateTitle: p.title,
+        candidateAuthor: p.author || "Учебные материалы",
+        relevance: `Издание по запросу «${matchedQuery}»`,
+      });
+    }
+  }
+
+  if (isDescendingPriceOrder) {
+    deduped.sort((a, b) => b.price - a.price);
+  } else {
+    deduped.sort((a, b) => a.price - b.price);
+  }
+
+  return deduped.slice(0, 8).map((b, idx) => ({
+    id: `catalog-book-${idx}`,
+    ...b,
+  }));
+}
+
+/**
  * 4. Main AI Discovery & Supplier Verification pipeline.
  * Discovers real books by meaning, searches suppliers strictly by title only,
  * validates products, and excludes any books not available on suppliers.
@@ -985,6 +1151,17 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
       id: `catalog-book-${idx}`,
       ...b,
     }));
+  }
+
+  // Check if user is asking for generic categories / items without specific book titles (e.g. "прописи", "учебники", "рабочие тетради")
+  const categoryResults = await searchGenericCategoryIfNeeded(
+    userQuery,
+    activeRate,
+    isForeignLanguageRequested,
+    isDescendingPriceOrder,
+  );
+  if (categoryResults !== null) {
+    return categoryResults;
   }
 
   const rawCandidates = await discoverBooksByMeaning(
@@ -1320,8 +1497,17 @@ async function analyzeSearchIntent(messages) {
     return { needSearch: true };
   }
 
-  // Fast-path 4: Explicit book requests and follow-ups
+  // Fast-path 4: Explicit book requests, category inquiries, and follow-ups
+  const hasCategoryOrBookInquiry =
+    /(есть|бывают|прода(ете|ются|ется)|найди|ищу|покажи|подскажи|посоветуй|порекомендуй|хочу|нужн[аыое]?)\s*(ли)?\s*(у\s*вас)?\s*(каки[е-]?то|какие-нибудь|что-?[нто]|какой-?то)?\s*(книг|учебник|пропис|тетрад|пособи|словарь|словари|атлас|энциклопеди|азбук|буквар|справочник|руководств|комикс|мангу|манга|раскраск|литератур)/i.test(
+      lower,
+    ) ||
+    /\b(прописи|прописях|прописей|учебники|учебник|рабочие\s*тетради|азбука|букварь|хрестоматия|словари|развивающие\s*тетради)\b/i.test(
+      lower,
+    );
+
   const hasExplicitBookRequest =
+    hasCategoryOrBookInquiry ||
     /(посоветуй|порекомендуй|найди|хочу.*книг|подскажи что почитать|что почитать|подобрать книгу|выбери книгу|какие книги|книги про|книгу про|книги о|книги по|книга про|книга о|книга по|хочу книгу|подар(ок|ка|ком|ку|ки|ить)|для\s*подарка|в\s*подарок|что\s*подарить|что-нибудь\s*для\s*подарка|дай\s*мне|друг(их|ие|ого|им|ое|ую|ая)?\s*(изд[аея]ни|изд[аея]тельств|переплет|обложк|вариант|оформлен)|в другом оформлении|другое издание|другого издания|другого издательства|такие же книги|подороже|подешевле|еще книг|другие книги|сделай друго|замени|поменяй|дай\s*друг(ие|их)|покажи\s*друг(ие|их)|не\s*хочу|не\s*то|другие\s*вариант|что-?то\s*друг(ое|их)|покажи\s*ещ[её]|других\s*автор)/i.test(
       lower,
     );
@@ -1343,7 +1529,7 @@ CRITICAL RULES:
   * Personal opinion or literary thoughts without asking to buy or find books ("скажи свое мнение", "что ты думаешь о Достоевском", "твое мнение о книге")
   * Book plots, endings, or spoilers ("выжил ли герой", "кто убийца")
   * Navigation ("открой корзину", "перейти к оформлению")
-- set needSearch = true if the customer is asking for book recommendations, searching for reading material, or asking for other editions/publishers/prices (e.g. "хочу такие же книги но другого издательства", "посоветуй что-то про космос", "найди детективы", "хочу почитать драму", "что-то подороже").
+- set needSearch = true if the customer is asking for book recommendations, searching for reading material, asking if the store has or sells specific categories/materials (e.g. "есть ли прописи", "а есть какие-то учебники или прописи", "у вас есть словари?", "продаются ли прописи"), or asking for other editions/publishers/prices (e.g. "хочу такие же книги но другого издательства", "посоветуй что-то про космос", "найди детективы", "хочу почитать драму", "что-то подороже").
 
 Customer message: "${latestMessage}"
 Return JSON: { "needSearch": boolean }
@@ -1545,9 +1731,11 @@ CRITICAL TARGETED BOOK REPLACEMENT INSTRUCTION:
         promptText += `
 CRITICAL INSTRUCTIONS:
 - DYNAMIC LANGUAGE FILTERING: If you notice ANY signs or markers that a book in the catalogue list is an edition in a foreign language (e.g. English, Romanian, French, German, "(на англ. яз.)", "(eng)", "in English", foreign language subtitles), YOU MUST DISCARD THAT BOOK AND NOT RECOMMEND IT!
-- NO DUPLICATE WORKS OR TITLES: Every single recommended book MUST be a completely distinct literary work! Never recommend duplicate editions of the same book in the list.
+- NO DUPLICATE WORKS OR TITLES: Every single recommended book MUST be a completely distinct literary work or distinct educational edition! Never recommend duplicate identical editions of the same book in the list.
 - QUANTITY REQUIREMENT: Whenever books are present in the catalogue list, recommend all valid Russian books (at least 3, up to 6 books). Return their IDs in "bookIds": ${JSON.stringify(catalogueResults.slice(0, 6).map((b) => b.id))}.
 - In "bookIds", return an array containing their exact IDs.
+- EDUCATIONAL / COPYBOOKS / TEXTBOOKS INSTRUCTION: If the customer asked about educational materials, textbooks, or copybooks ("прописи", "учебники", "рабочие тетради"):
+  Joyfully and warmly confirm that Litera has these items in stock, present the found editions from the catalogue search results list, and explain how they help in learning or practicing handwriting/skills!
 - CONVERSATION MEMORY & ACTIVE CONTEXT:
   * Your message MUST strictly orient on the ongoing dialogue history and previous queries!
   * If the ongoing dialogue is about GIFTS or books "подороже", remember that this context remains active!
