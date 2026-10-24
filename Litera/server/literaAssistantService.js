@@ -52,6 +52,13 @@ CRITICAL RULES ON RECOMMENDATIONS VS STORE/CART/SITE QUESTIONS:
    - PRICE AND VALUE PREFERENCE: By default, prioritize accessible, affordable editions (~7-15 €). But if the user explicitly asks for other editions, hardcover, premium, or more expensive editions ("другие издания", "другого издательства", "подороже", "подарочное"), recommend the higher-priced, high-quality editions from the provided catalogue list!
    - DYNAMIC FOREIGN LANGUAGE FILTERING: Litera is a Russian-language bookstore. If you see ANY signs or markers that a book in the catalogue is an edition in another language (e.g. English, Romanian, French, German, "(на англ. яз.)", "(eng)", "in English", foreign subtitles, or foreign language text): YOU MUST DISCARD THAT BOOK AND NEVER RECOMMEND IT OR RETURN ITS ID IN "bookIds" unless the user explicitly requested books in that foreign language!
    - ABSENCE OF OTHER EDITIONS: If the customer asks for another edition of a book, but no other edition exists in our catalogue: You MUST apologize politely and warmly to the customer (e.g. "Простите, пожалуйста! 💜", "Мне очень жаль...") and honestly explain that this title is available in our catalogue in only this one edition. DO NOT search for or suggest any other books or titles that the user did not ask for! Keep the existing list intact.
+   - STRICT SPOILER POLICY (NEVER GIVE SPOILERS WITHOUT PRIOR WARNING AND CONSENT):
+     1. If the user asks ANY spoiler question (e.g. «Выжил ли главный герой?», «Кто убийца?», «Чем заканчивается книга?», «Умрёт ли ...?», «С кем останется ...?», «Что случилось в конце?», «Предаст ли ...?»):
+        YOU ARE STRICTLY FORBIDDEN FROM REVEALING THE SPOILER IN THAT TURN!
+        You MUST first warn the user: explain that this is a major plot spoiler, and ask them directly if they are sure they want to know the spoiler or prefer to preserve the intrigue for reading!
+     2. ONLY IF the user in their subsequent message explicitly confirms/agrees (e.g. «Да», «Да, расскажи», «Хочу знать», «Согласен», «Спойлери», «Мне всё равно»):
+        ONLY THEN are you allowed to reveal the requested plot point or answer!
+     3. If the user declines («Нет», «Не надо»), warmly support their decision to enjoy the book without spoilers.
 
 YOUR PERSONALITY & TONE:
 - Friendly, warm, intelligent, polite, and approachable.
@@ -896,7 +903,25 @@ async function analyzeSearchIntent(messages) {
     return { needSearch: false };
   }
 
-  // Fast-path 3: Suggested quick chips (Direct search needed)
+  // Fast-path 3: Book plot, ending, character fate, or spoiler questions / confirmation (NO STORE SEARCH)
+  const isPlotOrSpoilerQuery =
+    /(выжил(а|и)?\s*ли|умер(ла|ли)?\s*ли|погиб(ла|ли)?\s*ли|кто\s*убийца|чем\s*заканчива|какой\s*финал|что\s*в\s*конце|концовк|спойлер|раскрой\s*сюжет|расскажи\s*финал|с\s*кем\s*останет|предаст\s*ли|что\s*станет\s*с)/i.test(
+      lower,
+    );
+
+  const prevAssistantMsg =
+    messages.filter((m) => m.role === "assistant").slice(-1)[0]?.content || "";
+  const isRespondingToSpoilerWarning =
+    /спойлер|интриг|развязк|хотите.*узнать|раскрыть/i.test(prevAssistantMsg) &&
+    /^(да|давай|хочу|расскажи|говори|спойлери|скажи|конечно|согласен|давай расскажи|да расскажи|мне всё равно|мне все равно|не боюсь спойлеров|нет|не надо|лучше не надо|не стоит)[\s!.,?]*$/i.test(
+      lower,
+    );
+
+  if (isPlotOrSpoilerQuery || isRespondingToSpoilerWarning) {
+    return { needSearch: false };
+  }
+
+  // Fast-path 4: Suggested quick chips (Direct search needed)
   if (
     /литера,?\s*(что\s*почитать|посоветуй\s*книгу|что\s*(сейчас\s*)?в\s*топе|помоги\s*с\s*подарком|найди\s*детектив)/i.test(
       lower,
@@ -1151,9 +1176,21 @@ CRITICAL INSTRUCTIONS WHEN NO BOOKS ARE FOUND:
   } else {
     promptText += `
 INSTRUCTION:
-Answer the user's question, greeting, cart inquiry, or store navigation inquiry directly and helpfully in your charming, friendly voice using the CURRENT USER & SITE CONTEXT.
+Answer the user's question, greeting, cart inquiry, store navigation inquiry, or literary question directly and helpfully in your charming, friendly voice using the CURRENT USER & SITE CONTEXT and Conversation history.
 Set "bookIds": [].
 If the user explicitly asks to open or navigate to a page (e.g. "открой корзину", "перейди в профиль", "оформи заказ"), include the "action" field: { "type": "navigate", "url": "/cart" } (or corresponding route).
+
+CRITICAL SPOILER POLICY & INSTRUCTIONS:
+1. NEVER reveal a spoiler on the first inquiry!
+   - If the user asks ANY spoiler question (e.g. "Выжил ли главный герой?", "Кто убийца?", "Чем закончилось?", "Умрёт ли ...?", "С кем останется ...?", "Что произошло в конце?"):
+     YOU MUST NOT REVEAL THE ANSWER YET!
+     You MUST first warn the user that this is a major plot spoiler (e.g. "Осторожно, это важный сюжетный спойлер! 🤫 Если вы ещё не дочитали, это может испортить вам впечатление от книги. Вы уверены, что хотите узнать развязку, или лучше сохранить интригу для чтения? 💜").
+     Set emotion: "curious" or "concerned".
+     Set "bookIds": [].
+2. ONLY IF the conversation history clearly shows that you already warned the user in the previous message and the user's latest reply explicitly confirms/agrees to hear the spoiler (e.g. "Да", "Да, расскажи", "Хочу знать", "Согласен", "Спойлери", "Мне всё равно"):
+   - ONLY THEN are you allowed to reveal the requested plot spoiler accurately, clearly, and thoughtfully!
+3. If the user declines ("Нет", "Не надо", "Лучше сам дочитаю"):
+   - Warmly praise their choice to preserve the intrigue and enjoy reading without spoilers!
 `;
   }
 
