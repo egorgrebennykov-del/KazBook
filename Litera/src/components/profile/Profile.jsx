@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router";
-import { getProfile, isLoggedIn, logout } from "../../../utils/auth";
+import {
+  getProfile,
+  isLoggedIn,
+  logout,
+  isPrivileged,
+  resolveUserRoles,
+  formatRoleName,
+} from "../../../utils/auth";
 import { useLanguage } from "../../context/languageContext";
 import "./Profile.css";
 
@@ -188,7 +195,7 @@ export default function Profile() {
               </div>
             )}
             <div
-              className={`profile__avatar ${profile.role === "privileged" ? "profile__avatar--privileged" : ""}`}
+              className={`profile__avatar ${isPrivileged(profile) ? "profile__avatar--privileged" : ""}`}
             >
               {initials || "?"}
             </div>
@@ -216,15 +223,48 @@ export default function Profile() {
               </div>
             )}
 
-            {profile.role === "privileged" && (
+            <div className="profile__badges-container">
+              {profile.status === "privileged" && (
+                <span
+                  className="profile__status-badge"
+                  title={
+                    language === "ru"
+                      ? "Статус: Привилегированный"
+                      : "Status: Privileged"
+                  }
+                >
+                  <i className="ri-vip-crown-fill" />
+                  <span>
+                    {language === "ru" ? "Привилегированный" : "Privileged"}
+                  </span>
+                </span>
+              )}
+              {resolveUserRoles(profile).map((role) => (
+                <span
+                  key={role}
+                  className={`profile__role-tag profile__role-tag--${role}`}
+                  title={`${language === "ru" ? "Роль: " : "Role: "}${formatRoleName(role, language)}`}
+                >
+                  {role === "developer" && <i className="ri-code-box-line" />}
+                  {role === "admin" && <i className="ri-shield-star-line" />}
+                  {role === "vip" && <i className="ri-medal-fill" />}
+                  {role === "user" && <i className="ri-user-line" />}
+                  <span>{formatRoleName(role, language)}</span>
+                </span>
+              ))}
+            </div>
+
+            {isPrivileged(profile) && (
               <Link
                 to="/privileged"
                 className="profile__privileged-badge"
                 title={t("privileged.title")}
               >
-                <i className="ri-vip-crown-fill" />
+                <i className="ri-shield-check-line" />
                 <span>
-                  {language === "ru" ? "Привилегированный" : "Privileged"}
+                  {language === "ru"
+                    ? "Панель управления"
+                    : "Management Panel"}
                 </span>
               </Link>
             )}

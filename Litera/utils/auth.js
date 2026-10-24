@@ -19,16 +19,104 @@ const checkEmail = (email) => {
 export const isLoggedIn = () =>
   document.cookie.split("; ").some((c) => c.startsWith("user="));
 
-const setUserCookie = ({ id, firstName, role }) => {
+export function resolveUserRoles(user) {
+  if (!user) return ["user"];
+
+  const rawRole = user.role ?? user.roles;
+  let parsedRoles = [];
+
+  if (Array.isArray(rawRole)) {
+    parsedRoles = rawRole;
+  } else if (typeof rawRole === "string" && rawRole.trim()) {
+    try {
+      const parsed = JSON.parse(rawRole);
+      if (Array.isArray(parsed)) {
+        parsedRoles = parsed;
+      } else if (typeof parsed === "string") {
+        parsedRoles = [parsed];
+      }
+    } catch {
+      parsedRoles = rawRole.split(",").map((r) => r.trim());
+    }
+  }
+
+  const roleSet = new Set();
+  for (const r of parsedRoles) {
+    if (!r || typeof r !== "string") continue;
+    const norm = r.trim().toLowerCase();
+    if (norm === "admin" || norm === "админ" || norm === "administrator") {
+      roleSet.add("admin");
+    } else if (
+      norm === "developer" ||
+      norm === "девелопер" ||
+      norm === "dev" ||
+      norm === "разработчик"
+    ) {
+      roleSet.add("developer");
+    } else if (norm === "vip" || norm === "вип") {
+      roleSet.add("vip");
+    } else if (norm === "user" || norm === "юзер") {
+      roleSet.add("user");
+    } else {
+      roleSet.add(norm);
+    }
+  }
+
+  const isPrivilegedStatus =
+    user.status === "privileged" ||
+    user.status === "привилегированный" ||
+    user.role === "privileged";
+
+  const isDevOrAdmin = roleSet.has("developer") || roleSet.has("admin");
+
+  // Если пользователь привилегированный, но не разработчик и не админ, то его роль называется вип
+  if (isPrivilegedStatus && !isDevOrAdmin) {
+    roleSet.add("vip");
+    roleSet.delete("user");
+  }
+
+  // По умолчанию человек должен иметь роль юзер
+  if (roleSet.size === 0) {
+    roleSet.add("user");
+  }
+
+  return Array.from(roleSet);
+}
+
+export function formatRoleName(role, language = "ru") {
+  const norm = String(role).trim().toLowerCase();
+  if (norm === "developer") return language === "ru" ? "Девелопер" : "Developer";
+  if (norm === "admin") return language === "ru" ? "Админ" : "Admin";
+  if (norm === "vip") return language === "ru" ? "ВИП" : "VIP";
+  return language === "ru" ? "Юзер" : "User";
+}
+
+export function formatStatusName(status, language = "ru") {
+  const norm = String(status).trim().toLowerCase();
+  if (norm === "privileged" || norm === "привилегированный") {
+    return language === "ru" ? "Привилегированный" : "Privileged";
+  }
+  return language === "ru" ? "Юзер" : "User";
+}
+
+const setUserCookie = ({ id, firstName, role, status, roles }) => {
+  const userStatus = status || (role === "privileged" ? "privileged" : "user");
+  const resolvedRoles = roles || resolveUserRoles({ role, status: userStatus });
   const value = encodeURIComponent(
-    JSON.stringify({ id, firstName, role: role || null }),
+    JSON.stringify({
+      id,
+      firstName,
+      status: userStatus,
+      role: resolvedRoles[0] || "user",
+      roles: resolvedRoles,
+    }),
   );
   document.cookie = `user=${value}; max-age=${7 * 24 * 60 * 60}; path=/; SameSite=Lax`;
 };
 
 async function findByEmail(email) {
   const response = await fetch(
-    `${TABLE_URL}?select=id,firstName,lastName,email,password_hash,role&email=eq.${encodeURIComponent(email)}&limit=1`,
+    `${TABLE_URL}?select=id,firstName,lastName,email,password_hash,status,role&email=eq.${encodeURIComponent(email)}&limit=1`,
     { headers },
   );
   if (!response.ok) throw new Error("Server error, try again later");
@@ -90,6 +178,8 @@ export async function register({ firstName, lastName, email, password, phone }) 
       email: normalized,
       password_hash: await bcrypt.hash(password, 10),
       phone: phoneArray,
+      status: "user",
+      role: ["user"],
     }),
   });
   if (
@@ -130,7 +220,7 @@ export async function getProfile() {
   if (!cookieUser) return null;
 
   const response = await fetch(
-    `${TABLE_URL}?select=id,firstName,lastName,email,phone,adresses,role&id=eq.${encodeURIComponent(cookieUser.id)}&limit=1`,
+    `${TABLE_URL}?select=id,firstName,lastName,email,phone,adresses,status,role&id=eq.${encodeURIComponent(cookieUser.id)}&limit=1`,
     { headers },
   );
   const row = response.ok ? (await response.json())[0] : null;
@@ -141,22 +231,28 @@ export async function getProfile() {
   const phones = parseUserPhones(row?.phone);
   const primaryPhone =
     phones[0] || (typeof row?.phone === "string" ? row.phone.trim() : "");
-  const userRole = row?.role || "";
 
-  if (cookieUser.role !== userRole) {
-    setUserCookie({
-      id: cookieUser.id,
-      firstName: row?.firstName || cookieUser.firstName,
-      role: userRole,
-    });
-  }
+  const userStatus =
+    row?.status || (row?.role === "privileged" ? "privileged" : "user");
+  const userRoles = resolveUserRoles({ status: userStatus, role: row?.role });
+  const primaryRole = userRoles[0] || "user";
+
+  setUserCookie({
+    id: cookieUser.id,
+    firstName: row?.firstName || cookieUser.firstName,
+    status: userStatus,
+    role: primaryRole,
+    roles: userRoles,
+  });
 
   return {
     id: cookieUser.id,
     firstName: cookieUser.firstName,
     lastName: "",
     email: "",
-    role: userRole,
+    status: userStatus,
+    role: primaryRole,
+    roles: userRoles,
     adresses: [],
     ...(row || {}),
     phone: primaryPhone,
@@ -164,40 +260,89 @@ export async function getProfile() {
   };
 }
 
-export function isPrivileged() {
-  const user = getCookieUser();
-  return user?.role === "privileged";
+export function isPrivileged(user) {
+  const u = user ?? getCookieUser();
+  if (!u) return false;
+  if (u.status === "privileged" || u.status === "привилегированный") return true;
+  const roles = resolveUserRoles(u);
+  return roles.some(
+    (r) =>
+      r === "admin" ||
+      r === "developer" ||
+      r === "vip" ||
+      r === "privileged",
+  );
+}
+
+export function hasRole(user, roleName) {
+  const roles = resolveUserRoles(user);
+  return roles.includes(roleName.toLowerCase().trim());
 }
 
 export async function getAllUsers() {
   try {
     const response = await fetch(
-      `${TABLE_URL}?select=id,created_at,firstName,lastName,email,phone,role&order=created_at.desc`,
+      `${TABLE_URL}?select=id,created_at,firstName,lastName,email,phone,status,role&order=created_at.desc`,
       { headers },
     );
     if (!response.ok) return [];
     const list = await response.json();
-    return Array.isArray(list) ? list : [];
+    if (!Array.isArray(list)) return [];
+    return list.map((u) => {
+      const userStatus =
+        u.status || (u.role === "privileged" ? "privileged" : "user");
+      const userRoles = resolveUserRoles({ status: userStatus, role: u.role });
+      return {
+        ...u,
+        status: userStatus,
+        roles: userRoles,
+        role: userRoles[0] || "user",
+      };
+    });
   } catch (err) {
     console.warn("Error fetching users:", err);
     return [];
   }
 }
 
-export async function updateUserRole(userId, newRole) {
+export async function updateUserStatus(userId, newStatus) {
   const response = await fetch(
     `${TABLE_URL}?id=eq.${encodeURIComponent(userId)}`,
     {
       method: "PATCH",
       headers: { ...headers, Prefer: "return=representation" },
-      body: JSON.stringify({ role: newRole }),
+      body: JSON.stringify({ status: newStatus }),
     },
   );
   if (!response.ok) {
     const err = await response.json().catch(() => null);
-    throw new Error(err?.message || "Could not update user role");
+    throw new Error(err?.message || "Could not update user status");
   }
   return (await response.json())[0];
+}
+
+export async function updateUserRoles(userId, newRoles) {
+  const rolesArray = Array.isArray(newRoles) ? newRoles : [newRoles];
+  const response = await fetch(
+    `${TABLE_URL}?id=eq.${encodeURIComponent(userId)}`,
+    {
+      method: "PATCH",
+      headers: { ...headers, Prefer: "return=representation" },
+      body: JSON.stringify({ role: rolesArray }),
+    },
+  );
+  if (!response.ok) {
+    const err = await response.json().catch(() => null);
+    throw new Error(err?.message || "Could not update user roles");
+  }
+  return (await response.json())[0];
+}
+
+export async function updateUserRole(userId, newRole) {
+  if (newRole === "privileged" || newRole === "user") {
+    return updateUserStatus(userId, newRole);
+  }
+  return updateUserRoles(userId, Array.isArray(newRole) ? newRole : [newRole]);
 }
 
 export async function getUserPhones(userId) {

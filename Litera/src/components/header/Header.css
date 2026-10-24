@@ -237,3 +237,56 @@
   color: var(--first-color);
   transform: rotate(45deg);
 }
+
+.nav__profile-roles-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+
+.nav__profile-role-pill {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 1rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.nav__profile-role-pill--developer {
+  background-color: hsla(205, 90%, 45%, 0.15);
+  color: hsl(205, 90%, 45%);
+  border: 1px solid hsla(205, 90%, 45%, 0.3);
+}
+
+.dark-theme .nav__profile-role-pill--developer {
+  color: hsl(205, 90%, 65%);
+}
+
+.nav__profile-role-pill--admin {
+  background-color: hsla(0, 80%, 55%, 0.15);
+  color: hsl(0, 75%, 50%);
+  border: 1px solid hsla(0, 80%, 55%, 0.3);
+}
+
+.dark-theme .nav__profile-role-pill--admin {
+  color: hsl(0, 85%, 65%);
+}
+
+.nav__profile-role-pill--vip {
+  background-color: hsla(38, 92%, 50%, 0.15);
+  color: hsl(38, 92%, 45%);
+  border: 1px solid hsla(38, 92%, 50%, 0.35);
+}
+
+.dark-theme .nav__profile-role-pill--vip {
+  color: hsl(38, 92%, 60%);
+}
+
+.nav__profile-role-pill--user {
+  background-color: var(--body-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+}

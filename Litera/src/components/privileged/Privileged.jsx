@@ -5,6 +5,12 @@ import {
   getCookieUser,
   getProfile,
   isLoggedIn,
+  isPrivileged,
+  resolveUserRoles,
+  formatRoleName,
+  formatStatusName,
+  updateUserStatus,
+  updateUserRoles,
   updateUserRole,
 } from "../../../utils/auth";
 import { getAllOrdersAdmin, updateOrderStatus } from "../../../utils/orders";
@@ -49,10 +55,10 @@ export default function Privileged() {
   const cookieUser = getCookieUser();
 
   const [checkingAuth, setCheckingAuth] = useState(
-    !loggedIn ? false : cookieUser?.role !== "privileged",
+    !loggedIn ? false : !isPrivileged(cookieUser),
   );
-  const [isPrivilegedUser, setIsPrivilegedUser] = useState(
-    cookieUser?.role === "privileged",
+  const [isPrivilegedUser, setIsPrivilegedUser] = useState(() =>
+    isPrivileged(cookieUser),
   );
 
   const [activeSection, setActiveSection] = useState("users");
@@ -98,14 +104,14 @@ export default function Privileged() {
   const [actionStatuses, setActionStatuses] = useState({});
   const [selectedLogAction, setSelectedLogAction] = useState(null);
 
-  // Check auth and verify privileged role
+  // Check auth and verify privileged role/status
   useEffect(() => {
     if (!loggedIn) return;
     let cancelled = false;
     getProfile()
       .then((p) => {
         if (cancelled) return;
-        if (p?.role === "privileged") {
+        if (isPrivileged(p)) {
           setIsPrivilegedUser(true);
         } else {
           setIsPrivilegedUser(false);
@@ -262,15 +268,23 @@ export default function Privileged() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [openCellPopover]);
 
-  const handleToggleUserRole = async (targetUser) => {
-    const isTargetPrivileged = targetUser.role === "privileged";
-    const nextRole = isTargetPrivileged ? "user" : "privileged";
+  const handleToggleUserStatus = async (targetUser) => {
+    const isTargetPrivileged =
+      targetUser.status === "privileged" || targetUser.role === "privileged";
+    const nextStatus = isTargetPrivileged ? "user" : "privileged";
     try {
-      await updateUserRole(targetUser.id, nextRole);
+      await updateUserStatus(targetUser.id, nextStatus);
       setUsers((prev) =>
-        prev.map((u) =>
-          u.id === targetUser.id ? { ...u, role: nextRole } : u,
-        ),
+        prev.map((u) => {
+          if (u.id !== targetUser.id) return u;
+          const updated = { ...u, status: nextStatus };
+          const resolvedRoles = resolveUserRoles(updated);
+          return {
+            ...updated,
+            roles: resolvedRoles,
+            role: resolvedRoles[0] || "user",
+          };
+        }),
       );
       showNotice(
         isTargetPrivileged
@@ -278,6 +292,39 @@ export default function Privileged() {
           : language === "ru"
             ? `Пользователь ${targetUser.email} ${t("privileged.users.noticeGranted")}`
             : `User ${targetUser.email} ${t("privileged.users.noticeGranted")}`,
+      );
+    } catch (err) {
+      showNotice(err.message, true);
+    }
+  };
+
+  const handleToggleUserRole = async (targetUser, roleToToggle) => {
+    const currentRoles = resolveUserRoles(targetUser);
+    let newRoles;
+    if (currentRoles.includes(roleToToggle)) {
+      newRoles = currentRoles.filter((r) => r !== roleToToggle);
+      if (newRoles.length === 0) newRoles = ["user"];
+    } else {
+      newRoles = [...currentRoles.filter((r) => r !== "user"), roleToToggle];
+    }
+    try {
+      await updateUserRoles(targetUser.id, newRoles);
+      setUsers((prev) =>
+        prev.map((u) => {
+          if (u.id !== targetUser.id) return u;
+          const updated = { ...u, role: newRoles };
+          const resolvedRoles = resolveUserRoles(updated);
+          return {
+            ...updated,
+            roles: resolvedRoles,
+            role: resolvedRoles[0] || "user",
+          };
+        }),
+      );
+      showNotice(
+        language === "ru"
+          ? `Роли пользователя ${targetUser.email} обновлены: ${newRoles.map((r) => formatRoleName(r, "ru")).join(", ")}`
+          : `Roles for ${targetUser.email} updated: ${newRoles.map((r) => formatRoleName(r, "en")).join(", ")}`,
       );
     } catch (err) {
       showNotice(err.message, true);
@@ -522,7 +569,7 @@ export default function Privileged() {
     return <Navigate to="/" replace />;
   }
 
-  const privilegedUsers = users.filter((u) => u.role === "privileged");
+  const privilegedUsers = users.filter((u) => isPrivileged(u));
 
   const filteredUsers = users.filter((u) => {
     if (!searchQuery.trim()) return true;
@@ -826,13 +873,16 @@ export default function Privileged() {
                     <th>{t("privileged.users.thEmail")}</th>
                     <th>{t("privileged.users.thPhone")}</th>
                     <th>{t("privileged.users.thRegistered")}</th>
-                    <th>{t("privileged.users.thRole")}</th>
+                    <th>{language === "ru" ? "Статус" : "Status"}</th>
+                    <th>{language === "ru" ? "Роли" : "Roles"}</th>
                     <th>{t("privileged.users.thAction")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredUsers.map((u, rowIndex) => {
-                    const isPriv = u.role === "privileged";
+                    const isStatusPriv =
+                      u.status === "privileged" || u.role === "privileged";
+                    const userRolesList = resolveUserRoles(u);
                     const phones = Array.isArray(u.phone)
                       ? u.phone
                       : u.phone
@@ -1010,23 +1060,60 @@ export default function Privileged() {
                         <td>{formatDate(u.created_at, language)}</td>
                         <td>
                           <span
-                            className={`privileged__role-pill ${isPriv ? "privileged__role-pill--privileged" : "privileged__role-pill--user"}`}
+                            className={`privileged__role-pill ${isStatusPriv ? "privileged__role-pill--privileged" : "privileged__role-pill--user"}`}
                           >
-                            {isPriv ? "privileged" : "user"}
+                            {isStatusPriv
+                              ? language === "ru"
+                                ? "Привилегированный"
+                                : "Privileged"
+                              : language === "ru"
+                                ? "Юзер"
+                                : "User"}
                           </span>
+                        </td>
+                        <td>
+                          <div className="privileged__roles-cell">
+                            <div className="privileged__roles-tags">
+                              {userRolesList.map((r) => (
+                                <span
+                                  key={r}
+                                  className={`privileged__role-pill privileged__role-pill--${r}`}
+                                >
+                                  {formatRoleName(r, language)}
+                                </span>
+                              ))}
+                            </div>
+                            <div className="privileged__role-quick-toggle">
+                              {["developer", "admin"].map((r) => {
+                                const has = userRolesList.includes(r);
+                                return (
+                                  <button
+                                    key={r}
+                                    type="button"
+                                    className={`privileged__mini-role-btn ${has ? "privileged__mini-role-btn--active" : ""}`}
+                                    onClick={() => handleToggleUserRole(u, r)}
+                                    title={`${has ? (language === "ru" ? "Убрать роль " : "Remove role ") : (language === "ru" ? "Назначить роль " : "Add role ")}${formatRoleName(r, language)}`}
+                                  >
+                                    {has ? "✓ " : "+ "}
+                                    {formatRoleName(r, language)}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
                         </td>
                         <td>
                           <button
                             type="button"
-                            className={`button privileged__btn-sm ${isPriv ? "button--ghost" : ""}`}
-                            onClick={() => handleToggleUserRole(u)}
+                            className={`button privileged__btn-sm ${isStatusPriv ? "button--ghost" : ""}`}
+                            onClick={() => handleToggleUserStatus(u)}
                             title={
-                              isPriv
+                              isStatusPriv
                                 ? t("privileged.users.revokeTitle")
                                 : t("privileged.users.makeTitle")
                             }
                           >
-                            {isPriv ? (
+                            {isStatusPriv ? (
                               <>
                                 <i className="ri-user-unfollow-line" />
                                 {t("privileged.users.revokePrivileges")}
@@ -1044,7 +1131,7 @@ export default function Privileged() {
                   })}
                   {filteredUsers.length === 0 && (
                     <tr>
-                      <td colSpan="6" className="privileged__no-data">
+                      <td colSpan="7" className="privileged__no-data">
                         {t("privileged.users.empty")}
                       </td>
                     </tr>
@@ -1086,9 +1173,21 @@ export default function Privileged() {
                         <strong className="privileged__user-name">
                           {u.firstName} {u.lastName}
                         </strong>
-                        <span className="privileged__role-pill privileged__role-pill--privileged">
-                          privileged
-                        </span>
+                        <div className="privileged__user-roles-wrap">
+                          <span className="privileged__role-pill privileged__role-pill--privileged">
+                            {language === "ru"
+                              ? "Привилегированный"
+                              : "Privileged"}
+                          </span>
+                          {resolveUserRoles(u).map((role) => (
+                            <span
+                              key={role}
+                              className={`privileged__role-pill privileged__role-pill--${role}`}
+                            >
+                              {formatRoleName(role, language)}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     </div>
 
@@ -1122,7 +1221,7 @@ export default function Privileged() {
                       <button
                         type="button"
                         className="button button--ghost privileged__btn-sm"
-                        onClick={() => handleToggleUserRole(u)}
+                        onClick={() => handleToggleUserStatus(u)}
                       >
                         <i className="ri-close-circle-line" />
                         {t("privileged.privilegedUsers.revokeBtn")}

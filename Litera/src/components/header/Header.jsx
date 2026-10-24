@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router";
-import { getCookieUser, getProfile, isLoggedIn, logout } from "../../../utils/auth";
+import {
+  getCookieUser,
+  getProfile,
+  isLoggedIn,
+  logout,
+  isPrivileged,
+  resolveUserRoles,
+  formatRoleName,
+} from "../../../utils/auth";
 import { useLanguage } from "../../context/languageContext";
 import "./Header.css";
 
@@ -16,9 +24,10 @@ export default function Header({ theme, isLight, onSearch }) {
 
   const loggedIn = isLoggedIn();
   const user = getCookieUser();
-  const [isPrivilegedUser, setIsPrivilegedUser] = useState(
-    user?.role === "privileged",
+  const [isPrivilegedUser, setIsPrivilegedUser] = useState(() =>
+    isPrivileged(user),
   );
+  const [userRoles, setUserRoles] = useState(() => resolveUserRoles(user));
 
   useEffect(() => {
     if (!loggedIn) {
@@ -27,8 +36,9 @@ export default function Header({ theme, isLight, onSearch }) {
     let cancelled = false;
     getProfile()
       .then((p) => {
-        if (!cancelled && p?.role === "privileged") {
-          setIsPrivilegedUser(true);
+        if (!cancelled && p) {
+          setIsPrivilegedUser(isPrivileged(p));
+          setUserRoles(resolveUserRoles(p));
         }
       })
       .catch(() => {});
@@ -300,6 +310,18 @@ export default function Header({ theme, isLight, onSearch }) {
                           </span>
                         )}
                       </div>
+                      {userRoles && userRoles.length > 0 && (
+                        <div className="nav__profile-roles-row">
+                          {userRoles.map((role) => (
+                            <span
+                              key={role}
+                              className={`nav__profile-role-pill nav__profile-role-pill--${role}`}
+                            >
+                              {formatRoleName(role, language)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                   <ul className="nav__profile-menu">

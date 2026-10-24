@@ -295,7 +295,7 @@ export const translations = {
     "privileged.users.copy": "Копировать",
     "privileged.users.copied": "скопирован в буфер обмена!",
     "privileged.users.noticeRevoked": "Привилегии сняты с",
-    "privileged.users.noticeGranted": "теперь имеет роль privileged!",
+    "privileged.users.noticeGranted": "теперь имеет статус privileged!",
 
     // Privileged Users List Tab
     "privileged.privilegedUsers.title": "Привилегированные пользователи",
@@ -760,7 +760,7 @@ export const translations = {
     "privileged.users.copy": "Copy",
     "privileged.users.copied": "copied to clipboard!",
     "privileged.users.noticeRevoked": "Privileges revoked from",
-    "privileged.users.noticeGranted": "now has privileged role!",
+    "privileged.users.noticeGranted": "now has privileged status!",
 
     // Privileged Users List Tab
     "privileged.privilegedUsers.title": "Privileged Users",

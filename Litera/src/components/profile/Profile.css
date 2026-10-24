@@ -55,6 +55,78 @@
   font-size: var(--small-font-size);
 }
 
+.profile__badges-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  align-items: center;
+  margin-top: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.profile__status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.85rem;
+  border-radius: 2rem;
+  background: linear-gradient(135deg, #ffd700 0%, #f59f00 50%, #e67700 100%);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  box-shadow: 0 2px 8px rgba(245, 159, 0, 0.35);
+}
+
+.profile__role-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 2rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.profile__role-tag--developer {
+  background-color: hsla(205, 90%, 45%, 0.15);
+  color: hsl(205, 90%, 40%);
+  border: 1px solid hsla(205, 90%, 45%, 0.3);
+}
+
+.dark-theme .profile__role-tag--developer {
+  color: hsl(205, 90%, 65%);
+}
+
+.profile__role-tag--admin {
+  background-color: hsla(0, 80%, 55%, 0.15);
+  color: hsl(0, 75%, 45%);
+  border: 1px solid hsla(0, 80%, 55%, 0.3);
+}
+
+.dark-theme .profile__role-tag--admin {
+  color: hsl(0, 85%, 65%);
+}
+
+.profile__role-tag--vip {
+  background-color: hsla(38, 92%, 50%, 0.15);
+  color: hsl(38, 92%, 40%);
+  border: 1px solid hsla(38, 92%, 50%, 0.35);
+}
+
+.dark-theme .profile__role-tag--vip {
+  color: hsl(38, 92%, 60%);
+}
+
+.profile__role-tag--user {
+  background-color: var(--body-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+}
+
 /* Gold Privileged Badge under email */
 .profile__privileged-badge {
   display: inline-flex;
