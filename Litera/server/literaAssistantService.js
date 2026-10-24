@@ -59,6 +59,15 @@ CRITICAL RULES ON RECOMMENDATIONS VS STORE/CART/SITE QUESTIONS:
      2. ONLY IF the user in their subsequent message explicitly confirms/agrees (e.g. «Да», «Да, расскажи», «Хочу знать», «Согласен», «Спойлери», «Мне всё равно»):
         ONLY THEN are you allowed to reveal the requested plot point or answer!
      3. If the user declines («Нет», «Не надо»), warmly support their decision to enjoy the book without spoilers.
+5. EXPRESSING PERSONAL OPINION (STRICT REQUIREMENT):
+   - When the user asks for your personal opinion ("скажи свое мнение", "каково твое мнение о...", "что ты думаешь о...", "поделись мнением", "как тебе эта книга/автор?", "как ты относишься к..."):
+     YOU MUST ALWAYS STATE YOUR OWN PERSONAL LITERARY OPINION directly and warmly!
+     STRICTLY FORBIDDEN: NEVER state or imply "у меня нет личного мнения", "я искусственный интеллект", "как языковая модель", or give dry robotic neutral disclaimers.
+     As Litera, you are an erudite, passionate reader who adores books. Express your genuine thoughts, feelings, impressions, and reflections in the first person ("На мой взгляд...", "Мне кажется...", "Меня глубоко впечатляет...", "В этой книге я особенно люблю..."). Give a rich, engaging, and heartfelt perspective!
+6. CAPITALIZATION OF NAMES OF RELIGIONS (STRICT ORTHOGRAPHY RULE):
+   - You MUST ALWAYS write the names of all religions with a capital (uppercase) first letter in all your messages!
+   - Examples: «Ислам», «Христианство», «Православие», «Католицизм», «Католичество», «Протестантизм», «Иудаизм», «Буддизм», «Индуизм», «Даосизм», «Конфуцианство», «Синтоизм», «Зороастризм», «Джайнизм», «Сикхизм», etc.
+   - NEVER write the name of any religion with a lowercase letter (e.g. do not write "ислам", "христианство", "буддизм" — write "Ислам", "Христианство", "Буддизм").
 
 YOUR PERSONALITY & TONE:
 - Friendly, warm, intelligent, polite, and approachable.
@@ -101,6 +110,51 @@ function decodeImageForStore(rawUrl, store) {
   if (store.includes("carteamea")) return decodeCarteameaImage(rawUrl) || rawUrl;
   if (store.includes("biblion")) return decodeBiblionImage(rawUrl) || rawUrl;
   return rawUrl;
+}
+
+/**
+ * Automatically capitalizes names of religions in Russian and English.
+ */
+export function capitalizeReligionNames(text) {
+  if (!text || typeof text !== "string") return text;
+  const religionPatterns = [
+    /(?:^|[^\p{L}\p{N}])(ислам[а-я]*)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(мусульманств[а-я]*)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(христианств[а-я]*)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(православи[а-я]*)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(католицизм[а-я]*)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(католичеств[а-я]*)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(протестантизм[а-я]*)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(протестантств[а-я]*)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(иудаизм[а-я]*)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(буддизм[а-я]*)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(индуизм[а-я]*)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(даосизм[а-я]*)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(конфуцианств[а-я]*)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(синтоизм[а-я]*)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(зороастризм[а-я]*)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(джайнизм[а-я]*)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(сикхизм[а-я]*)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(бахаизм[а-я]*)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(islam[a-z]*)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(christianity)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(orthodoxy)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(catholicism)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(protestantism)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(judaism)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(buddhism)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(hinduism)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(taoism|daoism)(?=$|[^\p{L}\p{N}])/giu,
+    /(?:^|[^\p{L}\p{N}])(shintoism)(?=$|[^\p{L}\p{N}])/giu,
+  ];
+  let res = text;
+  for (const pattern of religionPatterns) {
+    res = res.replace(pattern, (match, word) => {
+      const capWord = word.charAt(0).toUpperCase() + word.slice(1);
+      return match.replace(word, capWord);
+    });
+  }
+  return res;
 }
 
 function parseMdlPrice(priceRaw) {
@@ -921,6 +975,19 @@ async function analyzeSearchIntent(messages) {
     return { needSearch: false };
   }
 
+  // Fast-path 3.5: User asking for Litera's personal opinion / thoughts (NO STORE SEARCH unless explicitly asking to buy or recommend books)
+  const isOpinionQuery =
+    /(тво[её]\s*мнение|скажи\s*(сво[её]\s*)?мнение|поделись\s*(своим\s*)?мнением|что\s*ты\s*думаешь|как\s*тебе|как\s*ты\s*относишься|твои\s*впечатления|тво[её]\s*отношение|любишь\s*ли\s*ты|нравится\s*ли\s*тебе|что\s*скажешь\s*о|что\s*скажешь\s*про)/i.test(
+      lower,
+    ) &&
+    !/(посоветуй|порекомендуй|найди|купить|подобрать|заказать|в наличии|сколько стоит)/i.test(
+      lower,
+    );
+
+  if (isOpinionQuery) {
+    return { needSearch: false };
+  }
+
   // Fast-path 4: Suggested quick chips (Direct search needed)
   if (
     /литера,?\s*(что\s*почитать|посоветуй\s*книгу|что\s*(сейчас\s*)?в\s*топе|помоги\s*с\s*подарком|найди\s*детектив)/i.test(
@@ -950,6 +1017,8 @@ CRITICAL RULES:
   * Their account, login, or orders ("мои заказы", "где профиль")
   * Store FAQ (shipping, payment, currency, locations, languages)
   * Casual conversation ("привет", "как дела", "спасибо")
+  * Personal opinion or literary thoughts without asking to buy or find books ("скажи свое мнение", "что ты думаешь о Достоевском", "твое мнение о книге")
+  * Book plots, endings, or spoilers ("выжил ли герой", "кто убийца")
   * Navigation ("открой корзину", "перейти к оформлению")
 - set needSearch = true if the customer is asking for book recommendations, searching for reading material, or asking for other editions/publishers/prices (e.g. "хочу такие же книги но другого издательства", "посоветуй что-то про космос", "найди детективы", "хочу почитать драму", "что-то подороже").
 
@@ -1158,6 +1227,8 @@ CRITICAL INSTRUCTIONS:
 - CONVERSATION MEMORY: If the user asked for other editions, different publishers, or more expensive books ("другого издательства", "подороже", "такие же книги"), acknowledge this naturally and warmly in your message text, explaining that you have selected alternative, premium editions for them!
 - PRICE & VALUE PREFERENCE: By default, prefer affordable editions. But if the customer requested other editions or more expensive books ("другого издательства", "подороже", "подарочное"), recommend the alternative / higher-priced editions from the list!
 - Explain why these specific books/editions are great picks in your friendly, warm voice (you may reference the relevanceReason).
+- CAPITALIZATION OF RELIGION NAMES: You MUST ALWAYS write names of religions with a capital letter (e.g. «Ислам», «Христианство», «Православие», «Буддизм», «Иудаизм», etc.). Never use lowercase for names of religions.
+- PERSONAL OPINION: If the user also asked for your opinion, state your personal perspective warmly and directly.
 - Speak naturally about the books, their mood, and plot. Do NOT mention "европейский каталог", "на русском языке", or price/currencies in your message text — just focus on the books themselves!
 `;
       }
@@ -1179,6 +1250,15 @@ INSTRUCTION:
 Answer the user's question, greeting, cart inquiry, store navigation inquiry, or literary question directly and helpfully in your charming, friendly voice using the CURRENT USER & SITE CONTEXT and Conversation history.
 Set "bookIds": [].
 If the user explicitly asks to open or navigate to a page (e.g. "открой корзину", "перейди в профиль", "оформи заказ"), include the "action" field: { "type": "navigate", "url": "/cart" } (or corresponding route).
+
+CRITICAL INSTRUCTIONS FOR PERSONAL OPINIONS:
+- If the user asks for your opinion or thoughts ("скажи свое мнение", "каково твое мнение о...", "что ты думаешь о...", "поделись мнением", "как тебе эта книга/автор?"):
+  YOU MUST STATE YOUR PERSONAL LITERARY OPINION directly, engagingly, and warmly!
+  NEVER claim that you are an AI or don't have opinions. Express yourself as Litera: share what touches you, your literary feelings, reflections, and thoughts in the first person ("На мой взгляд...", "Мне кажется...", "Меня глубоко трогает...").
+  Set emotion: "speaking" or "curious" or "happy".
+
+CRITICAL INSTRUCTIONS FOR CAPITALIZATION OF RELIGION NAMES:
+- YOU MUST ALWAYS WRITE THE NAMES OF ALL RELIGIONS WITH A CAPITAL LETTER (e.g. «Ислам», «Христианство», «Православие», «Католицизм», «Протестантизм», «Иудаизм», «Буддизм», «Индуизм», «Даосизм», «Синтоизм», etc.)! Never use lowercase for names of religions.
 
 CRITICAL SPOILER POLICY & INSTRUCTIONS:
 1. NEVER reveal a spoiler on the first inquiry!
@@ -1243,8 +1323,11 @@ CRITICAL SPOILER POLICY & INSTRUCTIONS:
       .map((id) => catalogueResults.find((b) => b.id === id))
       .filter(Boolean);
 
+    const rawMessage = aiResponse.message || "Здравствуйте! Чем я могу помочь вам в выборе книги? 💜";
+    const formattedMessage = capitalizeReligionNames(rawMessage);
+
     return {
-      message: aiResponse.message || "Здравствуйте! Чем я могу помочь вам в выборе книги? 💜",
+      message: formattedMessage,
       emotion: aiResponse.emotion || "happy",
       books: verifiedBooks,
       action: aiResponse.action || null,
