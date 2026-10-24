@@ -93,6 +93,12 @@ function App() {
         rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/3.5.0/remixicon.css"
       />
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Roboto+Slab:wght@400;500;600;700&display=swap"
+      />
       <link rel="stylesheet" href="assets/css/swiper-bundle.min.css" />
       <link rel="stylesheet" href="/assets/css/styles.css" />
       <title>Litera</title>
