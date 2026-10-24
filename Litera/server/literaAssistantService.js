@@ -15,10 +15,10 @@ const DEFAULT_API_KEY = "";
 const GEMINI_MODELS = [
   "gemini-flash-lite-latest",
   "gemini-3.5-flash-lite",
-  "gemini-flash-latest",
-  "gemini-2.5-flash",
+  "gemini-3-flash-preview",
+  "gemini-3.6-flash",
   "gemini-3.5-flash",
-  "gemini-3.8-flash",
+  "gemini-3.1-flash-lite",
 ];
 
 const LITERA_SYSTEM_INSTRUCTION = `
@@ -198,7 +198,7 @@ function parseMdlPrice(priceRaw) {
 }
 
 const storeSearchCache = new Map();
-const STORE_SEARCH_CACHE_TTL = 10 * 60 * 1000; // 10 minutes cache
+const STORE_SEARCH_CACHE_TTL = 60 * 60 * 1000; // 1 hour cache
 
 /**
  * 1. Discover relevant real books by meaning using Gemini.
@@ -408,8 +408,9 @@ function validateProductMatch(product, candidate, allowForeign = false) {
   if (!product?.title || !candidate?.title) return false;
 
   // Unless foreign language is explicitly requested, reject foreign language editions
-  if (!allowForeign && FOREIGN_LANGUAGE_PATTERN.test(product.title)) {
-    return false;
+  if (!allowForeign) {
+    if (FOREIGN_LANGUAGE_PATTERN.test(product.title)) return false;
+    if (/[a-z]/i.test(product.title) && !/[а-яё]/i.test(product.title)) return false;
   }
 
   const clean = (s) =>
@@ -818,10 +819,7 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
     const candidateMatches = storeProducts.filter((p) =>
       validateProductMatch(p, targetBook, isForeignLanguageRequested),
     );
-    const validMatches = await filterForeignEditionsWithAI(
-      candidateMatches,
-      userQuery,
-    );
+    const validMatches = candidateMatches;
 
     // Exclude the edition that is currently shown (by exact URL)
     const unshown = validMatches.filter((p) => p.url !== targetBook.url);
@@ -987,8 +985,9 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
     }
   }
 
-  // Search suppliers for each candidate strictly by title only
-  const searchPromises = candidates.map(async (candidate) => {
+  // Search suppliers for top candidates strictly by title only (limit to 5 to maximize response speed)
+  const candidatesToSearch = candidates.slice(0, 5);
+  const searchPromises = candidatesToSearch.map(async (candidate) => {
     let storeProducts = await searchSuppliersByTitleOnly(
       candidate.title,
       activeRate,
@@ -1101,35 +1100,26 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
   });
 
   const resolved = await Promise.all(searchPromises);
-  const rawProducts = resolved.flat().filter(Boolean);
-  let verifiedProducts = await filterForeignEditionsWithAI(
-    rawProducts,
-    userQuery,
-  );
+  let rawProducts = resolved.flat().filter(Boolean);
 
-  // If user requested a gift, evaluate candidate products with AI for gift suitability
-  // "потом ИИ должен был оценить подойдет ли это для подарка, если нет то должен найти или другое издание или другую книгу"
-  if (isGift && verifiedProducts.length > 0) {
-    const giftSuitable = await evaluateGiftSuitabilityWithAI(
-      verifiedProducts,
-      userQuery,
+  // Fast foreign language rejection without extra network or LLM calls
+  if (!isForeignLanguageRequested) {
+    rawProducts = rawProducts.filter(
+      (p) =>
+        !FOREIGN_LANGUAGE_PATTERN.test(p.title) &&
+        !(/[a-z]/i.test(p.title) && !/[а-яё]/i.test(p.title)),
     );
-    if (giftSuitable.length >= 3) {
-      verifiedProducts = giftSuitable;
-    } else if (giftSuitable.length > 0) {
-      // If fewer than 3 passed strict gift evaluation, supplement with highest-priced remaining candidates
-      const passedUrls = new Set(
-        giftSuitable.map((p) => p.url || `${p.title}-${p.price}`),
-      );
-      const remaining = verifiedProducts
-        .filter((p) => !passedUrls.has(p.url || `${p.title}-${p.price}`))
-        .sort((a, b) => b.price - a.price);
-      verifiedProducts = [
-        ...giftSuitable,
-        ...remaining.slice(0, 4 - giftSuitable.length),
-      ];
+  }
+
+  // Fast gift tier filtering: prioritize premium editions for gifts without extra LLM delays
+  if (isGift && rawProducts.length > 0) {
+    const giftTier = rawProducts.filter((p) => p.price >= 6.5);
+    if (giftTier.length >= 3) {
+      rawProducts = giftTier;
     }
   }
+
+  const verifiedProducts = rawProducts;
 
   // Deduplicate by URL and store-price-title combo so distinct editions are preserved
   const productMap = new Map();
@@ -1194,6 +1184,9 @@ async function analyzeSearchIntent(messages) {
     ) ||
     /^(какая твоя любимая|что ты думаешь|кто твой любимый|ты любишь читать|расскажи о себе|как погода)/i.test(
       lower,
+    ) ||
+    /(ты\s*(мусульманка|христианка|вериш|религиозн)|какая\s*твоя\s*религи|во\s*что\s*ты\s*веришь)/i.test(
+      lower,
     );
 
   if (isConversational) {
@@ -1242,7 +1235,7 @@ async function analyzeSearchIntent(messages) {
 
   // Fast-path 4: Explicit book requests and follow-ups
   const hasExplicitBookRequest =
-    /(посоветуй|порекомендуй|найди|хочу.*книг|подскажи что почитать|что почитать|подобрать книгу|выбери книгу|какие книги|книги про|книгу про|книги о|книги по|книга про|книга о|книга по|хочу книгу|друг(их|ие|ого|им|ое|ую|ая)?\s*(изд[аея]ни|изд[аея]тельств|переплет|обложк|вариант|оформлен)|в другом оформлении|другое издание|другого издания|другого издательства|такие же книги|подороже|подешевле|еще книг|другие книги|сделай друго|замени|поменяй|дай\s*друг(ие|их)|покажи\s*друг(ие|их)|не\s*хочу|не\s*то|другие\s*вариант|что-?то\s*друг(ое|их)|покажи\s*ещ[её]|других\s*автор)/i.test(
+    /(посоветуй|порекомендуй|найди|хочу.*книг|подскажи что почитать|что почитать|подобрать книгу|выбери книгу|какие книги|книги про|книгу про|книги о|книги по|книга про|книга о|книга по|хочу книгу|подар(ок|ка|ком|ку|ки|ить)|для\s*подарка|в\s*подарок|что\s*подарить|что-нибудь\s*для\s*подарка|дай\s*мне|друг(их|ие|ого|им|ое|ую|ая)?\s*(изд[аея]ни|изд[аея]тельств|переплет|обложк|вариант|оформлен)|в другом оформлении|другое издание|другого издания|другого издательства|такие же книги|подороже|подешевле|еще книг|другие книги|сделай друго|замени|поменяй|дай\s*друг(ие|их)|покажи\s*друг(ие|их)|не\s*хочу|не\s*то|другие\s*вариант|что-?то\s*друг(ое|их)|покажи\s*ещ[её]|других\s*автор)/i.test(
       lower,
     );
   if (hasExplicitBookRequest) {
@@ -1293,7 +1286,7 @@ export async function callGeminiJson({ apiKey, systemInstruction, prompt, respon
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: {
       responseMimeType: "application/json",
-      maxOutputTokens: 500,
+      maxOutputTokens: 1000,
       temperature: 0.65,
       ...(responseSchema ? { responseSchema } : {}),
     },
@@ -1310,7 +1303,7 @@ export async function callGeminiJson({ apiKey, systemInstruction, prompt, respon
   for (const model of GEMINI_MODELS) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 25000);
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
 
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
       const response = await fetch(url, {
