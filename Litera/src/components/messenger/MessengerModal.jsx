@@ -203,6 +203,18 @@ export default function MessengerModal({ isOpen, onClose, onUnreadChange }) {
     }
   };
 
+  // Close on Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleGlobalKeyDown = (e) => {
+      if (e.key === "Escape") {
+        onClose?.();
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const adminName = inquiry?.interlocutors_info?.adminName || "Администратор";
