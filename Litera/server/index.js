@@ -41,6 +41,7 @@ import {
   getBiblionDetails,
 } from "./biblionService.js";
 import { processLiteraChat } from "./literaAssistantService.js";
+import { sendGuestInquiryEmail } from "./emailService.js";
 
 const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 dotenv.config({ path: path.resolve(appDir, ".env") });
@@ -545,6 +546,31 @@ const server = createServer(async (req, res) => {
       console.error("Failed to process Litera chat:", err);
       respond(res, 500, {
         error: "Litera assistant failed to respond",
+        message: err.message,
+      });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/send-inquiry-email") {
+    try {
+      const body = await readJson(req);
+      const { to, subject, text, adminName } = body || {};
+      if (!to || !text) {
+        respond(res, 400, { error: "Missing required fields: to, text" });
+        return;
+      }
+      const result = await sendGuestInquiryEmail({
+        to,
+        subject,
+        text,
+        adminName,
+      });
+      respond(res, 200, { success: true, result });
+    } catch (err) {
+      console.error("Failed to send inquiry email:", err);
+      respond(res, 500, {
+        error: "Failed to send inquiry email",
         message: err.message,
       });
     }

@@ -13,13 +13,14 @@ export const translations = {
     "nav.completedOrders": "Выполненные заказы",
     "nav.logout": "Выйти",
     "nav.login": "Войти",
+    "nav.messenger": "Связаться с администратором",
     "nav.theme": "Сменить тему",
     "nav.language": "Сменить язык",
 
     // Home
     "home.title": "Ваши любимые книги уже в Европе",
     "home.description":
-      "Litera находит нужную вам книгу в книжных магазинах Молдовы и рассчитывает оптимальный вариант с доставкой по Европе по единой итоговой цене.",
+      "Litera находит нужную вам книгу в книжных магазинах и рассчитывает оптимальный вариант с доставкой по Европе по единой итоговой цене.",
     "home.startShopping": "Перейти к покупкам",
     "home.freeShipping": "Быстрая доставка",
     "home.freeShippingDesc": "Надежная отправка заказов по всей Европе",
@@ -447,7 +448,8 @@ export const translations = {
     "assistant.closeChat": "Свернуть",
     "assistant.clearHistory": "Очистить чат",
     "assistant.clearHistoryConfirm": "Начать новый разговор с Литерой?",
-    "assistant.welcome": "Привет! 💜 Я Литера, ваш книжный спутник. Расскажите, что вам интересно почитать, или о каком сюжете вы мечтаете — и я с удовольствием найду для вас идеальные книги в нашем каталоге!",
+    "assistant.welcome":
+      "Привет! 💜 Я Литера, ваш книжный спутник. Расскажите, что вам интересно почитать, или о каком сюжете вы мечтаете — и я с удовольствием найду для вас идеальные книги в нашем каталоге!",
     "assistant.placeholder": "Спросите о книгах, жанрах или авторах...",
     "assistant.send": "Отправить",
     "assistant.q1": "☕ Литера, что почитать?",
@@ -480,13 +482,14 @@ export const translations = {
     "nav.completedOrders": "Completed orders",
     "nav.logout": "Log out",
     "nav.login": "Login",
+    "nav.messenger": "Contact Administrator",
     "nav.theme": "Toggle theme",
     "nav.language": "Switch language",
 
     // Home
     "home.title": "Your Favorite Books Already in Europe",
     "home.description":
-      "Litera finds your book across popular bookstores in Moldova and calculates the best available option with delivery to Europe, all in one final price.",
+      "Litera finds the book you’re looking for across bookstores and calculates the best option with delivery across Europe at one transparent final price.",
     "home.startShopping": "Start Shopping",
     "home.freeShipping": "Free Shipping",
     "home.freeShippingDesc": "Order More Than €100",
@@ -908,7 +911,8 @@ export const translations = {
     "assistant.closeChat": "Minimize",
     "assistant.clearHistory": "Clear chat",
     "assistant.clearHistoryConfirm": "Start a fresh conversation with Litera?",
-    "assistant.welcome": "Hi! 💜 I'm Litera, your bookstore companion. Tell me what kind of stories you enjoy or what you're in the mood to read — and I'll gladly find the perfect books in our catalogue!",
+    "assistant.welcome":
+      "Hi! 💜 I'm Litera, your bookstore companion. Tell me what kind of stories you enjoy or what you're in the mood to read — and I'll gladly find the perfect books in our catalogue!",
     "assistant.placeholder": "Ask Litera about books, genres, or authors...",
     "assistant.send": "Send",
     "assistant.q1": "☕ Litera, what should I read?",

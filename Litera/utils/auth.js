@@ -306,12 +306,16 @@ export async function getAllUsers() {
 }
 
 export async function updateUserStatus(userId, newStatus) {
+  const payload = { status: newStatus };
+  if (newStatus === "user") {
+    payload.role = ["user"];
+  }
   const response = await fetch(
     `${TABLE_URL}?id=eq.${encodeURIComponent(userId)}`,
     {
       method: "PATCH",
       headers: { ...headers, Prefer: "return=representation" },
-      body: JSON.stringify({ status: newStatus }),
+      body: JSON.stringify(payload),
     },
   );
   if (!response.ok) {

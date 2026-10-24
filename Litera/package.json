@@ -19,6 +19,7 @@
     "dotenv": "^18.0.8",
     "fast-xml-parser": "^5.11.2",
     "jsonwebtoken": "^9.0.3",
+    "nodemailer": "^10.2.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.4.0",

@@ -19,6 +19,12 @@ import {
   deleteCoupon,
   getAllCoupons,
 } from "../../../utils/coupons";
+import {
+  fetchAllInquiries,
+  sendInquiryMessage,
+  markInquiryReadByAdmin,
+  fetchInquiryById,
+} from "../../../utils/inquiries";
 import BookImage from "../common/BookImage";
 import decodeHtmlEntities from "../../../utils/decodeHtmlEntities";
 import { useLanguage } from "../../context/languageContext";
@@ -104,6 +110,14 @@ export default function Privileged() {
   const [actionStatuses, setActionStatuses] = useState({});
   const [selectedLogAction, setSelectedLogAction] = useState(null);
 
+  // Inquiries / Messenger state
+  const [inquiries, setInquiries] = useState([]);
+  const [selectedInquiryId, setSelectedInquiryId] = useState(null);
+  const [inquiryReplyText, setInquiryReplyText] = useState("");
+  const [sendingInquiryReply, setSendingInquiryReply] = useState(false);
+  const [inquiryFilter, setInquiryFilter] = useState("all"); // "all" | "unread" | "guest" | "registered"
+  const [inquirySearch, setInquirySearch] = useState("");
+
   // Check auth and verify privileged role/status
   useEffect(() => {
     if (!loggedIn) return;
@@ -181,14 +195,16 @@ export default function Privileged() {
   const handleRefresh = async () => {
     setLoadingData(true);
     try {
-      const [usersList, ordersList, couponsList] = await Promise.all([
+      const [usersList, ordersList, couponsList, inqList] = await Promise.all([
         getAllUsers(),
         getAllOrdersAdmin(),
         getAllCoupons(),
+        fetchAllInquiries(),
       ]);
       setUsers(usersList);
       setOrders(ordersList);
       setCoupons(couponsList);
+      if (Array.isArray(inqList)) setInquiries(inqList);
       if (activeSection === "git-actions") {
         const res = await fetch("/api/actions-status");
         if (res.ok) {
@@ -202,6 +218,35 @@ export default function Privileged() {
       setLoadingData(false);
     }
   };
+
+  useEffect(() => {
+    if (!isPrivilegedUser) return;
+    let cancelled = false;
+
+    const loadInquiries = async () => {
+      try {
+        const list = await fetchAllInquiries();
+        if (!cancelled && Array.isArray(list)) {
+          setInquiries(list);
+          if (selectedInquiryId) {
+            const current = list.find((i) => i.id === selectedInquiryId);
+            if (current && current.notifications_admin > 0) {
+              markInquiryReadByAdmin(current.id);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to load inquiries:", err);
+      }
+    };
+
+    loadInquiries();
+    const interval = setInterval(loadInquiries, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [isPrivilegedUser, selectedInquiryId]);
 
   const handleRunAction = async (actionId, actionTitle) => {
     setActionStatuses((prev) => ({
@@ -277,7 +322,11 @@ export default function Privileged() {
       setUsers((prev) =>
         prev.map((u) => {
           if (u.id !== targetUser.id) return u;
-          const updated = { ...u, status: nextStatus };
+          const updated = {
+            ...u,
+            status: nextStatus,
+            role: nextStatus === "user" ? ["user"] : u.role,
+          };
           const resolvedRoles = resolveUserRoles(updated);
           return {
             ...updated,
@@ -299,6 +348,20 @@ export default function Privileged() {
   };
 
   const handleToggleUserRole = async (targetUser, roleToToggle) => {
+    const isTargetPrivileged =
+      targetUser.status === "privileged" || targetUser.role === "privileged";
+
+    // Requirement: User must be privileged to receive any status/role beyond user
+    if (!isTargetPrivileged) {
+      showNotice(
+        language === "ru"
+          ? "Пользователь должен иметь статус привилегированного, чтобы получить роль помимо юзера. Сначала повысьте его статус."
+          : "User must be privileged to receive non-user roles. Please make the user privileged first.",
+        true,
+      );
+      return;
+    }
+
     const currentRoles = resolveUserRoles(targetUser);
     let newRoles;
     if (currentRoles.includes(roleToToggle)) {
@@ -328,6 +391,55 @@ export default function Privileged() {
       );
     } catch (err) {
       showNotice(err.message, true);
+    }
+  };
+
+  const handleSelectInquiry = async (id) => {
+    setSelectedInquiryId(id);
+    const target = inquiries.find((i) => i.id === id);
+    if (target && target.notifications_admin > 0) {
+      setInquiries((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, notifications_admin: 0 } : i)),
+      );
+      await markInquiryReadByAdmin(id);
+    }
+  };
+
+  const handleSendAdminReply = async (e) => {
+    e?.preventDefault();
+    const text = inquiryReplyText.trim();
+    if (!text || !selectedInquiryId || sendingInquiryReply) return;
+
+    setSendingInquiryReply(true);
+    try {
+      const updated = await sendInquiryMessage({
+        inquiryId: selectedInquiryId,
+        text,
+        sender: "admin",
+        senderUser: cookieUser,
+      });
+
+      setInquiryReplyText("");
+      setInquiries((prev) =>
+        prev.map((inq) => (inq.id === selectedInquiryId ? updated : inq)),
+      );
+
+      const isGuest = Boolean(updated?.interlocutors_info?.isGuest);
+      if (isGuest) {
+        showNotice(
+          language === "ru"
+            ? `Ответ отправлен пользователю в чат и на email ${updated.interlocutors_info.userEmail}`
+            : `Reply sent to chat and delivered to email ${updated.interlocutors_info.userEmail}`,
+        );
+      } else {
+        showNotice(
+          language === "ru" ? "Ответ отправлен" : "Reply sent successfully",
+        );
+      }
+    } catch (err) {
+      showNotice(err.message, true);
+    } finally {
+      setSendingInquiryReply(false);
     }
   };
 
@@ -588,6 +700,43 @@ export default function Privileged() {
     return s === orderStatusFilter;
   });
 
+  const totalAdminUnread = inquiries.reduce(
+    (acc, inq) => acc + (inq.notifications_admin || 0),
+    0,
+  );
+
+  const filteredInquiries = inquiries.filter((inq) => {
+    const info = inq.interlocutors_info || {};
+    const isGuest = Boolean(info.isGuest);
+    const unread = inq.notifications_admin || 0;
+
+    if (inquiryFilter === "unread" && unread <= 0) return false;
+    if (inquiryFilter === "guest" && !isGuest) return false;
+    if (inquiryFilter === "registered" && isGuest) return false;
+
+    if (!inquirySearch.trim()) return true;
+    const q = inquirySearch.toLowerCase();
+    const name = (info.userName || "").toLowerCase();
+    const email = (info.userEmail || "").toLowerCase();
+    const admin = (info.adminName || "").toLowerCase();
+    const chatText = (inq.chat || [])
+      .map((m) => m.text || "")
+      .join(" ")
+      .toLowerCase();
+
+    return (
+      name.includes(q) ||
+      email.includes(q) ||
+      admin.includes(q) ||
+      chatText.includes(q)
+    );
+  });
+
+  const activeInquiry =
+    inquiries.find((i) => i.id === selectedInquiryId) ||
+    filteredInquiries[0] ||
+    null;
+
   const renderConditionFields = () => (
     <>
       <label className="privileged__checkbox-label">
@@ -832,6 +981,25 @@ export default function Privileged() {
           <i className="ri-github-fill" />
           <span>{t("privileged.tabs.gitActions")}</span>
           <i className="ri-external-link-line privileged__ext-icon" />
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSection === "inquiries"}
+          className={`privileged__nav-btn ${activeSection === "inquiries" ? "privileged__nav-btn--active" : ""}`}
+          onClick={() => setActiveSection("inquiries")}
+        >
+          <i className="ri-customer-service-2-line" />
+          <span>{language === "ru" ? "Мессенджер" : "Messenger"}</span>
+          <span className="privileged__nav-count">
+            {inquiries.length}
+            {totalAdminUnread > 0 && (
+              <span className="privileged__unread-indicator">
+                +{totalAdminUnread}
+              </span>
+            )}
+          </span>
         </button>
       </div>
 
@@ -1218,6 +1386,24 @@ export default function Privileged() {
                     </div>
 
                     <div className="privileged__user-card-actions">
+                      <div className="privileged__role-quick-toggle">
+                        {["developer", "admin"].map((r) => {
+                          const userRolesList = resolveUserRoles(u);
+                          const has = userRolesList.includes(r);
+                          return (
+                            <button
+                              key={r}
+                              type="button"
+                              className={`privileged__mini-role-btn ${has ? "privileged__mini-role-btn--active" : ""}`}
+                              onClick={() => handleToggleUserRole(u, r)}
+                              title={`${has ? (language === "ru" ? "Убрать роль " : "Remove role ") : (language === "ru" ? "Назначить роль " : "Add role ")}${formatRoleName(r, language)}`}
+                            >
+                              {has ? "✓ " : "+ "}
+                              {formatRoleName(r, language)}
+                            </button>
+                          );
+                        })}
+                      </div>
                       <button
                         type="button"
                         className="button button--ghost privileged__btn-sm"
@@ -2391,6 +2577,406 @@ export default function Privileged() {
                 >
                   https://github.com/egorgrebennykov-del/Litera ↗
                 </a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SECTION 6: МЕССЕНДЖЕР / ОБРАЩЕНИЯ */}
+        {activeSection === "inquiries" && (
+          <div className="privileged__panel privileged__panel--inquiries">
+            <div className="privileged__panel-header">
+              <div>
+                <h2 className="privileged__panel-title">
+                  <i className="ri-customer-service-2-line" />
+                  {language === "ru"
+                    ? "Обращения клиентов и гостей"
+                    : "Customer & Guest Inquiries"}
+                </h2>
+                <span className="privileged__stats-text">
+                  {language === "ru"
+                    ? `Всего обращений: ${inquiries.length} • Непрочитанных: ${totalAdminUnread}`
+                    : `Total inquiries: ${inquiries.length} • Unread: ${totalAdminUnread}`}
+                </span>
+              </div>
+
+              <div className="privileged__inquiries-filter-group">
+                <button
+                  type="button"
+                  className={`privileged__filter-pill ${inquiryFilter === "all" ? "privileged__filter-pill--active" : ""}`}
+                  onClick={() => setInquiryFilter("all")}
+                >
+                  {language === "ru" ? "Все" : "All"} ({inquiries.length})
+                </button>
+                <button
+                  type="button"
+                  className={`privileged__filter-pill ${inquiryFilter === "unread" ? "privileged__filter-pill--active" : ""}`}
+                  onClick={() => setInquiryFilter("unread")}
+                >
+                  {language === "ru" ? "Непрочитанные" : "Unread"} (
+                  {
+                    inquiries.filter((i) => (i.notifications_admin || 0) > 0)
+                      .length
+                  }
+                  )
+                </button>
+                <button
+                  type="button"
+                  className={`privileged__filter-pill ${inquiryFilter === "guest" ? "privileged__filter-pill--active" : ""}`}
+                  onClick={() => setInquiryFilter("guest")}
+                >
+                  <i className="ri-mail-line" />{" "}
+                  {language === "ru" ? "Гости" : "Guests"} (
+                  {
+                    inquiries.filter((i) => i.interlocutors_info?.isGuest)
+                      .length
+                  }
+                  )
+                </button>
+                <button
+                  type="button"
+                  className={`privileged__filter-pill ${inquiryFilter === "registered" ? "privileged__filter-pill--active" : ""}`}
+                  onClick={() => setInquiryFilter("registered")}
+                >
+                  <i className="ri-user-star-line" />{" "}
+                  {language === "ru" ? "Зарегистрированные" : "Registered"} (
+                  {
+                    inquiries.filter((i) => !i.interlocutors_info?.isGuest)
+                      .length
+                  }
+                  )
+                </button>
+              </div>
+            </div>
+
+            <div className="privileged__inquiries-layout">
+              {/* Sidebar with inquiries list */}
+              <div className="privileged__inquiries-sidebar">
+                <div className="privileged__inquiries-search">
+                  <i className="ri-search-line" />
+                  <input
+                    type="text"
+                    placeholder={
+                      language === "ru"
+                        ? "Поиск по имени, email или сообщению..."
+                        : "Search by name, email or message..."
+                    }
+                    value={inquirySearch}
+                    onChange={(e) => setInquirySearch(e.target.value)}
+                  />
+                  {inquirySearch && (
+                    <button type="button" onClick={() => setInquirySearch("")}>
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                <div className="privileged__inquiries-list">
+                  {filteredInquiries.map((inq) => {
+                    const info = inq.interlocutors_info || {};
+                    const isGuest = Boolean(info.isGuest);
+                    const isSelected = inq.id === activeInquiry?.id;
+                    const unread = inq.notifications_admin || 0;
+                    const chat = Array.isArray(inq.chat) ? inq.chat : [];
+                    const lastMsg = chat[chat.length - 1];
+
+                    return (
+                      <div
+                        key={inq.id}
+                        className={`privileged__inquiry-item ${isSelected ? "privileged__inquiry-item--active" : ""} ${unread > 0 ? "privileged__inquiry-item--unread" : ""}`}
+                        onClick={() => handleSelectInquiry(inq.id)}
+                      >
+                        <div className="privileged__inquiry-item-top">
+                          <div className="privileged__inquiry-avatar">
+                            {isGuest ? (
+                              <i className="ri-mail-line" />
+                            ) : (
+                              (info.userName?.[0] || "?").toUpperCase()
+                            )}
+                          </div>
+                          <div className="privileged__inquiry-meta">
+                            <div className="privileged__inquiry-user-row">
+                              <strong className="privileged__inquiry-name">
+                                {info.userName ||
+                                  (isGuest
+                                    ? language === "ru"
+                                      ? "Гость"
+                                      : "Guest"
+                                    : language === "ru"
+                                      ? "Пользователь"
+                                      : "User")}
+                              </strong>
+                              {unread > 0 && (
+                                <span className="privileged__inquiry-badge-unread">
+                                  +{unread}
+                                </span>
+                              )}
+                            </div>
+                            <span className="privileged__inquiry-email">
+                              {info.userEmail}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="privileged__inquiry-status-row">
+                          {isGuest ? (
+                            <span className="privileged__inquiry-tag privileged__inquiry-tag--guest">
+                              <i className="ri-mail-send-line" />{" "}
+                              {language === "ru"
+                                ? "Гость (Email)"
+                                : "Guest (Email)"}
+                            </span>
+                          ) : (
+                            <span className="privileged__inquiry-tag privileged__inquiry-tag--reg">
+                              <i className="ri-shield-user-line" />{" "}
+                              {language === "ru"
+                                ? "Зарегистрирован"
+                                : "Registered"}
+                            </span>
+                          )}
+                          {info.adminName && (
+                            <span className="privileged__inquiry-admin-tag">
+                              {language === "ru" ? "Админ: " : "Admin: "}
+                              {info.adminName}
+                            </span>
+                          )}
+                        </div>
+
+                        {lastMsg && (
+                          <div className="privileged__inquiry-preview">
+                            <span className="privileged__inquiry-preview-sender">
+                              {lastMsg.sender === "admin"
+                                ? language === "ru"
+                                  ? "Вы: "
+                                  : "You: "
+                                : ""}
+                            </span>
+                            {lastMsg.text}
+                          </div>
+                        )}
+                        <span className="privileged__inquiry-date">
+                          {formatDate(
+                            lastMsg?.timestamp || inq.created_at,
+                            language,
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                  {filteredInquiries.length === 0 && (
+                    <div className="privileged__inquiries-empty">
+                      <i className="ri-inbox-archive-line" />
+                      <p>
+                        {language === "ru"
+                          ? "Нет обращений"
+                          : "No inquiries found"}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Chat View */}
+              <div className="privileged__inquiries-chat">
+                {activeInquiry ? (
+                  <>
+                    <div className="privileged__chat-header">
+                      <div className="privileged__chat-header-user">
+                        <div className="privileged__chat-avatar">
+                          {activeInquiry.interlocutors_info?.isGuest ? (
+                            <i className="ri-mail-line" />
+                          ) : (
+                            (
+                              activeInquiry.interlocutors_info?.userName?.[0] ||
+                              "?"
+                            ).toUpperCase()
+                          )}
+                        </div>
+                        <div>
+                          <div className="privileged__chat-name-row">
+                            <h3>
+                              {activeInquiry.interlocutors_info?.userName ||
+                                "Пользователь"}
+                            </h3>
+                            {activeInquiry.interlocutors_info?.isGuest ? (
+                              <span className="privileged__inquiry-tag privileged__inquiry-tag--guest">
+                                <i className="ri-mail-line" />{" "}
+                                {language === "ru"
+                                  ? "Не зарегистрирован (Гость)"
+                                  : "Unregistered (Guest)"}
+                              </span>
+                            ) : (
+                              <span className="privileged__inquiry-tag privileged__inquiry-tag--reg">
+                                <i className="ri-check-line" />{" "}
+                                {language === "ru"
+                                  ? "Зарегистрирован"
+                                  : "Registered"}
+                              </span>
+                            )}
+                          </div>
+                          <div className="privileged__chat-email-row">
+                            <i className="ri-mail-line" />
+                            <a
+                              href={`mailto:${activeInquiry.interlocutors_info?.userEmail}`}
+                              className="privileged__link"
+                            >
+                              {activeInquiry.interlocutors_info?.userEmail}
+                            </a>
+                            {activeInquiry.interlocutors_info?.adminName && (
+                              <span className="privileged__muted">
+                                •{" "}
+                                {language === "ru"
+                                  ? "Ответственный админ: "
+                                  : "Assigned admin: "}
+                                <strong>
+                                  {activeInquiry.interlocutors_info?.adminName}
+                                </strong>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Guest Notification Banner */}
+                    {activeInquiry.interlocutors_info?.isGuest && (
+                      <div className="privileged__guest-email-alert">
+                        <i className="ri-information-line" />
+                        <div>
+                          <strong>
+                            {language === "ru"
+                              ? "Пользователь не зарегистрирован"
+                              : "Unregistered Guest User"}
+                          </strong>
+                          <p>
+                            {language === "ru"
+                              ? `Гость указал email: ${activeInquiry.interlocutors_info?.userEmail}. Ваши ответы будут автоматически отправлены ему на электронную почту и сохранены в истории переписки.`
+                              : `Guest user email: ${activeInquiry.interlocutors_info?.userEmail}. Your messages will be automatically sent to their email inbox and saved in chat history.`}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Messages feed */}
+                    <div className="privileged__chat-feed">
+                      {(activeInquiry.chat || []).map((msg, idx) => {
+                        const isAdmin = msg.sender === "admin";
+                        return (
+                          <div
+                            key={msg.id || idx}
+                            className={`privileged__msg-row ${isAdmin ? "privileged__msg-row--admin" : "privileged__msg-row--user"}`}
+                          >
+                            <div className="privileged__msg-bubble">
+                              <div className="privileged__msg-author">
+                                {isAdmin
+                                  ? msg.senderName || "Администратор"
+                                  : msg.senderName || "Клиент"}
+                              </div>
+                              <div className="privileged__msg-text">
+                                {msg.text}
+                              </div>
+                              <div className="privileged__msg-footer">
+                                <span>
+                                  {formatDate(msg.timestamp, language)}
+                                </span>
+                                {isAdmin && msg.deliveredViaEmail && (
+                                  <span
+                                    className="privileged__msg-email-tag"
+                                    title={
+                                      language === "ru"
+                                        ? "Доставлено на email"
+                                        : "Delivered via email"
+                                    }
+                                  >
+                                    <i className="ri-mail-check-line" />{" "}
+                                    {language === "ru"
+                                      ? "Отправлено на email"
+                                      : "Sent to email"}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {(activeInquiry.chat || []).length === 0 && (
+                        <div className="privileged__chat-empty">
+                          <p>
+                            {language === "ru"
+                              ? "В этом обращении ещё нет сообщений"
+                              : "No messages in this inquiry yet"}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Reply Composer */}
+                    <form
+                      className="privileged__chat-composer"
+                      onSubmit={handleSendAdminReply}
+                    >
+                      <textarea
+                        rows={2}
+                        className="privileged__chat-input"
+                        placeholder={
+                          activeInquiry.interlocutors_info?.isGuest
+                            ? language === "ru"
+                              ? "Напишите ответ (будет отправлен в чат и на email гостя)..."
+                              : "Type reply (will be delivered to chat and email)..."
+                            : language === "ru"
+                              ? "Напишите ответ пользователю..."
+                              : "Type reply to user..."
+                        }
+                        value={inquiryReplyText}
+                        onChange={(e) => setInquiryReplyText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendAdminReply();
+                          }
+                        }}
+                        disabled={sendingInquiryReply}
+                      />
+                      <button
+                        type="submit"
+                        className="button button--primary privileged__chat-send-btn"
+                        disabled={
+                          !inquiryReplyText.trim() || sendingInquiryReply
+                        }
+                      >
+                        {sendingInquiryReply ? (
+                          <i className="ri-loader-4-line ri-spin" />
+                        ) : (
+                          <>
+                            <i className="ri-send-plane-2-fill" />
+                            {activeInquiry.interlocutors_info?.isGuest
+                              ? language === "ru"
+                                ? "Ответить (в чат и на Email)"
+                                : "Send (Chat & Email)"
+                              : language === "ru"
+                                ? "Отправить"
+                                : "Send"}
+                          </>
+                        )}
+                      </button>
+                    </form>
+                  </>
+                ) : (
+                  <div className="privileged__chat-placeholder">
+                    <i className="ri-chat-voice-line" />
+                    <h3>
+                      {language === "ru"
+                        ? "Выберите обращение"
+                        : "Select an inquiry"}
+                    </h3>
+                    <p>
+                      {language === "ru"
+                        ? "Выберите диалог из списка слева для просмотра переписки и ответа."
+                        : "Choose a conversation from the left sidebar to view messages and reply."}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -10,6 +10,8 @@ import {
   formatRoleName,
 } from "../../../utils/auth";
 import { useLanguage } from "../../context/languageContext";
+import MessengerModal from "../messenger/MessengerModal";
+import { fetchUserInquiry } from "../../../utils/inquiries";
 import "./Header.css";
 
 const navClass = ({ isActive }) =>
@@ -28,6 +30,30 @@ export default function Header({ theme, isLight, onSearch }) {
     isPrivileged(user),
   );
   const [userRoles, setUserRoles] = useState(() => resolveUserRoles(user));
+  const [isMessengerOpen, setIsMessengerOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const checkUnread = async () => {
+      try {
+        const guestEmail = localStorage.getItem("litera_guest_inquiry_email");
+        const inq = await fetchUserInquiry({
+          userId: loggedIn ? user?.id : null,
+          userEmail: loggedIn ? null : guestEmail,
+        });
+        if (inq?.notifications_user) {
+          setUnreadCount(inq.notifications_user);
+        } else {
+          setUnreadCount(0);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    checkUnread();
+    const interval = setInterval(checkUnread, 10000);
+    return () => clearInterval(interval);
+  }, [loggedIn, user?.id]);
 
   useEffect(() => {
     if (!loggedIn) {
@@ -142,6 +168,19 @@ export default function Header({ theme, isLight, onSearch }) {
           <Link to="/cart" aria-label={t("nav.cart")} title={t("nav.cart")}>
             <i className="ri-shopping-basket-2-line" />
           </Link>
+
+          <button
+            type="button"
+            className="nav__messenger-btn"
+            onClick={() => setIsMessengerOpen((prev) => !prev)}
+            title={t("nav.messenger")}
+            aria-label={t("nav.messenger")}
+          >
+            <i className="ri-customer-service-2-line" />
+            {unreadCount > 0 && (
+              <span className="nav__badge-count">{unreadCount}</span>
+            )}
+          </button>
 
           {loggedIn ? (
             <div className="nav__profile-wrap" ref={profileMenuRef}>
@@ -412,6 +451,12 @@ export default function Header({ theme, isLight, onSearch }) {
           />
         </div>
       </nav>
+
+      <MessengerModal
+        isOpen={isMessengerOpen}
+        onClose={() => setIsMessengerOpen(false)}
+        onUnreadChange={(cnt) => setUnreadCount(cnt)}
+      />
     </header>
   );
 }
