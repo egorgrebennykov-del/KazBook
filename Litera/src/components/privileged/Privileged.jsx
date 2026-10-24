@@ -322,13 +322,17 @@ export default function Privileged() {
           const updated = {
             ...u,
             status: nextStatus,
-            role: nextStatus === "user" ? ["user"] : u.role,
+            role:
+              nextStatus === "user"
+                ? ["user"]
+                : u.role && Array.isArray(u.role) && !u.role.includes("user")
+                  ? u.role
+                  : [],
           };
           const resolvedRoles = resolveUserRoles(updated);
           return {
             ...updated,
             roles: resolvedRoles,
-            role: resolvedRoles[0] || "user",
           };
         }),
       );
@@ -336,8 +340,8 @@ export default function Privileged() {
         isTargetPrivileged
           ? `${t("privileged.users.noticeRevoked")} ${targetUser.email}`
           : language === "ru"
-            ? `Пользователь ${targetUser.email} ${t("privileged.users.noticeGranted")}`
-            : `User ${targetUser.email} ${t("privileged.users.noticeGranted")}`,
+            ? `Пользователь ${targetUser.email} получил статус привилегированного (роль VIP)`
+            : `User ${targetUser.email} is now privileged (role VIP)`,
       );
     } catch (err) {
       showNotice(err.message, true);
@@ -345,46 +349,48 @@ export default function Privileged() {
   };
 
   const handleToggleUserRole = async (targetUser, roleToToggle) => {
-    const isTargetPrivileged =
-      targetUser.status === "privileged" || targetUser.role === "privileged";
-
-    // Requirement: User must be privileged to receive any status/role beyond user
-    if (!isTargetPrivileged) {
-      showNotice(
-        language === "ru"
-          ? "Пользователь должен иметь статус привилегированного, чтобы получить роль помимо юзера. Сначала повысьте его статус."
-          : "User must be privileged to receive non-user roles. Please make the user privileged first.",
-        true,
-      );
-      return;
-    }
-
     const currentRoles = resolveUserRoles(targetUser);
     let newRoles;
+
     if (currentRoles.includes(roleToToggle)) {
-      newRoles = currentRoles.filter((r) => r !== roleToToggle);
-      if (newRoles.length === 0) newRoles = ["user"];
+      newRoles = currentRoles.filter(
+        (r) => r !== roleToToggle && r !== "user" && r !== "vip",
+      );
     } else {
-      newRoles = [...currentRoles.filter((r) => r !== "user"), roleToToggle];
+      newRoles = [
+        ...currentRoles.filter((r) => r !== "user" && r !== "vip"),
+        roleToToggle,
+      ];
     }
+
     try {
       await updateUserRoles(targetUser.id, newRoles);
+
       setUsers((prev) =>
         prev.map((u) => {
           if (u.id !== targetUser.id) return u;
-          const updated = { ...u, role: newRoles };
+          const updated = {
+            ...u,
+            status: "privileged",
+            role: newRoles,
+          };
           const resolvedRoles = resolveUserRoles(updated);
           return {
             ...updated,
             roles: resolvedRoles,
-            role: resolvedRoles[0] || "user",
           };
         }),
       );
+
+      const resolved = resolveUserRoles({
+        status: "privileged",
+        role: newRoles,
+      });
+
       showNotice(
         language === "ru"
-          ? `Роли пользователя ${targetUser.email} обновлены: ${newRoles.map((r) => formatRoleName(r, "ru")).join(", ")}`
-          : `Roles for ${targetUser.email} updated: ${newRoles.map((r) => formatRoleName(r, "en")).join(", ")}`,
+          ? `Роли пользователя ${targetUser.email} обновлены: ${resolved.map((r) => formatRoleName(r, "ru")).join(", ")}`
+          : `Roles for ${targetUser.email} updated: ${resolved.map((r) => formatRoleName(r, "en")).join(", ")}`,
       );
     } catch (err) {
       showNotice(err.message, true);
@@ -971,18 +977,6 @@ export default function Privileged() {
         <button
           type="button"
           role="tab"
-          aria-selected={activeSection === "git-actions"}
-          className={`privileged__nav-btn ${activeSection === "git-actions" ? "privileged__nav-btn--active" : ""}`}
-          onClick={() => setActiveSection("git-actions")}
-        >
-          <i className="ri-github-fill" />
-          <span>{t("privileged.tabs.gitActions")}</span>
-          <i className="ri-external-link-line privileged__ext-icon" />
-        </button>
-
-        <button
-          type="button"
-          role="tab"
           aria-selected={activeSection === "inquiries"}
           className={`privileged__nav-btn ${activeSection === "inquiries" ? "privileged__nav-btn--active" : ""}`}
           onClick={() => setActiveSection("inquiries")}
@@ -997,6 +991,18 @@ export default function Privileged() {
               </span>
             )}
           </span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSection === "git-actions"}
+          className={`privileged__nav-btn ${activeSection === "git-actions" ? "privileged__nav-btn--active" : ""}`}
+          onClick={() => setActiveSection("git-actions")}
+        >
+          <i className="ri-github-fill" />
+          <span>{t("privileged.tabs.gitActions")}</span>
+          <i className="ri-external-link-line privileged__ext-icon" />
         </button>
       </div>
 
@@ -1224,17 +1230,37 @@ export default function Privileged() {
                         </td>
                         <td>{formatDate(u.created_at, language)}</td>
                         <td>
-                          <span
-                            className={`privileged__role-pill ${isStatusPriv ? "privileged__role-pill--privileged" : "privileged__role-pill--user"}`}
+                          <button
+                            type="button"
+                            className={`privileged__status-toggle-btn ${isStatusPriv ? "privileged__status-toggle-btn--privileged" : "privileged__status-toggle-btn--user"}`}
+                            onClick={() => handleToggleUserStatus(u)}
+                            title={
+                              isStatusPriv
+                                ? (language === "ru"
+                                  ? "Нажмите, чтобы отозвать привилегии"
+                                  : "Click to revoke privilege")
+                                : (language === "ru"
+                                  ? "Нажмите, чтобы сделать привилегированным"
+                                  : "Click to make privileged")
+                            }
                           >
-                            {isStatusPriv
-                              ? language === "ru"
-                                ? "Привилегированный"
-                                : "Privileged"
-                              : language === "ru"
-                                ? "Юзер"
-                                : "User"}
-                          </span>
+                            <i
+                              className={
+                                isStatusPriv
+                                  ? "ri-vip-crown-fill"
+                                  : "ri-user-line"
+                              }
+                            />
+                            <span>
+                              {isStatusPriv
+                                ? (language === "ru"
+                                  ? "Привилегированный"
+                                  : "Privileged")
+                                : (language === "ru"
+                                  ? "Юзер"
+                                  : "User")}
+                            </span>
+                          </button>
                         </td>
                         <td>
                           <div className="privileged__roles-cell">
@@ -2406,180 +2432,7 @@ export default function Privileged() {
           </div>
         )}
 
-        {/* SECTION 5: GIT ACTIONS */}
-        {activeSection === "git-actions" && (
-          <div className="privileged__panel">
-            <div className="privileged__panel-header">
-              <div>
-                <h2 className="privileged__panel-title">
-                  <i className="ri-github-fill" />
-                  {t("privileged.gitActions.title")}
-                </h2>
-                <span className="privileged__stats-text">
-                  {t("privileged.gitActions.subtitle")}
-                </span>
-              </div>
-
-              <a
-                href="https://github.com/egorgrebennykov-del/KazBook/actions"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="button privileged__github-btn"
-              >
-                <i className="ri-github-fill" />
-                {t("privileged.gitActions.openGithub")}
-              </a>
-            </div>
-
-            <div className="privileged__workflows-grid">
-              {[
-                {
-                  id: "update-book-picks",
-                  title: "Update Book Picks",
-                  file: ".github/workflows/update-book-picks.yml",
-                  descKey: "privileged.gitActions.wfBookPicksDesc",
-                  icon: "ri-book-3-line",
-                },
-                {
-                  id: "update-home-books",
-                  title: "Update Homepage Books",
-                  file: ".github/workflows/update-home-books.yml",
-                  descKey: "privileged.gitActions.wfHomeBooksDesc",
-                  icon: "ri-home-4-line",
-                },
-                {
-                  id: "update-new-books",
-                  title: "Update New Books",
-                  file: ".github/workflows/update-new-books.yml",
-                  descKey: "privileged.gitActions.wfNewBooksDesc",
-                  icon: "ri-bookmark-line",
-                },
-                {
-                  id: "update-exchange-rate",
-                  title: "Update Exchange Rate",
-                  file: ".github/workflows/update-exchange-rate.yml",
-                  descKey: "privileged.gitActions.wfExchangeRateDesc",
-                  icon: "ri-exchange-dollar-line",
-                },
-                {
-                  id: "update-discounts",
-                  title: "Update Discount Books",
-                  file: ".github/workflows/update-discounts.yml",
-                  descKey: "privileged.gitActions.wfDiscountsDesc",
-                  icon: "ri-percent-line",
-                },
-              ].map((wf) => {
-                const info = actionStatuses[wf.id] || {};
-                const isRunning = info.status === "running";
-                const isSuccess = info.status === "success";
-                const isError = info.status === "error";
-
-                return (
-                  <div className="privileged__workflow-card" key={wf.id}>
-                    <div className="privileged__wf-icon-wrap">
-                      <i className={wf.icon} />
-                    </div>
-                    <div className="privileged__wf-content">
-                      <strong className="privileged__wf-title">
-                        {wf.title}
-                      </strong>
-                      <span className="privileged__wf-file">{wf.file}</span>
-                      <p className="privileged__wf-desc">{t(wf.descKey)}</p>
-
-                      <div className="privileged__wf-status-row">
-                        <span
-                          className={`privileged__action-status ${
-                            isRunning
-                              ? "privileged__action-status--running"
-                              : isSuccess
-                                ? "privileged__action-status--success"
-                                : isError
-                                  ? "privileged__action-status--error"
-                                  : ""
-                          }`}
-                        >
-                          <i
-                            className={
-                              isRunning
-                                ? "ri-loader-4-line privileged__spin"
-                                : isSuccess
-                                  ? "ri-checkbox-circle-fill"
-                                  : isError
-                                    ? "ri-error-warning-fill"
-                                    : "ri-time-line"
-                            }
-                          />
-                          {isRunning
-                            ? t("privileged.gitActions.statusRunning")
-                            : isSuccess
-                              ? t("privileged.gitActions.statusSuccess")
-                              : isError
-                                ? t("privileged.gitActions.statusError")
-                                : t("privileged.gitActions.statusIdle")}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="privileged__wf-actions-row">
-                      <button
-                        type="button"
-                        className={`button privileged__btn-sm ${isRunning ? "button--ghost" : ""}`}
-                        disabled={isRunning}
-                        onClick={() => handleRunAction(wf.id, wf.title)}
-                        title={
-                          isRunning
-                            ? t("privileged.gitActions.running")
-                            : t("privileged.gitActions.run")
-                        }
-                      >
-                        {isRunning ? (
-                          <>
-                            <i className="ri-loader-4-line privileged__spin" />
-                            {t("privileged.gitActions.running")}
-                          </>
-                        ) : (
-                          <>
-                            <i className="ri-play-fill" />
-                            {t("privileged.gitActions.run")}
-                          </>
-                        )}
-                      </button>
-
-                      {info.output && (
-                        <button
-                          type="button"
-                          className="button button--ghost privileged__btn-sm"
-                          onClick={() => setSelectedLogAction(wf.id)}
-                          title={t("privileged.gitActions.viewLogs")}
-                        >
-                          <i className="ri-terminal-box-line" />
-                          {t("privileged.gitActions.logs")}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="privileged__git-repo-card">
-              <i className="ri-git-repository-line" />
-              <div>
-                <strong>{t("privileged.gitActions.repoLabel")}</strong>
-                <a
-                  href="https://github.com/egorgrebennykov-del/Litera"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="privileged__link"
-                >
-                  https://github.com/egorgrebennykov-del/Litera ↗
-                </a>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* SECTION 6: МЕССЕНДЖЕР / ОБРАЩЕНИЯ */}
+        {/* SECTION 5: МЕССЕНДЖЕР / ОБРАЩЕНИЯ */}
         {activeSection === "inquiries" && (
           <div className="privileged__panel privileged__panel--inquiries">
             <div className="privileged__panel-header">
@@ -2974,6 +2827,179 @@ export default function Privileged() {
                     </p>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SECTION 6: GIT ACTIONS (ПОСЛЕДНИЙ РАЗДЕЛ) */}
+        {activeSection === "git-actions" && (
+          <div className="privileged__panel">
+            <div className="privileged__panel-header">
+              <div>
+                <h2 className="privileged__panel-title">
+                  <i className="ri-github-fill" />
+                  {t("privileged.gitActions.title")}
+                </h2>
+                <span className="privileged__stats-text">
+                  {t("privileged.gitActions.subtitle")}
+                </span>
+              </div>
+
+              <a
+                href="https://github.com/egorgrebennykov-del/KazBook/actions"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="button privileged__github-btn"
+              >
+                <i className="ri-github-fill" />
+                {t("privileged.gitActions.openGithub")}
+              </a>
+            </div>
+
+            <div className="privileged__workflows-grid">
+              {[
+                {
+                  id: "update-book-picks",
+                  title: "Update Book Picks",
+                  file: ".github/workflows/update-book-picks.yml",
+                  descKey: "privileged.gitActions.wfBookPicksDesc",
+                  icon: "ri-book-3-line",
+                },
+                {
+                  id: "update-home-books",
+                  title: "Update Homepage Books",
+                  file: ".github/workflows/update-home-books.yml",
+                  descKey: "privileged.gitActions.wfHomeBooksDesc",
+                  icon: "ri-home-4-line",
+                },
+                {
+                  id: "update-new-books",
+                  title: "Update New Books",
+                  file: ".github/workflows/update-new-books.yml",
+                  descKey: "privileged.gitActions.wfNewBooksDesc",
+                  icon: "ri-bookmark-line",
+                },
+                {
+                  id: "update-exchange-rate",
+                  title: "Update Exchange Rate",
+                  file: ".github/workflows/update-exchange-rate.yml",
+                  descKey: "privileged.gitActions.wfExchangeRateDesc",
+                  icon: "ri-exchange-dollar-line",
+                },
+                {
+                  id: "update-discounts",
+                  title: "Update Discount Books",
+                  file: ".github/workflows/update-discounts.yml",
+                  descKey: "privileged.gitActions.wfDiscountsDesc",
+                  icon: "ri-percent-line",
+                },
+              ].map((wf) => {
+                const info = actionStatuses[wf.id] || {};
+                const isRunning = info.status === "running";
+                const isSuccess = info.status === "success";
+                const isError = info.status === "error";
+
+                return (
+                  <div className="privileged__workflow-card" key={wf.id}>
+                    <div className="privileged__wf-icon-wrap">
+                      <i className={wf.icon} />
+                    </div>
+                    <div className="privileged__wf-content">
+                      <strong className="privileged__wf-title">
+                        {wf.title}
+                      </strong>
+                      <span className="privileged__wf-file">{wf.file}</span>
+                      <p className="privileged__wf-desc">{t(wf.descKey)}</p>
+
+                      <div className="privileged__wf-status-row">
+                        <span
+                          className={`privileged__action-status ${
+                            isRunning
+                              ? "privileged__action-status--running"
+                              : isSuccess
+                                ? "privileged__action-status--success"
+                                : isError
+                                  ? "privileged__action-status--error"
+                                  : ""
+                          }`}
+                        >
+                          <i
+                            className={
+                              isRunning
+                                ? "ri-loader-4-line privileged__spin"
+                                : isSuccess
+                                  ? "ri-checkbox-circle-fill"
+                                  : isError
+                                    ? "ri-error-warning-fill"
+                                    : "ri-time-line"
+                            }
+                          />
+                          {isRunning
+                            ? t("privileged.gitActions.statusRunning")
+                            : isSuccess
+                              ? t("privileged.gitActions.statusSuccess")
+                              : isError
+                                ? t("privileged.gitActions.statusError")
+                                : t("privileged.gitActions.statusIdle")}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="privileged__wf-actions-row">
+                      <button
+                        type="button"
+                        className={`button privileged__btn-sm ${isRunning ? "button--ghost" : ""}`}
+                        disabled={isRunning}
+                        onClick={() => handleRunAction(wf.id, wf.title)}
+                        title={
+                          isRunning
+                            ? t("privileged.gitActions.running")
+                            : t("privileged.gitActions.run")
+                        }
+                      >
+                        {isRunning ? (
+                          <>
+                            <i className="ri-loader-4-line privileged__spin" />
+                            {t("privileged.gitActions.running")}
+                          </>
+                        ) : (
+                          <>
+                            <i className="ri-play-fill" />
+                            {t("privileged.gitActions.run")}
+                          </>
+                        )}
+                      </button>
+
+                      {info.output && (
+                        <button
+                          type="button"
+                          className="button button--ghost privileged__btn-sm"
+                          onClick={() => setSelectedLogAction(wf.id)}
+                          title={t("privileged.gitActions.viewLogs")}
+                        >
+                          <i className="ri-terminal-box-line" />
+                          {t("privileged.gitActions.logs")}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="privileged__git-repo-card">
+              <i className="ri-git-repository-line" />
+              <div>
+                <strong>{t("privileged.gitActions.repoLabel")}</strong>
+                <a
+                  href="https://github.com/egorgrebennykov-del/Litera"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="privileged__link"
+                >
+                  https://github.com/egorgrebennykov-del/Litera ↗
+                </a>
               </div>
             </div>
           </div>

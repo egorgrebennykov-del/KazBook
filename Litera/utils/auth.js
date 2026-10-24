@@ -22,6 +22,16 @@ export const isLoggedIn = () =>
 export function resolveUserRoles(user) {
   if (!user) return ["user"];
 
+  const isPrivilegedStatus =
+    user.status === "privileged" ||
+    user.status === "привилегированный" ||
+    user.role === "privileged";
+
+  // Если пользователь не имеет статуса привилегированного, его роль всегда только 'user'
+  if (!isPrivilegedStatus) {
+    return ["user"];
+  }
+
   const rawRole = user.role ?? user.roles;
   let parsedRoles = [];
 
@@ -53,31 +63,12 @@ export function resolveUserRoles(user) {
       norm === "разработчик"
     ) {
       roleSet.add("developer");
-    } else if (norm === "vip" || norm === "вип") {
-      roleSet.add("vip");
-    } else if (norm === "user" || norm === "юзер") {
-      roleSet.add("user");
-    } else {
-      roleSet.add(norm);
     }
   }
 
-  const isPrivilegedStatus =
-    user.status === "privileged" ||
-    user.status === "привилегированный" ||
-    user.role === "privileged";
-
-  const isDevOrAdmin = roleSet.has("developer") || roleSet.has("admin");
-
-  // Если пользователь привилегированный, но не разработчик и не админ, то его роль называется вип
-  if (isPrivilegedStatus && !isDevOrAdmin) {
-    roleSet.add("vip");
-    roleSet.delete("user");
-  }
-
-  // По умолчанию человек должен иметь роль юзер
+  // Если пользователь привилегированный, но не разработчик и не админ, то его роль называется VIP
   if (roleSet.size === 0) {
-    roleSet.add("user");
+    return ["vip"];
   }
 
   return Array.from(roleSet);
@@ -296,7 +287,7 @@ export async function getAllUsers() {
         ...u,
         status: userStatus,
         roles: userRoles,
-        role: userRoles[0] || "user",
+        role: u.role,
       };
     });
   } catch (err) {
@@ -327,12 +318,16 @@ export async function updateUserStatus(userId, newStatus) {
 
 export async function updateUserRoles(userId, newRoles) {
   const rolesArray = Array.isArray(newRoles) ? newRoles : [newRoles];
+  const payload = { role: rolesArray };
+  if (rolesArray.some((r) => r === "developer" || r === "admin" || r === "vip")) {
+    payload.status = "privileged";
+  }
   const response = await fetch(
     `${TABLE_URL}?id=eq.${encodeURIComponent(userId)}`,
     {
       method: "PATCH",
       headers: { ...headers, Prefer: "return=representation" },
-      body: JSON.stringify({ role: rolesArray }),
+      body: JSON.stringify(payload),
     },
   );
   if (!response.ok) {

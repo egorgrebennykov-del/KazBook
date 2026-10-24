@@ -33,7 +33,11 @@ export default function Header({ theme, isLight, onSearch }) {
   const [isMessengerOpen, setIsMessengerOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
+  const isAdminOrDev =
+    userRoles.includes("admin") || userRoles.includes("developer");
+
   useEffect(() => {
+    if (isAdminOrDev) return;
     const checkUnread = async () => {
       try {
         const guestEmail = localStorage.getItem("litera_guest_inquiry_email");
@@ -53,7 +57,7 @@ export default function Header({ theme, isLight, onSearch }) {
     checkUnread();
     const interval = setInterval(checkUnread, 10000);
     return () => clearInterval(interval);
-  }, [loggedIn, user?.id]);
+  }, [loggedIn, user?.id, isAdminOrDev]);
 
   useEffect(() => {
     if (!loggedIn) {
@@ -169,18 +173,20 @@ export default function Header({ theme, isLight, onSearch }) {
             <i className="ri-shopping-basket-2-line" />
           </Link>
 
-          <button
-            type="button"
-            className="nav__messenger-btn"
-            onClick={() => setIsMessengerOpen((prev) => !prev)}
-            title={t("nav.messenger")}
-            aria-label={t("nav.messenger")}
-          >
-            <i className="ri-customer-service-2-line" />
-            {unreadCount > 0 && (
-              <span className="nav__badge-count">{unreadCount}</span>
-            )}
-          </button>
+          {!isAdminOrDev && (
+            <button
+              type="button"
+              className="nav__messenger-btn"
+              onClick={() => setIsMessengerOpen((prev) => !prev)}
+              title={t("nav.messenger")}
+              aria-label={t("nav.messenger")}
+            >
+              <i className="ri-customer-service-2-line" />
+              {unreadCount > 0 && (
+                <span className="nav__badge-count">{unreadCount}</span>
+              )}
+            </button>
+          )}
 
           {loggedIn ? (
             <div className="nav__profile-wrap" ref={profileMenuRef}>
