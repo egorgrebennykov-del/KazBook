@@ -180,37 +180,87 @@ export function parseLibrariusDetails(html, pageUrl) {
 
   // Description
   let description = "";
-  const descSection = html.match(/class="book-page-description">([\s\S]*?)<\/div>/i);
+  const descSection = html.match(
+    /<div[^>]*class="[^"]*book-page-description[^"]*"[^>]*>([\s\S]*?)<\/div>\s*(?:<div|<footer|<\/section|<\/main)/i,
+  );
   if (descSection) {
     description = descSection[1]
       .replace(/<div class="nav nav-tabs">[\s\S]*?<\/div>/gi, "")
       .replace(/<[^>]+>/g, " ")
+      .replace(/^[oо]писание[\s\r\n:]*/i, "")
       .replace(/\s+/g, " ")
       .trim();
   }
   if (!description && jsonLd?.description) {
-    description = String(jsonLd.description).trim();
+    description = String(jsonLd.description)
+      .replace(/^[oо]писание[\s\r\n:]*/i, "")
+      .trim();
   }
   description = decodeHtmlEntities(description);
 
   const additionalProperties = [];
-  if (author) additionalProperties.push({ name: "автор", value: author });
-  if (publisher) additionalProperties.push({ name: "издательство", value: publisher });
-  if (year) additionalProperties.push({ name: "год издания", value: year });
-  if (pages) additionalProperties.push({ name: "количество страниц", value: pages });
-  if (isbn) additionalProperties.push({ name: "isbn", value: isbn });
+  const seenProps = new Set();
 
+  // 1. Extract properties directly from HTML book-prop-item rows (handles links <a> inside values)
   const propMatches = [
     ...html.matchAll(
-      /class="book-prop-name">([^<]+)<\/div>[\s\S]*?<div class="book-prop-value">([^<]+)<\/div>/gi,
+      /class="book-prop-name">([^<]+)<\/div>[\s\S]*?<div class="book-prop-value">([\s\S]*?)<\/div>/gi,
     ),
   ];
   for (const m of propMatches) {
-    const pName = decodeHtmlEntities(m[1].trim().toLowerCase());
-    const pVal = decodeHtmlEntities(m[2].trim());
-    if (!additionalProperties.some((p) => p.name.toLowerCase() === pName)) {
-      additionalProperties.push({ name: pName, value: pVal });
-    }
+    const rawName = m[1].replace(/<[^>]+>/g, "").trim();
+    const rawVal = m[2].replace(/<[^>]+>/g, "").trim();
+    if (!rawName || !rawVal) continue;
+
+    // Normalize Latin lookalikes to Cyrillic
+    const normName = rawName
+      .toLowerCase()
+      .replace(/a/g, "а")
+      .replace(/k/g, "к")
+      .replace(/e/g, "е")
+      .replace(/o/g, "о")
+      .replace(/c/g, "с")
+      .trim();
+
+    // Group keys so "год" and "год издания", "страницы" and "количество страниц" never duplicate
+    let groupKey = normName;
+    if (/^год/i.test(normName)) groupKey = "год";
+    else if (/страниц/i.test(normName)) groupKey = "страницы";
+    else if (/^isbn/i.test(normName)) groupKey = "isbn";
+    else if (/автор/i.test(normName)) groupKey = "автор";
+    else if (/издательств/i.test(normName)) groupKey = "издательство";
+    else if (/код/i.test(normName)) groupKey = "код";
+    else if (/коллекци|сери/i.test(normName)) groupKey = "серия";
+
+    if (seenProps.has(groupKey)) continue;
+    seenProps.add(groupKey);
+
+    additionalProperties.push({
+      name: groupKey,
+      value: decodeHtmlEntities(rawVal),
+    });
+  }
+
+  // 2. Supplement missing core properties ONLY if not already found in HTML table
+  if (author && !seenProps.has("автор")) {
+    additionalProperties.unshift({ name: "автор", value: author });
+    seenProps.add("автор");
+  }
+  if (publisher && !seenProps.has("издательство")) {
+    additionalProperties.push({ name: "издательство", value: publisher });
+    seenProps.add("издательство");
+  }
+  if (isbn && !seenProps.has("isbn")) {
+    additionalProperties.push({ name: "isbn", value: isbn });
+    seenProps.add("isbn");
+  }
+  if (pages && !seenProps.has("страницы")) {
+    additionalProperties.push({ name: "страницы", value: pages });
+    seenProps.add("страницы");
+  }
+  if (year && !seenProps.has("год")) {
+    additionalProperties.push({ name: "год", value: year });
+    seenProps.add("год");
   }
 
   let imageUrl = jsonLd?.image || "";

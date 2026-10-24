@@ -27,10 +27,24 @@ function normalizeProduct(product) {
   const rawImage =
     product.mainImage?.url ?? product.images?.[0]?.url ?? "";
   const fullImage = enhancedImageUrl(rawImage) || rawImage;
+
+  let desc = decodeHtmlEntities(product.description ?? "").trim();
+  // Strip redundant leading "Описание" / "Oписание" header if present
+  desc = desc.replace(/^[oо]писание[\s\r\n:]*/i, "").trim();
+
+  // If description was empty, check descriptionHtml
+  if (!desc && product.descriptionHtml) {
+    desc = product.descriptionHtml
+      .replace(/<[^>]+>/g, " ")
+      .replace(/^[oо]писание[\s\r\n:]*/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
   return {
     ...product,
     name: decodeHtmlEntities(product.name ?? ""),
-    description: decodeHtmlEntities(product.description ?? ""),
+    description: desc,
     mainImage: { url: fullImage },
     images: [{ url: fullImage }],
   };

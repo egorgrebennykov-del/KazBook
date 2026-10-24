@@ -11,25 +11,90 @@ import "./BookDetails.css";
 
 const HIDDEN_PROPERTIES = /^цена|вы экономите|иллюстрированное издание|тираж/i;
 
-const PROPERTY_NAMES_EN = {
-  код: "Code",
-  "код товара": "Code",
-  автор: "Author",
-  серия: "Series",
-  "серия книг": "Series",
-  "год издания": "Year",
-  "дата выхода": "Year",
-  жанр: "Genre",
-  издательство: "Publisher",
-  isbn: "ISBN",
-  возраст: "Age",
-  "количество страниц": "Pages",
-  переплет: "Binding",
-  язык: "Language",
-  "страна производитель": "Country",
-  бумага: "Paper",
-  "формат издания": "Format",
-  продавец: "Seller",
+const CANONICAL_PROPERTY_MAP = {
+  // Author
+  автор: { ru: "Автор", en: "Author", key: "author" },
+  aвтор: { ru: "Автор", en: "Author", key: "author" },
+  author: { ru: "Автор", en: "Author", key: "author" },
+
+  // Year (unifies "год", "год издания", "год выпуска", "дата выхода", "year")
+  год: { ru: "Год издания", en: "Year", key: "year" },
+  "год издания": { ru: "Год издания", en: "Year", key: "year" },
+  "год выпуска": { ru: "Год издания", en: "Year", key: "year" },
+  "дата выхода": { ru: "Год издания", en: "Year", key: "year" },
+  year: { ru: "Год издания", en: "Year", key: "year" },
+
+  // Pages (unifies "страницы", "количество страниц", "число страниц", "pages")
+  страницы: { ru: "Количество страниц", en: "Pages", key: "pages" },
+  "количество страниц": { ru: "Количество страниц", en: "Pages", key: "pages" },
+  "число страниц": { ru: "Количество страниц", en: "Pages", key: "pages" },
+  pages: { ru: "Количество страниц", en: "Pages", key: "pages" },
+
+  // ISBN (strictly uppercase "ISBN" in all languages)
+  isbn: { ru: "ISBN", en: "ISBN", key: "isbn" },
+  isbn13: { ru: "ISBN", en: "ISBN", key: "isbn" },
+  "isbn-13": { ru: "ISBN", en: "ISBN", key: "isbn" },
+  isbn10: { ru: "ISBN", en: "ISBN", key: "isbn" },
+  "isbn-10": { ru: "ISBN", en: "ISBN", key: "isbn" },
+
+  // Publisher
+  издательство: { ru: "Издательство", en: "Publisher", key: "publisher" },
+  publisher: { ru: "Издательство", en: "Publisher", key: "publisher" },
+
+  // Code / SKU / Article
+  код: { ru: "Код товара", en: "Code", key: "code" },
+  "код товара": { ru: "Код товара", en: "Code", key: "code" },
+  "код продукта": { ru: "Код товара", en: "Code", key: "code" },
+  артикул: { ru: "Код товара", en: "Code", key: "code" },
+  sku: { ru: "Код товара", en: "Code", key: "code" },
+
+  // Series / Collection
+  серия: { ru: "Серия", en: "Series", key: "series" },
+  "серия книг": { ru: "Серия", en: "Series", key: "series" },
+  коллекция: { ru: "Серия", en: "Series", key: "series" },
+  "kоллекция эксклюзив": { ru: "Серия", en: "Series", key: "series" },
+  "коллекция эксклюзив": { ru: "Серия", en: "Series", key: "series" },
+  series: { ru: "Серия", en: "Series", key: "series" },
+
+  // Binding
+  переплет: { ru: "Переплет", en: "Binding", key: "binding" },
+  переплёт: { ru: "Переплет", en: "Binding", key: "binding" },
+  "тип переплета": { ru: "Переплет", en: "Binding", key: "binding" },
+  обложка: { ru: "Переплет", en: "Binding", key: "binding" },
+  "тип обложки": { ru: "Переплет", en: "Binding", key: "binding" },
+  binding: { ru: "Переплет", en: "Binding", key: "binding" },
+
+  // Genre
+  жанр: { ru: "Жанр", en: "Genre", key: "genre" },
+  genre: { ru: "Жанр", en: "Genre", key: "genre" },
+
+  // Language
+  язык: { ru: "Язык", en: "Language", key: "language" },
+  language: { ru: "Язык", en: "Language", key: "language" },
+
+  // Format
+  формат: { ru: "Формат", en: "Format", key: "format" },
+  "формат издания": { ru: "Формат", en: "Format", key: "format" },
+  format: { ru: "Формат", en: "Format", key: "format" },
+
+  // Paper
+  бумага: { ru: "Бумага", en: "Paper", key: "paper" },
+  paper: { ru: "Бумага", en: "Paper", key: "paper" },
+
+  // Age
+  возраст: { ru: "Возраст", en: "Age", key: "age" },
+  "возрастные ограничения": { ru: "Возраст", en: "Age", key: "age" },
+  age: { ru: "Возраст", en: "Age", key: "age" },
+
+  // Country
+  "страна производитель": { ru: "Страна", en: "Country", key: "country" },
+  страна: { ru: "Страна", en: "Country", key: "country" },
+  country: { ru: "Страна", en: "Country", key: "country" },
+
+  // Weight
+  вес: { ru: "Вес", en: "Weight", key: "weight" },
+  "вес (г)": { ru: "Вес", en: "Weight", key: "weight" },
+  weight: { ru: "Вес", en: "Weight", key: "weight" },
 };
 
 const PROPERTY_VALUES_EN = {
@@ -49,12 +114,10 @@ const PROPERTY_VALUES_EN = {
   нет: "No",
 };
 
-const translate = (dictionary, text) =>
-  dictionary[String(text).trim().toLowerCase()] ?? text;
-
 const formatCapitalized = (text) => {
   const str = String(text).trim();
   if (!str) return "";
+  if (/^isbn/i.test(str)) return "ISBN";
   return str.charAt(0).toUpperCase() + str.slice(1);
 };
 
@@ -161,27 +224,83 @@ export default function BookDetails() {
         : formatPrice(toEur(rawPrice), "EUR", language);
   }
 
-  const seen = new Set();
-  const properties = (product?.additionalProperties ?? [])
+  const seenKeys = new Set();
+  const rawProps = [...(product?.additionalProperties ?? [])];
+
+  // If ISBN wasn't in additionalProperties, check product.gtin or product.isbn
+  if (
+    !rawProps.some((p) => /isbn/i.test(p.name)) &&
+    (product?.gtin?.[0]?.value || product?.isbn)
+  ) {
+    rawProps.push({
+      name: "isbn",
+      value: product?.gtin?.[0]?.value || product?.isbn,
+    });
+  }
+
+  // If code wasn't in additionalProperties, check product.sku
+  if (!rawProps.some((p) => /код|sku|артикул/i.test(p.name)) && product?.sku) {
+    rawProps.push({
+      name: "код товара",
+      value: product.sku,
+    });
+  }
+
+  const properties = rawProps
     .filter((p) => p.name && p.value && !HIDDEN_PROPERTIES.test(p.name))
     .map((p) => {
-      const decodedVal = decodeHtmlEntities(p.value);
-      if (language === "en") {
-        return {
-          name: translate(PROPERTY_NAMES_EN, p.name),
-          value: translate(PROPERTY_VALUES_EN, decodedVal),
-        };
+      const decodedVal = decodeHtmlEntities(p.value).trim();
+      const rawName = String(p.name)
+        .trim()
+        .toLowerCase()
+        .replace(/a/g, "а")
+        .replace(/k/g, "к");
+
+      const canon = CANONICAL_PROPERTY_MAP[rawName];
+      const groupKey = canon ? canon.key : rawName;
+
+      let displayName = canon
+        ? language === "en"
+          ? canon.en
+          : canon.ru
+        : formatCapitalized(p.name);
+
+      // Ensure ISBN is ALWAYS uppercase in all languages (ISBN, never isbn or Isbn)
+      if (/^isbn/i.test(p.name) || rawName === "isbn") {
+        displayName = "ISBN";
       }
+
+      const displayValue =
+        language === "en"
+          ? (PROPERTY_VALUES_EN[decodedVal.toLowerCase()] ?? decodedVal)
+          : formatCapitalized(decodedVal);
+
       return {
-        name: formatCapitalized(p.name),
-        value: formatCapitalized(decodedVal),
+        groupKey,
+        name: displayName,
+        value: displayValue,
       };
     })
-    .filter((p) => !seen.has(p.name) && seen.add(p.name));
+    .filter((p) => !seenKeys.has(p.groupKey) && seenKeys.add(p.groupKey));
 
   const author = decodeHtmlEntities(
-    properties.find((p) => p.name === "Author" || p.name.toLowerCase() === "автор")?.value ?? "",
+    product?.author ||
+      properties.find(
+        (p) =>
+          p.groupKey === "author" ||
+          p.name === "Author" ||
+          p.name.toLowerCase() === "автор",
+      )?.value ||
+      preview?.author ||
+      "",
   );
+
+  const cleanDescription = decodeHtmlEntities(
+    product?.description || product?.descriptionHtml || "",
+  )
+    .replace(/<[^>]+>/g, " ")
+    .replace(/^[oо]писание[\s\r\n:]*/i, "")
+    .trim();
 
   const handleToggleCart = async () => {
     if (!isLoggedIn()) {
@@ -390,10 +509,10 @@ export default function BookDetails() {
               <p className="book__loading-hint">{t("book.loadingHint")}</p>
             )}
 
-            {product?.description && (
+            {cleanDescription && (
               <div className="book__section">
                 <h2 className="book__heading">{t("book.about")}</h2>
-                <p className="book__description">{product.description}</p>
+                <p className="book__description">{cleanDescription}</p>
               </div>
             )}
 
