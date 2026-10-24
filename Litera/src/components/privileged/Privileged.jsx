@@ -8,10 +8,8 @@ import {
   isPrivileged,
   resolveUserRoles,
   formatRoleName,
-  formatStatusName,
   updateUserStatus,
   updateUserRoles,
-  updateUserRole,
 } from "../../../utils/auth";
 import { getAllOrdersAdmin, updateOrderStatus } from "../../../utils/orders";
 import {
@@ -23,7 +21,6 @@ import {
   fetchAllInquiries,
   sendInquiryMessage,
   markInquiryReadByAdmin,
-  fetchInquiryById,
 } from "../../../utils/inquiries";
 import BookImage from "../common/BookImage";
 import decodeHtmlEntities from "../../../utils/decodeHtmlEntities";
@@ -1072,7 +1069,7 @@ export default function Privileged() {
                         <td>
                           <div className="privileged__user-cell">
                             <div
-                              className={`privileged__user-avatar ${isPriv ? "privileged__user-avatar--star" : ""}`}
+                              className={`privileged__user-avatar ${isStatusPriv ? "privileged__user-avatar--star" : ""}`}
                             >
                               {(u.firstName?.[0] || "?").toUpperCase()}
                             </div>

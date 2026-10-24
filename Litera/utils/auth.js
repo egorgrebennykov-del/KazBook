@@ -87,7 +87,7 @@ export function formatRoleName(role, language = "ru") {
   const norm = String(role).trim().toLowerCase();
   if (norm === "developer") return language === "ru" ? "Девелопер" : "Developer";
   if (norm === "admin") return language === "ru" ? "Админ" : "Admin";
-  if (norm === "vip") return language === "ru" ? "ВИП" : "VIP";
+  if (norm === "vip") return "VIP";
   return language === "ru" ? "Юзер" : "User";
 }
 

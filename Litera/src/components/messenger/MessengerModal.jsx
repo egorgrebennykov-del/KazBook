@@ -86,9 +86,11 @@ export default function MessengerModal({ isOpen, onClose, onUnreadChange }) {
   // Initial load when opened
   useEffect(() => {
     if (isOpen && isIdentified) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       loadInquiry(true);
     }
-  }, [isOpen, loggedIn, guestEmail, isEditingGuest]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, isIdentified]);
 
   // Polling for incoming messages while modal is open
   useEffect(() => {
