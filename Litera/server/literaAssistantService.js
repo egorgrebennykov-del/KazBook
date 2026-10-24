@@ -54,7 +54,11 @@ CRITICAL RULES ON RECOMMENDATIONS VS STORE/CART/SITE QUESTIONS:
    - Use their exact "id" in "bookIds".
    - MINIMUM 3 BOOKS REQUIREMENT: Whenever books are present in the search results list, YOU MUST ALWAYS RECOMMEND AT LEAST 3 BOOKS (return at least 3 IDs in "bookIds", e.g. ["catalog-book-0", "catalog-book-1", "catalog-book-2"]) unless fewer than 3 books total are available in the catalogue results. Always give the reader a great selection of at least 3 books!
    - CONVERSATION MEMORY & CONTINUITY: Pay close attention to recent messages and previously recommended books. If the user asks for "другие издания", "такие же книги но другого издательства", "подороже", "покажи еще", acknowledge the connection to their previous request warmly and present the alternative editions!
-   - PRICE AND VALUE PREFERENCE: By default, prioritize accessible, affordable editions (~7-15 €). But if the user explicitly asks for other editions, hardcover, premium, or more expensive editions ("другие издания", "другого издательства", "подороже", "подарочное"), recommend the higher-priced, high-quality editions from the provided catalogue list!
+   - PRICE AND VALUE PREFERENCE: By default, prioritize accessible, affordable editions (~7-15 €).
+     CRITICAL RULE FOR GIFTS AND "ПОДОРОЖЕ" REQUESTS:
+     If the user is asking for a GIFT ("для подарка", "подарок", "в подарок", "что подарить", "помоги с подарком") OR explicitly asks for something more expensive ("подороже", "что-нибудь подороже", "подарочное", "коллекционное", "люкс"):
+     The price filter works strictly IN REVERSE ORDER — from the most expensive to the least expensive (descending)!
+     Recommend premium, hardcover, illustrated, and deluxe editions that make an unforgettable and aesthetic present. Never recommend cheap 2-3 € pocket brochures or flimsy editions for gifts!
    - DYNAMIC FOREIGN LANGUAGE FILTERING: Litera is a Russian-language bookstore. If you see ANY signs or markers that a book in the catalogue is an edition in another language (e.g. English, Romanian, French, German, "(на англ. яз.)", "(eng)", "in English", foreign subtitles, or foreign language text): YOU MUST DISCARD THAT BOOK AND NEVER RECOMMEND IT OR RETURN ITS ID IN "bookIds" unless the user explicitly requested books in that foreign language!
    - ABSENCE OF OTHER EDITIONS: If the customer asks for another edition of a book, but no other edition exists in our catalogue: You MUST apologize politely and warmly to the customer (e.g. "Простите, пожалуйста! 💜", "Мне очень жаль...") and honestly explain that this title is available in our catalogue in only this one edition. DO NOT search for or suggest any other books or titles that the user did not ask for! Keep the existing list intact.
    - STRICT SPOILER POLICY (NEVER GIVE SPOILERS WITHOUT PRIOR WARNING AND CONSENT):
@@ -232,6 +236,8 @@ ${contextSection}
 
 TASK:
 1. Understand the user's request, considering the conversation context:
+   - If the user is looking for a GIFT ("для подарка", "подарок", "в подарок", "что подарить", "помоги с подарком"):
+     Select 7-8 distinguished, highly acclaimed, and aesthetically captivating books in Russian that make outstanding, memorable presents (e.g. iconic classics with beloved illustrated/deluxe editions, celebrated philosophical masterpieces, rich literary gems, or deluxe collector works).
    - If the user refers to previous recommendations or books (e.g. "хочу такие же книги но другого издательства", "другие издания", "подороже", "подешевле", "покажи еще", "в другом оформлении"):
      You MUST include the exact titles from PREVIOUSLY RECOMMENDED BOOKS as candidate #1 (and #2, etc.) so we can search supplier catalogues for other editions of those exact same titles!
    - If the user explicitly names, asks for, or searches for a specific book title (e.g. "Идиот", "найди книгу Идиот", "Мастер и Маргарита", "1984", "книга Скотный двор"), you MUST include that exact book as candidate #1!
@@ -594,6 +600,91 @@ Return strictly the array of "id" numbers for products that are genuine Russian 
   return products.filter((p) => !FOREIGN_LANGUAGE_PATTERN.test(p.title));
 }
 
+export function isGiftQuery(query) {
+  return /(подар(ок|ка|ком|ку|ке|ки|ить|ный|ная|ное|ные|ками|ках)|для подарка|в подарок|помоги с подарком|подарочн|выбрать подарок|подарить|present|gift)/i.test(
+    query || "",
+  );
+}
+
+export function isExpensiveQuery(query) {
+  return /(подороже|дорог(ое|ую|ой|ие|их|им|ими)|элитн|премиум|коллекционн|эксклюзивн|кожан|в коробе|люкс|самое дорогое|повысь цену|вариант подороже|luxury|expensive)/i.test(
+    query || "",
+  );
+}
+
+/**
+ * Dynamically evaluate bookstore candidate products with Gemini AI to determine
+ * whether each book edition is truly suitable as a gift.
+ * Evaluates aesthetics, edition tier, and presentation value.
+ * Rejects cheap brochures, pocket pamphlets, or low-grade paperbacks inappropriate for gifting.
+ */
+export async function evaluateGiftSuitabilityWithAI(products, userQuery = "") {
+  if (!Array.isArray(products) || products.length === 0) return [];
+
+  const apiKey = process.env.GEMINI_API_KEY || DEFAULT_API_KEY;
+
+  const items = products.map((p, idx) => ({
+    id: idx,
+    title: p.title || "",
+    author: p.author || "",
+    price: `${p.price} EUR`,
+    store: p.store || "",
+  }));
+
+  const prompt = `You are a strict gift curator for an elegant European online bookstore "Litera".
+The customer requested a book for a GIFT ("для подарка" / present).
+
+CRITICAL INSTRUCTION:
+Inspect each candidate book product edition and evaluate if it is genuinely suitable to give as a gift:
+1. SUITABLE FOR A GIFT:
+   - Impressive, high-quality, aesthetic editions (hardcover, illustrated, deluxe, collector edition, anniversary volume, or substantial literary volume).
+   - Price generally reflects gift quality (typically >= 7-8 EUR or higher).
+2. NOT SUITABLE FOR A GIFT (MUST BE REJECTED):
+   - Ultra-cheap pocket paperbacks / softcover brochures (e.g. 2-4 EUR mass-market cheap editions).
+   - Textbooks, study guides, or flimsy pocket pamphlets.
+   - Any edition that looks like a cheap disposable paperback rather than a thoughtful, memorable gift.
+
+Products list:
+${JSON.stringify(items, null, 2)}
+
+Return JSON:
+{
+  "giftSuitableIds": [number]
+}
+Return strictly the array of "id" numbers for products that are genuinely worthy and suitable as a gift!`;
+
+  try {
+    const res = await callGeminiJson({
+      apiKey,
+      prompt,
+      responseSchema: {
+        type: "OBJECT",
+        properties: {
+          giftSuitableIds: {
+            type: "ARRAY",
+            items: { type: "INTEGER" },
+          },
+        },
+        required: ["giftSuitableIds"],
+      },
+    });
+
+    if (Array.isArray(res?.giftSuitableIds)) {
+      const validSet = new Set(res.giftSuitableIds);
+      return products.filter((_, idx) => validSet.has(idx));
+    }
+  } catch (err) {
+    console.warn("evaluateGiftSuitabilityWithAI fallback:", err.message);
+  }
+
+  // Fallback: exclude anything under 6.0 EUR if higher-priced editions exist
+  const hasSubstantial = products.some((p) => p.price >= 8.0);
+  if (hasSubstantial) {
+    return products.filter((p) => p.price >= 6.0);
+  }
+  return products;
+}
+
 /**
  * 4. Main AI Discovery & Supplier Verification pipeline.
  * Discovers real books by meaning, searches suppliers strictly by title only,
@@ -642,10 +733,10 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
       userQuery || "",
     );
 
-  const isGiftOrLuxuryRequest =
-    /(подарочн|коллекционн|эксклюзивн|кожан|в коробе|люкс|дорог(ое|ую|ой|ие)|collector|luxury|gift)/i.test(
-      userQuery || "",
-    );
+  const isGift = isGiftQuery(userQuery);
+  const isExpensive = isExpensiveQuery(userQuery);
+  const isDescendingPriceOrder = isGift || isExpensive;
+  const isGiftOrLuxuryRequest = isDescendingPriceOrder;
 
   const isForeignLanguageRequested =
     /(на\s+английском|на\s+англ|на\s+немецком|на\s+французском|на\s+румынском|in\s+english|english\s+books|english)/i.test(
@@ -713,7 +804,9 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
     const pool = unshown;
 
     const isExplicitlyLuxury =
-      /(подарочн|коллекционн|в твердом переплете|кожан|люкс|самое дорогое)/i.test(
+      isGift ||
+      isExpensive ||
+      /(подарочн|коллекционн|в твердом переплете|кожан|люкс|самое дорогое|подороже|подарок|для подарка)/i.test(
         userQuery || "",
       );
 
@@ -839,6 +932,25 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
 
     if (validMatches.length === 0) return [];
 
+    if (isGift || isExpensive) {
+      // Find expensive/deluxe options of this book
+      // Sort editions descending by price: from most expensive to cheapest
+      validMatches.sort((a, b) => b.price - a.price);
+
+      // Prefer editions that are in higher price tiers (e.g. >= 7.0 EUR) if available
+      const premiumEditions = validMatches.filter((p) => p.price >= 7.0);
+      const chosenPool = premiumEditions.length > 0 ? premiumEditions : validMatches;
+
+      // Offer top 2 distinct editions of this candidate title
+      const takeCount = Math.min(2, chosenPool.length);
+      return chosenPool.slice(0, takeCount).map((match) => ({
+        ...match,
+        candidateTitle: candidate.title,
+        candidateAuthor: candidate.author,
+        relevance: candidate.relevance,
+      }));
+    }
+
     if (isOtherEditionRequest) {
       // Find previous edition price if this candidate was previously recommended
       const prevBook = previouslyRecommended.find(
@@ -912,10 +1024,34 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
 
   const resolved = await Promise.all(searchPromises);
   const rawProducts = resolved.flat().filter(Boolean);
-  const verifiedProducts = await filterForeignEditionsWithAI(
+  let verifiedProducts = await filterForeignEditionsWithAI(
     rawProducts,
     userQuery,
   );
+
+  // If user requested a gift, evaluate candidate products with AI for gift suitability
+  // "потом ИИ должен был оценить подойдет ли это для подарка, если нет то должен найти или другое издание или другую книгу"
+  if (isGift && verifiedProducts.length > 0) {
+    const giftSuitable = await evaluateGiftSuitabilityWithAI(
+      verifiedProducts,
+      userQuery,
+    );
+    if (giftSuitable.length >= 3) {
+      verifiedProducts = giftSuitable;
+    } else if (giftSuitable.length > 0) {
+      // If fewer than 3 passed strict gift evaluation, supplement with highest-priced remaining candidates
+      const passedUrls = new Set(
+        giftSuitable.map((p) => p.url || `${p.title}-${p.price}`),
+      );
+      const remaining = verifiedProducts
+        .filter((p) => !passedUrls.has(p.url || `${p.title}-${p.price}`))
+        .sort((a, b) => b.price - a.price);
+      verifiedProducts = [
+        ...giftSuitable,
+        ...remaining.slice(0, 4 - giftSuitable.length),
+      ];
+    }
+  }
 
   // Deduplicate by URL and store-price-title combo so distinct editions are preserved
   const productMap = new Map();
@@ -928,8 +1064,12 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
 
   const deduped = Array.from(productMap.values());
 
-  // Prioritize budget-friendly, accessible options first (unless luxury or other edition requested)
-  if (!isGiftOrLuxuryRequest && !isOtherEditionRequest) {
+  // PRICE FILTER SORTING:
+  // "Когда пользователь просит что-нибудь для подарка, то фильтр цены должен идти наоборот от самого дорогого до самого дешевого"
+  // "Фильтр цены так же должен работать от большего к меньшему если пользователь специально просит что нибудь подороже"
+  if (isDescendingPriceOrder) {
+    deduped.sort((a, b) => b.price - a.price);
+  } else if (!isOtherEditionRequest) {
     deduped.sort((a, b) => {
       const aIsHigh = a.price > 45;
       const bIsHigh = b.price > 45;
@@ -1092,7 +1232,7 @@ export async function callGeminiJson({ apiKey, systemInstruction, prompt, respon
   for (const model of GEMINI_MODELS) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 14000);
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
 
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
       const response = await fetch(url, {
@@ -1251,6 +1391,7 @@ CRITICAL INSTRUCTIONS:
 - In "bookIds", return an array containing their exact IDs.
 - CONVERSATION MEMORY: If the user asked for other editions, different publishers, or more expensive books ("другого издательства", "подороже", "такие же книги"), acknowledge this naturally and warmly in your message text, explaining that you have selected alternative, premium editions for them!
 - PRICE & VALUE PREFERENCE: By default, prefer affordable editions. But if the customer requested other editions or more expensive books ("другого издательства", "подороже", "подарочное"), recommend the alternative / higher-priced editions from the list!
+- GIFTS & EXPENSIVE EDITIONS INSTRUCTION: If the customer asked for a GIFT ("для подарка", "подарок", "в подарок", "помоги с подарком") or asked for books "подороже": the books in the catalogue list above are premium, gift-worthy editions sorted strictly from highest price to lowest price. Recommend them proudly, emphasizing their aesthetic appeal, high edition quality, and suitability as a memorable, meaningful gift!
 - Explain why these specific books/editions are great picks in your friendly, warm voice (you may reference the relevanceReason).
 - CAPITALIZATION OF RELIGION NAMES: You MUST ALWAYS write names of religions with a capital letter (e.g. «Ислам», «Христианство», «Православие», «Буддизм», «Иудаизм», etc.). Never use lowercase for names of religions.
 - PERSONAL OPINION: If the user also asked for your opinion, state your personal perspective warmly and directly.
