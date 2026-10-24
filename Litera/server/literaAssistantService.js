@@ -484,6 +484,52 @@ function validateProductMatch(product, candidate, allowForeign = false) {
   );
 }
 
+/**
+ * Checks whether two book titles represent the same literary work.
+ * Prevents duplicate works (such as "Сто лет одиночества" and "Сто лет одиночества. Маркес",
+ * or "Преступление и наказание" and "Преступление и наказание. Идиот. Достоевский") from
+ * appearing multiple times in the assistant's recommendations.
+ */
+export function areTitlesSameWork(title1, title2) {
+  if (!title1 || !title2) return false;
+  const clean = (s) =>
+    String(s || "")
+      .toLowerCase()
+      .replace(/\(.*?\)/g, " ")
+      .replace(/[«»""''„“]/g, "")
+      .replace(/\b(?:роман|повести|рассказы|сказки|поэмы|эссе|сочинения|тома?|том|в\s*\d+[-–]?[а-я]*\s*томах?|книга|\d+)\b/gi, " ")
+      .replace(/[^a-zа-я0-9\s]/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const t1 = clean(title1);
+  const t2 = clean(title2);
+
+  if (t1 === t2) return true;
+  if (!t1 || !t2) return false;
+
+  if (t1.startsWith(t2 + " ") || t2.startsWith(t1 + " ")) return true;
+
+  const stopWords = new Set(["для", "или", "под", "при", "про", "без", "над", "все", "всё", "его", "ее", "её", "их", "это"]);
+  const words1 = t1.split(/\s+/).filter((w) => w.length >= 3 && !stopWords.has(w));
+  const words2 = t2.split(/\s+/).filter((w) => w.length >= 3 && !stopWords.has(w));
+
+  if (words1.length === 0 || words2.length === 0) return false;
+
+  const set2 = new Set(words2);
+  const common = words1.filter((w) => set2.has(w));
+
+  if (common.length === words1.length || common.length === words2.length) {
+    return true;
+  }
+
+  if (common.length >= 2) {
+    return true;
+  }
+
+  return false;
+}
+
 export function findTargetBookIndex(query, bookList) {
   if (!Array.isArray(bookList) || bookList.length === 0) return -1;
   const q = String(query || "").toLowerCase();
@@ -691,27 +737,27 @@ export async function evaluateGiftSuitabilityWithAI(products, userQuery = "") {
     store: p.store || "",
   }));
 
-  const prompt = `You are a strict gift curator for an elegant European online bookstore "Litera".
-The customer requested a book for a GIFT ("для подарка" / present).
+  const prompt = `You are a strict luxury gift curator for European online bookstore "Litera".
+The customer requested books as a GIFT ("для подарка").
 
-CRITICAL INSTRUCTION:
-Inspect each candidate book product edition and evaluate if it is genuinely suitable to give as a gift:
-1. SUITABLE FOR A GIFT:
-   - Impressive, high-quality, aesthetic editions (hardcover, illustrated, deluxe, collector edition, anniversary volume, or substantial literary volume).
-   - Price generally reflects gift quality (typically >= 7-8 EUR or higher).
-2. NOT SUITABLE FOR A GIFT (MUST BE REJECTED):
-   - Ultra-cheap pocket paperbacks / softcover brochures (e.g. 2-4 EUR mass-market cheap editions).
-   - Textbooks, study guides, or flimsy pocket pamphlets.
-   - Any edition that looks like a cheap disposable paperback rather than a thoughtful, memorable gift.
+CRITICAL USER RULES FOR GIFTS:
+A gift book MUST be an impressive, thoughtful, memorable PRESENT (deluxe volume, collector edition, gift set, illustrated edition, omnibus collection, or premium hardcover volume).
 
-Products list:
+STRICTLY REJECT AS NON-GIFT:
+- Standard, ordinary paperbacks, pocket editions, or basic mass-market softcovers without deluxe presentation (e.g. plain standard titles like "Сто лет одиночества 15-16 EUR", "Идиот 19 EUR", "Вино из одуванчиков 15 EUR" — these are ordinary pocket/softcover editions, NOT gifts!).
+- Any book under 20 EUR that has no explicit gift/illustrated/collector/set indicators in its title.
+
+ACCEPT AS GIFT:
+- Genuine gift editions, multi-volume sets, illustrated editions, or premium deluxe editions (e.g. "Мастер и Маргарита 57 EUR", "Божественная комедия 49 EUR", "Властелин колец 44 EUR", "Граф Монте-Кристо (комплект) 35 EUR", "Преступление и наказание 27 EUR", "Маленький принц и другие произведения 20 EUR", illustrated/collector books).
+
+Candidate books:
 ${JSON.stringify(items, null, 2)}
 
 Return JSON:
 {
   "giftSuitableIds": [number]
 }
-Return strictly the array of "id" numbers for products that are genuinely worthy and suitable as a gift!`;
+Return only the IDs of editions that are truly suitable as impressive gifts!`;
 
   try {
     const res = await callGeminiJson({
@@ -985,8 +1031,8 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
     }
   }
 
-  // Search suppliers for top candidates strictly by title only (limit to 5 to maximize response speed)
-  const candidatesToSearch = candidates.slice(0, 5);
+  // Search suppliers for top candidates strictly by title only (up to 8 for gifts to guarantee gift editions, 5 for normal)
+  const candidatesToSearch = isGift ? candidates.slice(0, 8) : candidates.slice(0, 5);
   const searchPromises = candidatesToSearch.map(async (candidate) => {
     let storeProducts = await searchSuppliersByTitleOnly(
       candidate.title,
@@ -1014,18 +1060,36 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
       // Sort editions descending by price: from most expensive to cheapest
       validMatches.sort((a, b) => b.price - a.price);
 
-      // Prefer editions that are in higher price tiers (e.g. >= 7.0 EUR) if available
-      const premiumEditions = validMatches.filter((p) => p.price >= 7.0);
-      const chosenPool = premiumEditions.length > 0 ? premiumEditions : validMatches;
+      let chosenPool;
+      if (isGift) {
+        // A true gift edition must be impressive: either explicit deluxe/gift markers, or premium price >= 20.0 EUR
+        // Reject plain mass-market paperbacks (like "Сто лет одиночества 15.30 €" or plain "Идиот 19.92 €")
+        const giftEditions = validMatches.filter((p) => {
+          const isExplicitGift = /(подарочн|иллюстр|шедевры\s*иллюстрац|коллекцион|кожан|шелковый|в\s*коробе|футляр|комплект|собрание\s*сочинений|тома?\s*\d|в\s*\d+\s*т|золотая\s*коллекция|большая\s*книга|библиотека\s*великих|суперобложк|твердый\s*переплет)/i.test(p.title);
+          if (isExplicitGift) return p.price >= 8.0;
+          return p.price >= 20.0;
+        });
 
-      // Offer top 2 distinct editions of this candidate title
-      const takeCount = Math.min(2, chosenPool.length);
-      return chosenPool.slice(0, takeCount).map((match) => ({
-        ...match,
-        candidateTitle: candidate.title,
-        candidateAuthor: candidate.author,
-        relevance: candidate.relevance,
-      }));
+        if (giftEditions.length === 0) {
+          // If this book has NO gift/deluxe editions available in store catalogues (only cheap softcover/paperbacks),
+          // reject this candidate so another book with genuine gift editions is selected!
+          return [];
+        }
+        chosenPool = giftEditions;
+      } else {
+        const premiumEditions = validMatches.filter((p) => p.price >= 7.5);
+        chosenPool = premiumEditions.length > 0 ? premiumEditions : validMatches;
+      }
+
+      // STRICTLY offer only 1 single best edition per candidate book so works NEVER repeat!
+      return [
+        {
+          ...chosenPool[0],
+          candidateTitle: candidate.title,
+          candidateAuthor: candidate.author,
+          relevance: candidate.relevance,
+        },
+      ];
     }
 
     if (isOtherEditionRequest) {
@@ -1111,26 +1175,49 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
     );
   }
 
-  // Fast gift tier filtering: prioritize premium editions for gifts without extra LLM delays
-  if (isGift && rawProducts.length > 0) {
-    const giftTier = rawProducts.filter((p) => p.price >= 6.5);
-    if (giftTier.length >= 3) {
-      rawProducts = giftTier;
-    }
+  let verifiedProducts = rawProducts;
+
+  if (isDescendingPriceOrder) {
+    verifiedProducts.sort((a, b) => b.price - a.price);
   }
 
-  const verifiedProducts = rawProducts;
+  // Work-level and URL deduplication: STRICTLY prevent duplicate works
+  // (no multiple editions of "Преступление и наказание", "Сто лет одиночества", etc.)
+  const deduped = [];
+  const seenUrls = new Set();
 
-  // Deduplicate by URL and store-price-title combo so distinct editions are preserved
-  const productMap = new Map();
   for (const b of verifiedProducts) {
-    const key = b.url || `${b.title}-${b.price}-${b.store}`;
-    if (!productMap.has(key)) {
-      productMap.set(key, b);
+    if (b.url && seenUrls.has(b.url)) continue;
+    const isDuplicateWork = deduped.some(
+      (existing) =>
+        areTitlesSameWork(existing.title, b.title) ||
+        (existing.candidateTitle &&
+          b.candidateTitle &&
+          areTitlesSameWork(existing.candidateTitle, b.candidateTitle)),
+    );
+    if (!isDuplicateWork) {
+      if (b.url) seenUrls.add(b.url);
+      deduped.push(b);
     }
   }
 
-  const deduped = Array.from(productMap.values());
+  // If user requested a gift, let AI evaluate candidate products for strict gift suitability
+  // "потом ИИ должен был оценить подойдет ли это для подарка, если нет то должен найти или другое издание или другую книгу"
+  if (isGift && deduped.length > 0) {
+    const giftSuitable = await evaluateGiftSuitabilityWithAI(deduped, userQuery);
+    if (giftSuitable.length >= 3) {
+      const suitableUrls = new Set(
+        giftSuitable.map((p) => p.url || `${p.title}-${p.price}`),
+      );
+      const filtered = deduped.filter((p) =>
+        suitableUrls.has(p.url || `${p.title}-${p.price}`),
+      );
+      if (filtered.length >= 3) {
+        deduped.length = 0;
+        deduped.push(...filtered);
+      }
+    }
+  }
 
   // PRICE FILTER SORTING:
   // "Когда пользователь просит что-нибудь для подарка, то фильтр цены должен идти наоборот от самого дорогого до самого дешевого"
@@ -1458,6 +1545,7 @@ CRITICAL TARGETED BOOK REPLACEMENT INSTRUCTION:
         promptText += `
 CRITICAL INSTRUCTIONS:
 - DYNAMIC LANGUAGE FILTERING: If you notice ANY signs or markers that a book in the catalogue list is an edition in a foreign language (e.g. English, Romanian, French, German, "(на англ. яз.)", "(eng)", "in English", foreign language subtitles), YOU MUST DISCARD THAT BOOK AND NOT RECOMMEND IT!
+- NO DUPLICATE WORKS OR TITLES: Every single recommended book MUST be a completely distinct literary work! Never recommend duplicate editions of the same book in the list.
 - QUANTITY REQUIREMENT: Whenever books are present in the catalogue list, recommend all valid Russian books (at least 3, up to 6 books). Return their IDs in "bookIds": ${JSON.stringify(catalogueResults.slice(0, 6).map((b) => b.id))}.
 - In "bookIds", return an array containing their exact IDs.
 - CONVERSATION MEMORY & ACTIVE CONTEXT:
