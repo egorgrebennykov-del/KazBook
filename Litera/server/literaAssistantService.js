@@ -15,7 +15,9 @@ const DEFAULT_API_KEY = "";
 const GEMINI_MODELS = [
   "gemini-flash-lite-latest",
   "gemini-3.5-flash-lite",
-  "gemini-3.1-flash-lite",
+  "gemini-flash-latest",
+  "gemini-2.5-flash",
+  "gemini-3.5-flash",
   "gemini-3.8-flash",
 ];
 
@@ -53,7 +55,10 @@ CRITICAL RULES ON RECOMMENDATIONS VS STORE/CART/SITE QUESTIONS:
    - Recommend books EXCLUSIVELY from the provided search results list.
    - Use their exact "id" in "bookIds".
    - MINIMUM 3 BOOKS REQUIREMENT: Whenever books are present in the search results list, YOU MUST ALWAYS RECOMMEND AT LEAST 3 BOOKS (return at least 3 IDs in "bookIds", e.g. ["catalog-book-0", "catalog-book-1", "catalog-book-2"]) unless fewer than 3 books total are available in the catalogue results. Always give the reader a great selection of at least 3 books!
-   - CONVERSATION MEMORY & CONTINUITY: Pay close attention to recent messages and previously recommended books. If the user asks for "другие издания", "такие же книги но другого издательства", "подороже", "покажи еще", acknowledge the connection to their previous request warmly and present the alternative editions!
+   - CONVERSATION MEMORY & CONTINUITY:
+     * Your responses MUST ALWAYS strictly orient on the ongoing conversation context, previous user queries, and established goals (e.g. if the user is looking for a GIFT or books "подороже", that preference and topic remain active in subsequent follow-up requests).
+     * REJECTING PREVIOUS RECOMMENDATIONS ("НЕ ХОЧУ", "ДАЙ ДРУГИЕ", "НЕ ТО", "ПОКАЖИ ДРУГИЕ"): If the user says "не хочу", "не то", "дай другие", "покажи другие книги/варианты", DO NOT recommend the same books again and DO NOT offer other editions of the rejected books! Acknowledge their wish warmly and recommend completely DIFFERENT, NEW books matching their active topic/goal (e.g. other outstanding gift masterpieces).
+     * If the user specifically asks for other editions ("другие издания", "другого издательства", "такие же книги но в другом переплете"), acknowledge the connection warmly and present alternative editions of those exact titles!
    - PRICE AND VALUE PREFERENCE: By default, prioritize accessible, affordable editions (~7-15 €).
      CRITICAL RULE FOR GIFTS AND "ПОДОРОЖЕ" REQUESTS:
      If the user is asking for a GIFT ("для подарка", "подарок", "в подарок", "что подарить", "помоги с подарком") OR explicitly asks for something more expensive ("подороже", "что-нибудь подороже", "подарочное", "коллекционное", "люкс"):
@@ -235,11 +240,16 @@ The user submitted this natural-language book request: "${cleanQ}".
 ${contextSection}
 
 TASK:
-1. Understand the user's request, considering the conversation context:
+1. Understand the user's request, considering the full conversation context and previous messages:
+   - CONVERSATION CONTINUITY & GOALS: Look at RECENT CONVERSATION HISTORY. If the user was looking for a GIFT ("для подарка", "подарок", "в подарок") or books "подороже", that goal remains active in follow-up queries (such as "не хочу дай другие", "покажи еще", "что-то другое"). Keep proposing books suited for that active goal!
+   - REJECTING PREVIOUS BOOKS ("НЕ ХОЧУ", "ДАЙ ДРУГИЕ", "НЕ ТО", "ПОКАЖИ ДРУГИЕ"):
+     If the user rejects the previously recommended books, says "не хочу", "не то", "дай другие", "покажи другие", "что-то другое", "не эти":
+     YOU ARE STRICTLY FORBIDDEN FROM RETURNING ANY OF THE TITLES LISTED IN "PREVIOUSLY RECOMMENDED BOOKS"!
+     You MUST choose 6-8 COMPLETELY NEW, DIFFERENT books and authors that match the ongoing topic/goal!
+   - OTHER EDITIONS OF SAME TITLES: Only if the user explicitly asks for alternative editions or publishers ("другие издания", "другого издательства", "в другом оформлении", "другой переплет"):
+     You MUST include the exact titles from PREVIOUSLY RECOMMENDED BOOKS as candidate #1 (and #2, etc.) so we can search supplier catalogues for other editions of those exact same titles!
    - If the user is looking for a GIFT ("для подарка", "подарок", "в подарок", "что подарить", "помоги с подарком"):
      Select 7-8 distinguished, highly acclaimed, and aesthetically captivating books in Russian that make outstanding, memorable presents (e.g. iconic classics with beloved illustrated/deluxe editions, celebrated philosophical masterpieces, rich literary gems, or deluxe collector works).
-   - If the user refers to previous recommendations or books (e.g. "хочу такие же книги но другого издательства", "другие издания", "подороже", "подешевле", "покажи еще", "в другом оформлении"):
-     You MUST include the exact titles from PREVIOUSLY RECOMMENDED BOOKS as candidate #1 (and #2, etc.) so we can search supplier catalogues for other editions of those exact same titles!
    - If the user explicitly names, asks for, or searches for a specific book title (e.g. "Идиот", "найди книгу Идиот", "Мастер и Маргарита", "1984", "книга Скотный двор"), you MUST include that exact book as candidate #1!
    - ALWAYS identify at least 4 to 6 real, acclaimed books in RUSSIAN that match the theme, mood, author, or idea, and are commonly available in bookstores.
    Examples of logical matching:
@@ -612,6 +622,55 @@ export function isExpensiveQuery(query) {
   );
 }
 
+export function extractConversationContext(history = [], latestMessage = "") {
+  const allUserTexts = [
+    ...history.filter((m) => m.role === "user").map((m) => m.content || ""),
+    latestMessage,
+  ];
+  const fullText = allUserTexts.join(" ");
+
+  // Check if gift was requested in this ongoing conversation
+  const isGift = isGiftQuery(fullText);
+
+  // Check price preference: "подороже" vs "подешевле"
+  let pricePreference = "default";
+  for (let i = allUserTexts.length - 1; i >= 0; i--) {
+    const txt = allUserTexts[i];
+    if (isExpensiveQuery(txt)) {
+      pricePreference = "expensive";
+      break;
+    }
+    if (/(подешевле|дешев(ле|ое|ую|ой|ые)|бюджетн|эконом|недорого)/i.test(txt)) {
+      pricePreference = "cheap";
+      break;
+    }
+  }
+
+  const isDescendingPriceOrder = isGift || pricePreference === "expensive";
+
+  // Check if user is explicitly rejecting previous picks or asking for different books
+  const isRejectingPrevious =
+    /(не\s*хочу|не\s*то|не\s*нравит|дай\s*друг(ие|их)|покажи\s*друг(ие|их)|друг(ие|их)\s*книг|друг(ие|их)\s*автор|что-?то\s*друг(ое|их)|не\s*эти|замени\s*вс[её]|новые\s*вариант|другие\s*вариант)/i.test(
+      latestMessage,
+    );
+
+  // Check if user specifically asks for other editions/publishers of the existing books
+  // (If user rejects the books, they do NOT want other editions of the same books!)
+  const isOtherEditionRequest =
+    !isRejectingPrevious &&
+    /(друг(их|ие|ого|им|ое|ую|ая)?\s*(изд[аея]ни|изд[аея]тельств|переплет|обложк|оформлен)|в другом оформлении|другое издание|другого издания|другого издательства|такие же книги но|сделай друго[ея])/i.test(
+      latestMessage,
+    );
+
+  return {
+    isGift,
+    pricePreference,
+    isDescendingPriceOrder,
+    isRejectingPrevious,
+    isOtherEditionRequest,
+  };
+}
+
 /**
  * Dynamically evaluate bookstore candidate products with Gemini AI to determine
  * whether each book edition is truly suitable as a gift.
@@ -728,14 +787,14 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
     }
   }
 
-  const isOtherEditionRequest =
-    /(друг(их|ие|ого|им|ое|ую|ая)?\s*(изд[аея]ни|изд[аея]тельств|переплет|обложк|вариант|оформлен)|в другом оформлении|другое издание|другого издания|другого издательства|такие же книги|подороже|подешевле|подарочн|коллекционн|в твердом переплете|кожан|другие варианты|замени|поменяй|сделай друго)/i.test(
-      userQuery || "",
-    );
-
-  const isGift = isGiftQuery(userQuery);
-  const isExpensive = isExpensiveQuery(userQuery);
-  const isDescendingPriceOrder = isGift || isExpensive;
+  const conversationContext = extractConversationContext(history, userQuery);
+  const {
+    isGift,
+    isExpensive,
+    isDescendingPriceOrder,
+    isRejectingPrevious,
+    isOtherEditionRequest,
+  } = conversationContext;
   const isGiftOrLuxuryRequest = isDescendingPriceOrder;
 
   const isForeignLanguageRequested =
@@ -884,15 +943,34 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
     }));
   }
 
-  const candidates = await discoverBooksByMeaning(
+  const rawCandidates = await discoverBooksByMeaning(
     userQuery,
     history,
     previouslyRecommended,
   );
-  if (!candidates || candidates.length === 0) return [];
+  if (!rawCandidates || rawCandidates.length === 0) return [];
 
-  // If other edition requested, guarantee previously recommended titles are included
-  if (isOtherEditionRequest && previouslyRecommended.length > 0) {
+  let candidates = rawCandidates;
+
+  // If user rejects previous recommendations ("не хочу", "дай другие", "не то"),
+  // strictly exclude all previously recommended titles so the user gets fresh different books!
+  if (isRejectingPrevious && previouslyRecommended.length > 0) {
+    const prevTitlesLower = new Set(
+      previouslyRecommended.map((b) => (b.title || "").toLowerCase().trim()),
+    );
+    candidates = candidates.filter((c) => {
+      const cTitle = (c.title || "").toLowerCase().trim();
+      return (
+        !prevTitlesLower.has(cTitle) &&
+        ![...prevTitlesLower].some(
+          (pt) => cTitle.includes(pt) || pt.includes(cTitle),
+        )
+      );
+    });
+  }
+
+  // If other edition requested specifically (and not rejecting), guarantee previously recommended titles are included
+  if (isOtherEditionRequest && previouslyRecommended.length > 0 && !isRejectingPrevious) {
     for (const pb of previouslyRecommended) {
       if (
         !candidates.some(
@@ -1164,7 +1242,7 @@ async function analyzeSearchIntent(messages) {
 
   // Fast-path 4: Explicit book requests and follow-ups
   const hasExplicitBookRequest =
-    /(посоветуй|порекомендуй|найди|хочу.*книг|подскажи что почитать|что почитать|подобрать книгу|выбери книгу|какие книги|книги про|книгу про|книги о|книги по|книга про|книга о|книга по|хочу книгу|друг(их|ие|ого|им|ое|ую|ая)?\s*(изд[аея]ни|изд[аея]тельств|переплет|обложк|вариант|оформлен)|в другом оформлении|другое издание|другого издания|другого издательства|такие же книги|подороже|подешевле|еще книг|другие книги|сделай друго|замени|поменяй)/i.test(
+    /(посоветуй|порекомендуй|найди|хочу.*книг|подскажи что почитать|что почитать|подобрать книгу|выбери книгу|какие книги|книги про|книгу про|книги о|книги по|книга про|книга о|книга по|хочу книгу|друг(их|ие|ого|им|ое|ую|ая)?\s*(изд[аея]ни|изд[аея]тельств|переплет|обложк|вариант|оформлен)|в другом оформлении|другое издание|другого издания|другого издательства|такие же книги|подороже|подешевле|еще книг|другие книги|сделай друго|замени|поменяй|дай\s*друг(ие|их)|покажи\s*друг(ие|их)|не\s*хочу|не\s*то|другие\s*вариант|что-?то\s*друг(ое|их)|покажи\s*ещ[её]|других\s*автор)/i.test(
       lower,
     );
   if (hasExplicitBookRequest) {
@@ -1389,7 +1467,11 @@ CRITICAL INSTRUCTIONS:
 - DYNAMIC LANGUAGE FILTERING: If you notice ANY signs or markers that a book in the catalogue list is an edition in a foreign language (e.g. English, Romanian, French, German, "(на англ. яз.)", "(eng)", "in English", foreign language subtitles), YOU MUST DISCARD THAT BOOK AND NOT RECOMMEND IT!
 - QUANTITY REQUIREMENT: Whenever books are present in the catalogue list, recommend all valid Russian books (at least 3, up to 6 books). Return their IDs in "bookIds": ${JSON.stringify(catalogueResults.slice(0, 6).map((b) => b.id))}.
 - In "bookIds", return an array containing their exact IDs.
-- CONVERSATION MEMORY: If the user asked for other editions, different publishers, or more expensive books ("другого издательства", "подороже", "такие же книги"), acknowledge this naturally and warmly in your message text, explaining that you have selected alternative, premium editions for them!
+- CONVERSATION MEMORY & ACTIVE CONTEXT:
+  * Your message MUST strictly orient on the ongoing dialogue history and previous queries!
+  * If the ongoing dialogue is about GIFTS or books "подороже", remember that this context remains active!
+  * If the user rejected previous books ("не хочу", "дай другие", "не то"), acknowledge this warmly (e.g. "Понимаю вас! 💜 Давайте посмотрим совсем другие произведения...") and explain that you picked completely DIFFERENT titles for them!
+  * If the user asked for other editions of the same book, acknowledge the alternative edition selection!
 - PRICE & VALUE PREFERENCE: By default, prefer affordable editions. But if the customer requested other editions or more expensive books ("другого издательства", "подороже", "подарочное"), recommend the alternative / higher-priced editions from the list!
 - GIFTS & EXPENSIVE EDITIONS INSTRUCTION: If the customer asked for a GIFT ("для подарка", "подарок", "в подарок", "помоги с подарком") or asked for books "подороже": the books in the catalogue list above are premium, gift-worthy editions sorted strictly from highest price to lowest price. Recommend them proudly, emphasizing their aesthetic appeal, high edition quality, and suitability as a memorable, meaningful gift!
 - Explain why these specific books/editions are great picks in your friendly, warm voice (you may reference the relevanceReason).
