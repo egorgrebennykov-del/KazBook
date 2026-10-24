@@ -50,6 +50,7 @@ CRITICAL RULES ON RECOMMENDATIONS VS STORE/CART/SITE QUESTIONS:
    - MINIMUM 3 BOOKS REQUIREMENT: Whenever books are present in the search results list, YOU MUST ALWAYS RECOMMEND AT LEAST 3 BOOKS (return at least 3 IDs in "bookIds", e.g. ["catalog-book-0", "catalog-book-1", "catalog-book-2"]) unless fewer than 3 books total are available in the catalogue results. Always give the reader a great selection of at least 3 books!
    - CONVERSATION MEMORY & CONTINUITY: Pay close attention to recent messages and previously recommended books. If the user asks for "другие издания", "такие же книги но другого издательства", "подороже", "покажи еще", acknowledge the connection to their previous request warmly and present the alternative editions!
    - PRICE AND VALUE PREFERENCE: By default, prioritize accessible, affordable editions (~7-15 €). But if the user explicitly asks for other editions, hardcover, premium, or more expensive editions ("другие издания", "другого издательства", "подороже", "подарочное"), recommend the higher-priced, high-quality editions from the provided catalogue list!
+   - DYNAMIC FOREIGN LANGUAGE FILTERING: Litera is a Russian-language bookstore. If you see ANY signs or markers that a book in the catalogue is an edition in another language (e.g. English, Romanian, French, German, "(на англ. яз.)", "(eng)", "in English", foreign subtitles, or foreign language text): YOU MUST DISCARD THAT BOOK AND NEVER RECOMMEND IT OR RETURN ITS ID IN "bookIds" unless the user explicitly requested books in that foreign language!
    - ABSENCE OF OTHER EDITIONS: If the customer asks for another edition of a book, but no other edition exists in our catalogue: You MUST apologize politely and warmly to the customer (e.g. "Простите, пожалуйста! 💜", "Мне очень жаль...") and honestly explain that this title is available in our catalogue in only this one edition. DO NOT search for or suggest any other books or titles that the user did not ask for! Keep the existing list intact.
 
 YOUR PERSONALITY & TONE:
@@ -439,6 +440,75 @@ export function findTargetBookIndex(query, bookList) {
 }
 
 /**
+ * Dynamically evaluate bookstore products with Gemini AI to detect and reject
+ * any editions in a foreign language (unless foreign books were explicitly requested).
+ */
+export async function filterForeignEditionsWithAI(products, userQuery = "") {
+  if (!Array.isArray(products) || products.length === 0) return [];
+
+  const isForeignRequested =
+    /(на\s+английском|на\s+англ|на\s+немецком|на\s+французском|на\s+румынском|in\s+english|english\s+books|english|foreign)/i.test(
+      userQuery || "",
+    );
+  if (isForeignRequested) {
+    return products;
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY || DEFAULT_API_KEY;
+
+  const items = products.map((p, idx) => ({
+    id: idx,
+    title: p.title || "",
+    author: p.author || "",
+    store: p.store || "",
+  }));
+
+  const prompt = `You are a strict catalogue language validator for an online Russian bookstore "Litera".
+The customer did NOT request books in foreign languages.
+
+CRITICAL INSTRUCTION:
+Dynamically inspect each product title and details.
+If you see ANY signs that a book is an edition in another language (such as English, Romanian, French, German, Spanish, Italian, or contains markers like "(на англ. яз.)", "(eng)", "in English", "pe limba romana", adapted foreign language readers, or foreign language text where Russian was expected):
+THAT BOOK MUST BE REJECTED.
+
+Products list:
+${JSON.stringify(items, null, 2)}
+
+Return JSON:
+{
+  "validIds": [number]
+}
+Return strictly the array of "id" numbers for products that are genuine Russian editions without foreign language indicators.`;
+
+  try {
+    const res = await callGeminiJson({
+      apiKey,
+      prompt,
+      responseSchema: {
+        type: "OBJECT",
+        properties: {
+          validIds: {
+            type: "ARRAY",
+            items: { type: "INTEGER" },
+          },
+        },
+        required: ["validIds"],
+      },
+    });
+
+    if (Array.isArray(res?.validIds)) {
+      const validSet = new Set(res.validIds);
+      return products.filter((_, idx) => validSet.has(idx));
+    }
+  } catch (err) {
+    console.warn("filterForeignEditionsWithAI fallback:", err.message);
+  }
+
+  // Fallback: discard any title matching foreign language indicators
+  return products.filter((p) => !FOREIGN_LANGUAGE_PATTERN.test(p.title));
+}
+
+/**
  * 4. Main AI Discovery & Supplier Verification pipeline.
  * Discovers real books by meaning, searches suppliers strictly by title only,
  * validates products, and excludes any books not available on suppliers.
@@ -509,8 +579,12 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
       targetBook.title,
       activeRate,
     );
-    const validMatches = storeProducts.filter((p) =>
+    const candidateMatches = storeProducts.filter((p) =>
       validateProductMatch(p, targetBook, isForeignLanguageRequested),
+    );
+    const validMatches = await filterForeignEditionsWithAI(
+      candidateMatches,
+      userQuery,
     );
 
     // Exclude the edition that is currently shown (by exact URL)
@@ -751,7 +825,11 @@ export async function discoverAndMatchBooks(userQuery, exchangeRate, history = [
   });
 
   const resolved = await Promise.all(searchPromises);
-  const verifiedProducts = resolved.flat().filter(Boolean);
+  const rawProducts = resolved.flat().filter(Boolean);
+  const verifiedProducts = await filterForeignEditionsWithAI(
+    rawProducts,
+    userQuery,
+  );
 
   // Deduplicate by URL and store-price-title combo so distinct editions are preserved
   const productMap = new Map();
@@ -1049,7 +1127,8 @@ CRITICAL TARGETED BOOK REPLACEMENT INSTRUCTION:
       } else {
         promptText += `
 CRITICAL INSTRUCTIONS:
-- QUANTITY REQUIREMENT: Whenever books are present in the catalogue list, YOU MUST RECOMMEND ALL OF THEM (at least 3, up to 6 books). Return their IDs in "bookIds": ${JSON.stringify(catalogueResults.slice(0, 6).map((b) => b.id))}. Never return fewer books than provided in the catalogue list!
+- DYNAMIC LANGUAGE FILTERING: If you notice ANY signs or markers that a book in the catalogue list is an edition in a foreign language (e.g. English, Romanian, French, German, "(на англ. яз.)", "(eng)", "in English", foreign language subtitles), YOU MUST DISCARD THAT BOOK AND NOT RECOMMEND IT!
+- QUANTITY REQUIREMENT: Whenever books are present in the catalogue list, recommend all valid Russian books (at least 3, up to 6 books). Return their IDs in "bookIds": ${JSON.stringify(catalogueResults.slice(0, 6).map((b) => b.id))}.
 - In "bookIds", return an array containing their exact IDs.
 - CONVERSATION MEMORY: If the user asked for other editions, different publishers, or more expensive books ("другого издательства", "подороже", "такие же книги"), acknowledge this naturally and warmly in your message text, explaining that you have selected alternative, premium editions for them!
 - PRICE & VALUE PREFERENCE: By default, prefer affordable editions. But if the customer requested other editions or more expensive books ("другого издательства", "подороже", "подарочное"), recommend the alternative / higher-priced editions from the list!
