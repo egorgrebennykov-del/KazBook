@@ -6,6 +6,7 @@ import { addToCart, getCartItem, removeFromCart } from "../../../utils/cart";
 import { getCookieUser, isLoggedIn } from "../../../utils/auth";
 import BookImage from "../common/BookImage";
 import decodeHtmlEntities from "../../../utils/decodeHtmlEntities";
+import extractBookMetadata from "../../../utils/extractBookMetadata";
 import { useLanguage } from "../../context/languageContext";
 import "./BookDetails.css";
 
@@ -39,6 +40,7 @@ const CANONICAL_PROPERTY_MAP = {
 
   // Publisher
   издательство: { ru: "Издательство", en: "Publisher", key: "publisher" },
+  издание: { ru: "Издательство", en: "Publisher", key: "publisher" },
   publisher: { ru: "Издательство", en: "Publisher", key: "publisher" },
 
   // Code / SKU / Article
@@ -62,6 +64,7 @@ const CANONICAL_PROPERTY_MAP = {
   "тип переплета": { ru: "Переплет", en: "Binding", key: "binding" },
   обложка: { ru: "Переплет", en: "Binding", key: "binding" },
   "тип обложки": { ru: "Переплет", en: "Binding", key: "binding" },
+  "вид обложки": { ru: "Переплет", en: "Binding", key: "binding" },
   binding: { ru: "Переплет", en: "Binding", key: "binding" },
 
   // Genre
@@ -224,6 +227,15 @@ export default function BookDetails() {
         : formatPrice(toEur(rawPrice), "EUR", language);
   }
 
+  const descSource = decodeHtmlEntities(
+    product?.description || product?.descriptionHtml || "",
+  )
+    .replace(/<[^>]+>/g, " ")
+    .replace(/^[oо]писание[\s\r\n:]*/i, "")
+    .trim();
+
+  const { cleanDescription, extracted } = extractBookMetadata(descSource);
+
   const seenKeys = new Set();
   const rawProps = [...(product?.additionalProperties ?? [])];
 
@@ -238,11 +250,72 @@ export default function BookDetails() {
     });
   }
 
-  // If code wasn't in additionalProperties, check product.sku
-  if (!rawProps.some((p) => /код|sku|артикул/i.test(p.name)) && product?.sku) {
+  // If code wasn't in additionalProperties, check product.sku or extracted.code
+  if (!rawProps.some((p) => /код|sku|артикул/i.test(p.name))) {
+    if (product?.sku) {
+      rawProps.push({
+        name: "код товара",
+        value: product.sku,
+      });
+    } else if (extracted?.code) {
+      rawProps.push({
+        name: "код товара",
+        value: extracted.code,
+      });
+    }
+  }
+
+  // If publisher was extracted from description and not yet in rawProps
+  if (
+    extracted?.publisher &&
+    !rawProps.some((p) => /издательств|издание/i.test(p.name))
+  ) {
     rawProps.push({
-      name: "код товара",
-      value: product.sku,
+      name: "издательство",
+      value: extracted.publisher,
+    });
+  }
+
+  // If binding was extracted from description and not yet in rawProps
+  if (
+    extracted?.binding &&
+    !rawProps.some((p) => /переплет|обложк/i.test(p.name))
+  ) {
+    rawProps.push({
+      name: "переплет",
+      value: extracted.binding,
+    });
+  }
+
+  // If author was extracted from description and not yet in rawProps
+  if (extracted?.author && !rawProps.some((p) => /автор/i.test(p.name))) {
+    rawProps.push({
+      name: "автор",
+      value: extracted.author,
+    });
+  }
+
+  // If series was extracted from description and not yet in rawProps
+  if (extracted?.series && !rawProps.some((p) => /серия/i.test(p.name))) {
+    rawProps.push({
+      name: "серия",
+      value: extracted.series,
+    });
+  }
+
+  // If pages were extracted from description and not yet in rawProps
+  if (extracted?.pages && !rawProps.some((p) => /страниц/i.test(p.name))) {
+    rawProps.push({
+      name: "количество страниц",
+      value: extracted.pages,
+    });
+  }
+
+  // If genre was extracted from description and not yet in rawProps
+  if (extracted?.genre && !rawProps.some((p) => /жанр/i.test(p.name))) {
+    rawProps.push({
+      name: "жанр",
+      value: extracted.genre,
     });
   }
 
@@ -285,6 +358,7 @@ export default function BookDetails() {
 
   const author = decodeHtmlEntities(
     product?.author ||
+      extracted?.author ||
       properties.find(
         (p) =>
           p.groupKey === "author" ||
@@ -294,13 +368,6 @@ export default function BookDetails() {
       preview?.author ||
       "",
   );
-
-  const cleanDescription = decodeHtmlEntities(
-    product?.description || product?.descriptionHtml || "",
-  )
-    .replace(/<[^>]+>/g, " ")
-    .replace(/^[oо]писание[\s\r\n:]*/i, "")
-    .trim();
 
   const handleToggleCart = async () => {
     if (!isLoggedIn()) {

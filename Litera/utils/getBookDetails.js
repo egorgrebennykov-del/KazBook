@@ -1,6 +1,7 @@
 import axios from "axios";
 import enhancedImageUrl from "./enhancedImageUrl.js";
 import decodeHtmlEntities from "./decodeHtmlEntities.js";
+import extractBookMetadata from "./extractBookMetadata.js";
 
 const ALLOWED_HOSTS = [
   "librarius.md",
@@ -41,10 +42,81 @@ function normalizeProduct(product) {
       .trim();
   }
 
+  const { cleanDescription, extracted } = extractBookMetadata(desc);
+  const additionalProps = Array.isArray(product.additionalProperties)
+    ? [...product.additionalProperties]
+    : [];
+
+  if (
+    extracted?.publisher &&
+    !additionalProps.some((p) => /издательств/i.test(p.name))
+  ) {
+    additionalProps.push({
+      name: "издательство",
+      value: extracted.publisher,
+    });
+  }
+  if (
+    extracted?.binding &&
+    !additionalProps.some((p) => /переплет|обложк/i.test(p.name))
+  ) {
+    additionalProps.push({
+      name: "переплет",
+      value: extracted.binding,
+    });
+  }
+  if (
+    extracted?.author &&
+    !additionalProps.some((p) => /автор/i.test(p.name))
+  ) {
+    additionalProps.push({
+      name: "автор",
+      value: extracted.author,
+    });
+  }
+  if (
+    extracted?.series &&
+    !additionalProps.some((p) => /серия/i.test(p.name))
+  ) {
+    additionalProps.push({
+      name: "серия",
+      value: extracted.series,
+    });
+  }
+  if (
+    extracted?.pages &&
+    !additionalProps.some((p) => /страниц/i.test(p.name))
+  ) {
+    additionalProps.push({
+      name: "количество страниц",
+      value: extracted.pages,
+    });
+  }
+  if (
+    extracted?.code &&
+    !additionalProps.some((p) => /код|артикул|sku/i.test(p.name))
+  ) {
+    additionalProps.push({
+      name: "код товара",
+      value: extracted.code,
+    });
+  }
+  if (
+    extracted?.genre &&
+    !additionalProps.some((p) => /жанр/i.test(p.name))
+  ) {
+    additionalProps.push({
+      name: "жанр",
+      value: extracted.genre,
+    });
+  }
+
   return {
     ...product,
     name: decodeHtmlEntities(product.name ?? ""),
-    description: desc,
+    description: cleanDescription,
+    author: product.author || extracted?.author || undefined,
+    additionalProperties: additionalProps,
     mainImage: { url: fullImage },
     images: [{ url: fullImage }],
   };

@@ -1,6 +1,7 @@
 import axios from "axios";
 import https from "node:https";
 import decodeHtmlEntities from "../utils/decodeHtmlEntities.js";
+import extractBookMetadata from "../utils/extractBookMetadata.js";
 
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
@@ -281,9 +282,12 @@ export async function getBiblionDetails(bookUrl) {
         /class="woocommerce-product-details__short-description"[^>]*>([\s\S]*?)<\/div>/i,
       )?.[1] ||
       "";
-    const description = decodeHtmlEntities(
+    const initialDesc = decodeHtmlEntities(
       rawDescription.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(),
     );
+
+    const { cleanDescription, extracted } = extractBookMetadata(initialDesc);
+    const description = cleanDescription;
 
     const additionalProperties = [];
 
@@ -346,8 +350,74 @@ export async function getBiblionDetails(bookUrl) {
       });
     }
 
+    // Merge extracted metadata from description (publisher, binding, author, series, pages, code, genre)
+    if (
+      extracted?.publisher &&
+      !additionalProperties.some((p) => /издательств/i.test(p.name))
+    ) {
+      additionalProperties.push({
+        name: "издательство",
+        value: extracted.publisher,
+      });
+    }
+    if (
+      extracted?.binding &&
+      !additionalProperties.some((p) => /переплет|обложк/i.test(p.name))
+    ) {
+      additionalProperties.push({
+        name: "переплет",
+        value: extracted.binding,
+      });
+    }
+    if (
+      extracted?.author &&
+      !additionalProperties.some((p) => /автор/i.test(p.name))
+    ) {
+      additionalProperties.push({
+        name: "автор",
+        value: extracted.author,
+      });
+    }
+    if (
+      extracted?.series &&
+      !additionalProperties.some((p) => /серия/i.test(p.name))
+    ) {
+      additionalProperties.push({
+        name: "серия",
+        value: extracted.series,
+      });
+    }
+    if (
+      extracted?.pages &&
+      !additionalProperties.some((p) => /страниц/i.test(p.name))
+    ) {
+      additionalProperties.push({
+        name: "количество страниц",
+        value: extracted.pages,
+      });
+    }
+    if (
+      extracted?.code &&
+      !additionalProperties.some((p) => /код|артикул|sku/i.test(p.name))
+    ) {
+      additionalProperties.push({
+        name: "код",
+        value: extracted.code,
+      });
+    }
+    if (
+      extracted?.genre &&
+      !additionalProperties.some((p) => /жанр/i.test(p.name))
+    ) {
+      additionalProperties.push({
+        name: "жанр",
+        value: extracted.genre,
+      });
+    }
+
     const product = {
       name: title,
+      author: extracted?.author || undefined,
       price,
       currency: "MDL",
       description,
